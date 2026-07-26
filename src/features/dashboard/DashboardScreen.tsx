@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import * as Location from "expo-location";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
 import type { Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
@@ -23,6 +23,7 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
   const [hails, setHails] = useState<HailRequest[]>([]);
   const [position, setPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [error, setError] = useState("");
+  const [mapEnabled, setMapEnabled] = useState(Platform.OS === "web");
 
   useEffect(() => {
     void Promise.all([api.transactions(shift.shiftId), api.earnings(shift.shiftId)])
@@ -41,6 +42,7 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
   }, []);
 
   useEffect(() => {
+    if (!mapEnabled) return;
     let subscription: Location.LocationSubscription | null = null;
     void Location.requestForegroundPermissionsAsync()
       .then(async permission => {
@@ -60,7 +62,7 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
       })
       .catch(() => setError("Live location is unavailable. The rest of the dashboard is still usable."));
     return () => subscription?.remove();
-  }, []);
+  }, [mapEnabled]);
 
   useEffect(() => {
     if (sosStatus !== "active" || !sosAlertId) return;
@@ -178,7 +180,17 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
       </View>
 
       <Text style={[styles.label, { marginTop: 22 }]}>Live Route</Text>
-      <LiveMap latitude={position?.latitude} longitude={position?.longitude} hails={hails} unitNumber={shift.unitNumber} />
+      {mapEnabled ? (
+        <LiveMap latitude={position?.latitude} longitude={position?.longitude} hails={hails} unitNumber={shift.unitNumber} />
+      ) : (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Live map is paused</Text>
+          <Text style={styles.subtitle}>Load the map when you need route tracking. This prevents heavy map and GPS services from delaying app startup.</Text>
+          <Pressable style={styles.button} onPress={() => setMapEnabled(true)}>
+            <Text style={styles.buttonText}>Load live map</Text>
+          </Pressable>
+        </View>
+      )}
 
       {hails.length ? (
         <>

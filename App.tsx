@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { StatusBar } from "expo-status-bar";
-import { View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "./src/core/api/chatco-api";
+import { appStorage } from "./src/core/storage/app-storage";
 import { ThemeProvider, useAppTheme } from "./src/core/theme/ThemeProvider";
 import { BottomNav, Loading } from "./src/shared/ui";
 import { DashboardScreen } from "./src/features/dashboard/DashboardScreen";
@@ -18,10 +19,47 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AppRoot />
+        <AppErrorBoundary>
+          <AppRoot />
+        </AppErrorBoundary>
       </ThemeProvider>
     </SafeAreaProvider>
   );
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null as string | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error: error.message || "Unexpected application error." };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("ChatCo application error", error, info.componentStack);
+  }
+
+  private recover = async () => {
+    await appStorage.removeItem("chatco_session");
+    this.setState({ error: null });
+  };
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <View style={{ flex: 1, backgroundColor: "#050F1A", padding: 28, justifyContent: "center" }}>
+        <Text style={{ color: "#fff", fontSize: 24, fontWeight: "900" }}>ChatCo could not open this screen</Text>
+        <Text style={{ color: "#91A0B4", fontSize: 14, lineHeight: 21, marginTop: 10 }}>
+          The app stayed open so this error can be reported.
+        </Text>
+        <Text selectable style={{ color: "#FB7185", fontSize: 12, lineHeight: 18, marginTop: 18 }}>
+          {this.state.error}
+        </Text>
+        <Pressable onPress={() => void this.recover()} style={{ minHeight: 48, backgroundColor: "#1A5FB4", borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 22 }}>
+          <Text style={{ color: "#fff", fontWeight: "800" }}>Clear session and return to login</Text>
+        </Pressable>
+      </View>
+    );
+  }
 }
 
 function AppRoot() {

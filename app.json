@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "ChatCo Conductor",
+    "slug": "chatco-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ChatCo uses your location during an active shift so commuters can see the vehicle."
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.chatco.conductor",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.chatco.conductor"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "462efbc5-8019-4801-95e7-dfd63190e38d"
+      }
+    }
+  }
+}

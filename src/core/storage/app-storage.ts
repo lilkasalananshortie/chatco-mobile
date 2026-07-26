@@ -2,6 +2,23 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 const isWeb = Platform.OS === "web";
+const STORAGE_TIMEOUT_MS = 4000;
+
+async function withStorageTimeout<T>(operation: Promise<T>, fallback: T): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>(resolve => {
+        timeout = setTimeout(() => resolve(fallback), STORAGE_TIMEOUT_MS);
+      }),
+    ]);
+  } catch {
+    return fallback;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 function webStorageAvailable() {
   return isWeb && typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -12,7 +29,7 @@ export const appStorage = {
     if (webStorageAvailable()) {
       return window.localStorage.getItem(key);
     }
-    return SecureStore.getItemAsync(key);
+    return withStorageTimeout(SecureStore.getItemAsync(key), null);
   },
 
   async setItem(key: string, value: string): Promise<void> {
@@ -20,7 +37,11 @@ export const appStorage = {
       window.localStorage.setItem(key, value);
       return;
     }
-    await SecureStore.setItemAsync(key, value);
+    const saved = await withStorageTimeout(
+      SecureStore.setItemAsync(key, value).then(() => true),
+      false,
+    );
+    if (!saved) throw new Error("Secure session storage is unavailable. Please restart the app and try again.");
   },
 
   async removeItem(key: string): Promise<void> {
@@ -28,6 +49,6 @@ export const appStorage = {
       window.localStorage.removeItem(key);
       return;
     }
-    await SecureStore.deleteItemAsync(key);
+    await withStorageTimeout(SecureStore.deleteItemAsync(key), undefined);
   },
 };

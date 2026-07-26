@@ -7,6 +7,9 @@ export function LiveMap({ latitude, longitude, hails, fill = false }: {
 }) {
   const lat = latitude ?? 14.8255;
   const lng = longitude ?? 120.8650;
+  const visibleHails = hails.filter(hail =>
+    Number.isFinite(hail.latitude) && Number.isFinite(hail.longitude)
+  );
   return (
     <View style={[local.frame, fill && local.fill]}>
       <MapView
@@ -17,7 +20,7 @@ export function LiveMap({ latitude, longitude, hails, fill = false }: {
       >
         <Circle center={{ latitude: lat, longitude: lng }} radius={1000} fillColor="rgba(26,95,180,.12)" strokeColor="#1A5FB4" />
         <Marker coordinate={{ latitude: lat, longitude: lng }} title="Your unit" pinColor="#1A5FB4" />
-        {hails.map(h => <Marker key={h.id} coordinate={{ latitude: h.latitude, longitude: h.longitude }} title={h.commuterName} description="Pickup request" pinColor="#F59E0B" />)}
+        {visibleHails.map(h => <Marker key={h.id} coordinate={{ latitude: h.latitude, longitude: h.longitude }} title={h.commuterName} description="Pickup request" pinColor="#F59E0B" />)}
       </MapView>
     </View>
   );

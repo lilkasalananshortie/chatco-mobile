@@ -42,21 +42,23 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
-    void Location.requestForegroundPermissionsAsync().then(async permission => {
-      if (permission.status !== "granted") return;
-      subscription = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 25 },
-        location => {
-          setPosition({ latitude: location.coords.latitude, longitude: location.coords.longitude });
-          void api.location(
-            location.coords.latitude,
-            location.coords.longitude,
-            location.coords.speed,
-            location.coords.heading,
-          ).catch(() => undefined);
-        },
-      );
-    });
+    void Location.requestForegroundPermissionsAsync()
+      .then(async permission => {
+        if (permission.status !== "granted") return;
+        subscription = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 25 },
+          location => {
+            setPosition({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+            void api.location(
+              location.coords.latitude,
+              location.coords.longitude,
+              location.coords.speed,
+              location.coords.heading,
+            ).catch(() => undefined);
+          },
+        );
+      })
+      .catch(() => setError("Live location is unavailable. The rest of the dashboard is still usable."));
     return () => subscription?.remove();
   }, []);
 

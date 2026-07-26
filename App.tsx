@@ -50,9 +50,15 @@ function AppRoot() {
       setBooting(false);
     }
   }, []);
+  const handleLogin = useCallback(async (currentUser: User) => {
+    setUser(currentUser);
+    const active = await api.activeShift().catch(() => null);
+    setShift(active);
+    setScreen(active ? "home" : "verify");
+  }, []);
   useEffect(() => { void loadSession(); }, [loadSession]);
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
-  if (!user) return <LoginScreen onLogin={u => { setUser(u); setScreen("verify"); }} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
   if (!shift || screen === "verify") return <VerificationScreen onStarted={s => { setShift(s); setScreen("home"); }} />;
 
   return (

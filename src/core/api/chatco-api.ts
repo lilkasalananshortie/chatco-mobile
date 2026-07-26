@@ -18,21 +18,35 @@ import type {
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 const TOKEN_KEY = "chatco_session";
+const REQUEST_TIMEOUT_MS = 15000;
 
 type Envelope<T> = { data: T; message?: string; errors?: unknown };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in your .env file.");
   const token = await appStorage.getItem(TOKEN_KEY);
-  const response = await fetch(`${API_URL}/api/v1${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/api/v1${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    });
+  } catch (cause) {
+    if (cause instanceof Error && cause.name === "AbortError") {
+      throw new Error("The ChatCo server did not respond. Check your connection and try again.");
+    }
+    throw new Error("Unable to reach the ChatCo server. Check your internet connection.");
+  } finally {
+    clearTimeout(timeout);
+  }
   const payload = (await response.json().catch(() => null)) as Envelope<T> | null;
   if (!response.ok) {
     if (response.status === 401) await appStorage.removeItem(TOKEN_KEY);

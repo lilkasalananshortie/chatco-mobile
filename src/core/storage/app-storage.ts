@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 const isWeb = Platform.OS === "web";
@@ -29,7 +29,7 @@ export const appStorage = {
     if (webStorageAvailable()) {
       return window.localStorage.getItem(key);
     }
-    return withStorageTimeout(SecureStore.getItemAsync(key), null);
+    return withStorageTimeout(AsyncStorage.getItem(key), null);
   },
 
   async setItem(key: string, value: string): Promise<void> {
@@ -38,10 +38,10 @@ export const appStorage = {
       return;
     }
     const saved = await withStorageTimeout(
-      SecureStore.setItemAsync(key, value).then(() => true),
+      AsyncStorage.setItem(key, value).then(() => true),
       false,
     );
-    if (!saved) throw new Error("Secure session storage is unavailable. Please restart the app and try again.");
+    if (!saved) throw new Error("Session storage is unavailable. Please restart the app and try again.");
   },
 
   async removeItem(key: string): Promise<void> {
@@ -49,6 +49,6 @@ export const appStorage = {
       window.localStorage.removeItem(key);
       return;
     }
-    await withStorageTimeout(SecureStore.deleteItemAsync(key), undefined);
+    await withStorageTimeout(AsyncStorage.removeItem(key), undefined);
   },
 };

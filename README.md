@@ -7,10 +7,21 @@ This Expo/React Native client is extracted from the Conductor-facing portion of 
 1. Copy `.env.example` to `.env`.
 2. Set `EXPO_PUBLIC_API_URL` to the reachable Laravel host, without `/api/v1`.
    A physical phone cannot use the computer's `localhost`; use its LAN IP or HTTPS host.
-3. Run `npm install`.
-4. Run `npm start`.
+3. For Android APK builds, set `GOOGLE_MAPS_API_KEY` to an Android-restricted
+   Google Maps SDK key for package `com.chatco.conductor`.
+4. Run `npm install`.
+5. Run `npm start`.
 
-The app authenticates directly against the existing Laravel `POST /api/v1/auth/login` contract, stores the returned Sanctum token in Expo SecureStore, and sends it as a Bearer token on subsequent calls.
+The app authenticates directly against the existing Laravel `POST /api/v1/auth/login`
+contract, persists the returned Sanctum token in AsyncStorage, and sends it as a
+Bearer token on subsequent calls.
+
+The native live map uses Expo Maps on Android/iOS and keeps Leaflet on web.
+Android map keys must be available to EAS when the APK is built:
+
+```powershell
+eas env:set preview --name GOOGLE_MAPS_API_KEY --value "YOUR_KEY" --visibility sensitive
+```
 
 ## Extracted Conductor experience
 

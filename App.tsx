@@ -1,6 +1,6 @@
 import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { StatusBar } from "expo-status-bar";
-import { Pressable, Text, View } from "react-native";
+import { AppState, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "./src/core/api/chatco-api";
 import { appStorage } from "./src/core/storage/app-storage";
@@ -95,6 +95,35 @@ function AppRoot() {
     setScreen(active ? "home" : "verify");
   }, []);
   useEffect(() => { void loadSession(); }, [loadSession]);
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const revalidate = async () => {
+      try {
+        const current = await api.activeShift();
+        if (!active) return;
+        if (!current) {
+          setShift(null);
+          setScreen("verify");
+          setPayment(false);
+        } else {
+          setShift(current);
+        }
+      } catch {
+        // Keep the current operational state during a temporary network outage.
+      }
+    };
+    void revalidate();
+    const timer = setInterval(() => void revalidate(), 30000);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") void revalidate();
+    });
+    return () => {
+      active = false;
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [user]);
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
   if (!shift || screen === "verify") return <VerificationScreen onStarted={s => { setShift(s); setScreen("home"); }} />;
@@ -102,7 +131,7 @@ function AppRoot() {
   return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <StatusBar style={isLofi ? "dark" : "light"} />
-        {screen === "home" ? <DashboardScreen shift={shift} refreshKey={refreshKey} /> : null}
+        {screen === "home" ? <DashboardScreen shift={shift} refreshKey={refreshKey} onShiftUpdated={setShift} onShiftEnded={() => { setShift(null); setScreen("verify"); }} /> : null}
         {screen === "report" ? <ReportScreen shift={shift} refreshKey={refreshKey} onEnded={() => { setShift(null); setScreen("verify"); }} /> : null}
         {screen === "metrics" ? <MetricsScreen shift={shift} /> : null}
         {screen === "settings" ? <SettingsScreen user={user} shift={shift} onLogout={() => { setUser(null); setShift(null); setScreen("verify"); }} /> : null}

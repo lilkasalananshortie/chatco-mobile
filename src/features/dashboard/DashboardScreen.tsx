@@ -7,10 +7,11 @@ import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Header, ModalShell, ScreenShell } from "../../shared/ui";
 import { LiveMap } from "./LiveMap";
 import { TransactionHistoryModal } from "./TransactionHistoryModal";
+import { LOCATION_TASK_NAME } from "./location-task";
 
 type SosState = "confirm" | "locating" | "sending" | "active" | "responded" | "error";
 
-export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKey: number }) {
+export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnded }: { shift: Shift; refreshKey: number; onShiftUpdated?: (shift: Shift) => void; onShiftEnded?: () => void }) {
   const { colors, styles } = useAppTheme();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [earnings, setEarnings] = useState<ShiftEarnings | null>(null);
@@ -24,6 +25,9 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
   const [position, setPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [error, setError] = useState("");
   const [mapEnabled, setMapEnabled] = useState(Platform.OS === "web");
+  const [routeCoordinates, setRouteCoordinates] = useState<Array<[number, number]>>([]);
+  const [isOnBreak, setIsOnBreak] = useState(Boolean(shift.isOnBreak));
+  const [announcements, setAnnouncements] = useState<import("../../core/domain/types").Announcement[]>([]);
 
   useEffect(() => {
     void Promise.all([api.transactions(shift.shiftId), api.earnings(shift.shiftId)])
@@ -33,6 +37,15 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
       })
       .catch(cause => setError(cause instanceof Error ? cause.message : "Unable to load shift data."));
   }, [shift.shiftId, refreshKey]);
+
+  useEffect(() => {
+    setIsOnBreak(Boolean(shift.isOnBreak));
+    void api.routeGeometry(shift.routeId).then(route => setRouteCoordinates(route.coordinates)).catch(() => setRouteCoordinates([]));
+    const loadAnnouncements = () => void api.announcements().then(setAnnouncements).catch(() => undefined);
+    loadAnnouncements();
+    const timer = setInterval(loadAnnouncements, 30000);
+    return () => clearInterval(timer);
+  }, [shift.shiftId, shift.routeId, shift.isOnBreak]);
 
   useEffect(() => {
     const load = () => void api.hails().then(setHails).catch(() => undefined);
@@ -56,12 +69,37 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
               location.coords.longitude,
               location.coords.speed,
               location.coords.heading,
+              location.coords.accuracy,
+              new Date(location.timestamp).toISOString(),
             ).catch(() => undefined);
           },
         );
       })
       .catch(() => setError("Live location is unavailable. The rest of the dashboard is still usable."));
-    return () => subscription?.remove();
+    if (Platform.OS === "web") return () => subscription?.remove();
+    let backgroundStarted = false;
+    void Location.requestBackgroundPermissionsAsync().then(async permission => {
+      if (permission.status !== "granted") {
+        setError("Background location is disabled. Keep ChatCo open during the shift or allow Always location in Settings.");
+        return;
+      }
+      await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 15000,
+        distanceInterval: 25,
+        pausesUpdatesAutomatically: false,
+        showsBackgroundLocationIndicator: true,
+        foregroundService: {
+          notificationTitle: "ChatCo live shift",
+          notificationBody: "ChatCo is sharing this vehicle's location during the active shift.",
+        },
+      });
+      backgroundStarted = true;
+    }).catch(() => setError("Background location could not be started."));
+    return () => {
+      subscription?.remove();
+      if (backgroundStarted) void Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => undefined);
+    };
   }, [mapEnabled]);
 
   useEffect(() => {
@@ -101,6 +139,20 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
     }
   };
 
+  const updateBreak = async () => {
+    const next = !isOnBreak;
+    setError("");
+    setIsOnBreak(next);
+    try {
+      const updated = await api.breakStatus(next);
+      setIsOnBreak(Boolean(updated.isOnBreak));
+      onShiftUpdated?.(updated);
+    } catch (cause) {
+      setIsOnBreak(!next);
+      setError(cause instanceof Error ? cause.message : "Unable to update break status.");
+    }
+  };
+
   const handleHail = async (id: string, action: "accept" | "reject") => {
     try {
       if (action === "accept") await api.acceptHail(id);
@@ -119,10 +171,11 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
       const location = permission.status === "granted"
         ? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).catch(() => null)
         : null;
+      if (!location) throw new Error("Current location is required before sending SOS. Enable location permission and try again.");
       setSosStatus("sending");
       const alert = await api.sos(
-        location?.coords.latitude ?? 14.8434,
-        location?.coords.longitude ?? 120.875,
+        location.coords.latitude,
+        location.coords.longitude,
         "Emergency alert from conductor mobile app",
       );
       setSosAlertId(alert.id);
@@ -178,10 +231,25 @@ export function DashboardScreen({ shift, refreshKey }: { shift: Shift; refreshKe
           </Pressable>
         ))}
       </View>
+      <Pressable style={[styles.button, styles.secondaryButton, { marginTop: 10 }]} onPress={() => void updateBreak()}>
+        <Text style={[styles.buttonText, styles.secondaryButtonText]}>{isOnBreak ? "End break" : "Take a break"}</Text>
+      </Pressable>
+      {isOnBreak ? <Text style={[styles.subtitle, { color: colors.warning }]}>Pickup requests and live operations are paused while you are on break.</Text> : null}
+
+      {announcements.filter(item => !item.isRead).slice(0, 3).map(item => (
+        <View key={item.id} style={[styles.card, { borderColor: colors.warning, marginTop: 14 }]}>
+          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={styles.subtitle}>{item.body}</Text>
+          <Pressable style={[styles.button, styles.secondaryButton, { marginTop: 10 }]} onPress={() => {
+            setAnnouncements(current => current.map(row => row.id === item.id ? { ...row, isRead: true } : row));
+            void api.markAnnouncementRead(item.id).catch(() => undefined);
+          }}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Mark as read</Text></Pressable>
+        </View>
+      ))}
 
       <Text style={[styles.label, { marginTop: 22 }]}>Live Route</Text>
       {mapEnabled ? (
-        <LiveMap latitude={position?.latitude} longitude={position?.longitude} hails={hails} unitNumber={shift.unitNumber} />
+        <LiveMap latitude={position?.latitude} longitude={position?.longitude} hails={hails} unitNumber={shift.unitNumber} routeCoordinates={routeCoordinates} />
       ) : (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Live map is paused</Text>

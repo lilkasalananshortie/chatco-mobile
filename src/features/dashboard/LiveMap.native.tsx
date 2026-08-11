@@ -6,16 +6,16 @@ import type { HailRequest } from "../../core/domain/types";
 import {
   distanceMeters,
   PICKUP_RADIUS_METERS,
-  ROUTE_CENTER,
   ROUTE_COORDINATES,
 } from "./route-data";
 
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false }: {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates }: {
   latitude?: number;
   longitude?: number;
   hails: HailRequest[];
   unitNumber?: string;
   fill?: boolean;
+  routeCoordinates?: Array<[number, number]>;
 }) {
   const googleMap = useRef<GoogleMaps.MapView>(null);
   const appleMap = useRef<AppleMaps.MapView>(null);
@@ -24,10 +24,23 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const isMapConfigured = Platform.OS !== "android"
     || Constants.expoConfig?.extra?.googleMapsConfigured === true;
   const hasLivePosition = Number.isFinite(latitude) && Number.isFinite(longitude);
+  const activeRoute = useMemo(() => (
+    routeCoordinates && routeCoordinates.length > 1
+      ? routeCoordinates.map(([latitude, longitude]) => ({ latitude, longitude }))
+      : ROUTE_COORDINATES
+  ), [routeCoordinates]);
+  const routeCenter = useMemo(() => {
+    const latitudes = activeRoute.map(point => point.latitude);
+    const longitudes = activeRoute.map(point => point.longitude);
+    return {
+      latitude: (Math.min(...latitudes) + Math.max(...latitudes)) / 2,
+      longitude: (Math.min(...longitudes) + Math.max(...longitudes)) / 2,
+    };
+  }, [activeRoute]);
   const vehiclePosition = useMemo(() => ({
-    latitude: hasLivePosition ? latitude! : ROUTE_CENTER.latitude,
-    longitude: hasLivePosition ? longitude! : ROUTE_CENTER.longitude,
-  }), [hasLivePosition, latitude, longitude]);
+    latitude: hasLivePosition ? latitude! : routeCenter.latitude,
+    longitude: hasLivePosition ? longitude! : routeCenter.longitude,
+  }), [hasLivePosition, latitude, longitude, routeCenter]);
 
   const visibleHails = useMemo(() => hails.filter(hail =>
     Number.isFinite(hail.latitude)
@@ -41,19 +54,19 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const routeLines = useMemo(() => [
     {
       id: "route-shadow",
-      coordinates: ROUTE_COORDINATES,
+      coordinates: activeRoute,
       color: "rgba(98,160,234,0.22)",
       width: 10,
       geodesic: true,
     },
     {
       id: "route",
-      coordinates: ROUTE_COORDINATES,
+      coordinates: activeRoute,
       color: "#62A0EA",
       width: 5,
       geodesic: true,
     },
-  ], []);
+  ], [activeRoute]);
 
   useEffect(() => {
     if (!hasLivePosition || !loaded) return;
@@ -136,7 +149,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         <GoogleMaps.View
           ref={googleMap}
           style={StyleSheet.absoluteFill}
-          cameraPosition={{ coordinates: ROUTE_CENTER, zoom: 11.5 }}
+           cameraPosition={{ coordinates: routeCenter, zoom: 11.5 }}
           markers={googleMarkers}
           polylines={routeLines}
           circles={circles}
@@ -168,7 +181,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         <AppleMaps.View
           ref={appleMap}
           style={StyleSheet.absoluteFill}
-          cameraPosition={{ coordinates: ROUTE_CENTER, zoom: 11.5 }}
+           cameraPosition={{ coordinates: routeCenter, zoom: 11.5 }}
           markers={appleMarkers}
           polylines={routeLines.map(line => ({
             id: line.id,

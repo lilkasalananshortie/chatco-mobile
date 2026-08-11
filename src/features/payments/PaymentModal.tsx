@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { api } from "../../core/api/chatco-api";
@@ -14,6 +14,7 @@ import type {
 
 type Method = "CASH" | "GCASH" | "VOUCHER";
 type Step = "method" | "route" | "confirm" | "qr" | "success" | "failed";
+type GroupPassengerType = "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD";
 
 const types: { id: CommuterType; label: string }[] = [
   { id: "REGULAR", label: "Regular" },
@@ -45,12 +46,16 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
   const [dropoffName, setDropoffName] = useState("");
   const [selecting, setSelecting] = useState<"pickup" | "dropoff">("pickup");
   const [commuterType, setCommuterType] = useState<CommuterType>("REGULAR");
+  const [groupMode, setGroupMode] = useState(false);
+  const [groupCounts, setGroupCounts] = useState<Record<GroupPassengerType, number>>({ REGULAR: 0, SENIOR_CITIZEN: 0, STUDENT: 0, PWD: 0 });
   const [search, setSearch] = useState("");
   const [voucher, setVoucher] = useState("");
   const [gcash, setGcash] = useState<GcashInitiation | null>(null);
   const [paymentStatus, setPaymentStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [receiptTransactions, setReceiptTransactions] = useState<import("../../core/domain/types").Transaction[]>([]);
+  const requestKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -102,7 +107,7 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
     return points.filter(p =>
       p.name.toLowerCase().includes(query) ||
       p.code.toLowerCase().includes(query) ||
-      p.landmarks.some(l => l.toLowerCase().includes(query))
+      [...p.landmarks, ...(p.subStops ?? [])].some(l => l.toLowerCase().includes(query))
     );
   }, [points, search]);
 
@@ -114,16 +119,29 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
     const final = method === "VOUCHER" ? 0 : paidFare;
     return {
       regular,
+      discounted,
       final,
       discount: Math.max(0, regular - final),
       distance: Math.abs(pickup.pointNumber - dropoff.pointNumber) + 1,
     };
   }, [pickup, dropoff, commuterType, method, fareConfig]);
 
+  const groupPassengers = useMemo(() => (Object.entries(groupCounts) as [GroupPassengerType, number][])
+    .filter(([, quantity]) => quantity > 0)
+    .map(([type, quantity]) => ({ type, quantity })), [groupCounts]);
+  const groupCompanionCount = groupPassengers.reduce((total, row) => total + row.quantity, 0);
+  const groupFare = useMemo(() => {
+    if (!fare) return 0;
+    return groupPassengers.reduce((total, row) => total + row.quantity * (row.type === "REGULAR" ? fare.regular : fare.discounted), 0);
+  }, [fare, groupPassengers]);
+
   const chooseMethod = (next: Method) => {
     setMethod(next);
     setCommuterType("REGULAR");
     setStep("route");
+    setGroupMode(false);
+    setGroupCounts({ REGULAR: 0, SENIOR_CITIZEN: 0, STUDENT: 0, PWD: 0 });
+    requestKeyRef.current = null;
   };
   const choosePoint = (point: FarePoint, locationName = point.name) => {
     if (selecting === "pickup") {
@@ -142,22 +160,48 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
       setError("Enter the commuter's voucher code.");
       return;
     }
+    if (groupMode && groupCompanionCount === 0) {
+      setError(method === "GCASH" ? "Enter at least one companion. The payer is added after scanning." : "Enter at least one passenger.");
+      return;
+    }
+    if (!requestKeyRef.current) requestKeyRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setBusy(true); setError("");
     try {
       if (method === "GCASH") {
         const initiation = await api.initiateGcash({
-          amount: fare.regular,
+          amount: groupMode ? groupFare : fare.regular,
           from: pickupName,
           to: dropoffName,
           baseFare: fare.regular,
           distance: fare.distance,
           discountAmount: 0,
+          groupPassengers: groupMode ? groupPassengers.map(row => ({
+            ...row,
+            final_amount: row.type === "REGULAR" ? fare.regular : fare.discounted,
+            base_fare: fare.regular,
+            discount_amount: Math.max(0, fare.regular - (row.type === "REGULAR" ? fare.regular : fare.discounted)),
+          })) : undefined,
         });
         setGcash(initiation);
         setPaymentStatus("PENDING");
+        setReceiptTransactions(initiation.receipts ?? []);
         setStep("qr");
       } else {
-        await api.recordCash({
+        if (groupMode) {
+          const result = await api.recordGroupCash({
+            from: pickupName,
+            to: dropoffName,
+            regularFare: fare.regular,
+            discountedFare: fare.discounted,
+            passengers: groupPassengers.map(row => ({
+              passenger_type: row.type,
+              quantity: row.quantity,
+            })),
+            idempotencyKey: requestKeyRef.current,
+          });
+          setReceiptTransactions(result.transactions);
+        } else {
+          const transaction = await api.recordCash({
           amount: fare.final,
           from: pickupName,
           to: dropoffName,
@@ -166,7 +210,12 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
           discountAmount: fare.discount,
           passengerRole: commuterType,
           voucherCode: method === "VOUCHER" ? voucher.trim() : undefined,
+          pickupStopId: pickup?.id,
+          dropoffStopId: dropoff?.id,
+          idempotencyKey: requestKeyRef.current,
         });
+          setReceiptTransactions([transaction]);
+        }
         onSaved();
         setStep("success");
       }
@@ -192,6 +241,8 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
     setPickupName(""); setDropoffName("");
     setSelecting("pickup"); setCommuterType("REGULAR"); setVoucher("");
     setGcash(null); setPaymentStatus(""); setError(""); setSearch("");
+    setGroupMode(false); setGroupCounts({ REGULAR: 0, SENIOR_CITIZEN: 0, STUDENT: 0, PWD: 0 });
+    setReceiptTransactions([]); requestKeyRef.current = null;
   };
   const close = () => { reset(); onClose(); };
 
@@ -215,24 +266,48 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
               <Text style={styles.cardTitle}>{point.name}</Text>
               <Text style={styles.subtitle}>{point.code} | Main stop</Text>
             </Pressable>
-            {point.landmarks.map(landmark => (
+             {[...point.landmarks, ...(point.subStops ?? [])].filter((item, index, all) => all.indexOf(item) === index).map(landmark => (
               <Pressable key={landmark} style={[styles.button, styles.secondaryButton, { minHeight: 38, paddingVertical: 8 }]} onPress={() => choosePoint(point, landmark)}>
                 <Text style={[styles.buttonText, styles.secondaryButtonText]}>{landmark}</Text>
               </Pressable>
             ))}
           </View>
         )) : <>
-          {method !== "GCASH" ? <>
+           {method !== "VOUCHER" ? <>
+             <Text style={styles.label}>Passenger mode</Text>
+             <View style={{ flexDirection: "row", gap: 8 }}>
+               {([false, true] as const).map(value => <Pressable key={String(value)} style={[styles.button, styles.secondaryButton, { flex: 1, backgroundColor: groupMode === value ? colors.primary : colors.surface2 }]} onPress={() => setGroupMode(value)}><Text style={styles.buttonText}>{value ? "Multiple" : "Single"}</Text></Pressable>)}
+             </View>
+           </> : null}
+           {groupMode ? <View style={styles.card}>
+             <Text style={styles.label}>{method === "GCASH" ? "Companions (payer added after scan)" : "Passengers in this group"}</Text>
+             {([
+               ["REGULAR", "Regular"],
+               ["SENIOR_CITIZEN", "Senior"],
+               ["STUDENT", "Student"],
+               ["PWD", "PWD"],
+             ] as const).map(([type, label]) => <View key={type} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+               <Text style={styles.subtitle}>{label}</Text>
+               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                 <Pressable onPress={() => setGroupCounts(current => ({ ...current, [type]: Math.max(0, current[type] - 1) }))}><Text style={styles.cardTitle}>−</Text></Pressable>
+                 <Text style={styles.cardTitle}>{groupCounts[type]}</Text>
+                 <Pressable onPress={() => setGroupCounts(current => ({ ...current, [type]: Math.min(50, current[type] + 1) }))}><Text style={styles.cardTitle}>+</Text></Pressable>
+               </View>
+             </View>)}
+             <Text style={styles.subtitle}>{groupCompanionCount} {method === "GCASH" ? "companion" : "passenger"}{groupCompanionCount === 1 ? "" : "s"} entered{method === "GCASH" ? " · the scanning payer is added automatically" : ""}</Text>
+             <Text style={styles.cardTitle}>{`₱${groupFare.toFixed(2)}`}</Text>
+           </View> : null}
+           {method !== "GCASH" && !groupMode ? <>
             <Text style={[styles.label, { marginTop: 18 }]}>Commuter type</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {types.map(type => <Pressable key={type.id} style={[styles.button, styles.secondaryButton, commuterType === type.id && { backgroundColor: colors.primary }]} onPress={() => setCommuterType(type.id)}><Text style={[styles.buttonText, styles.secondaryButtonText]}>{type.label}</Text></Pressable>)}
             </View>
           </> : null}
-          {method !== "GCASH" ? <View style={styles.card}>
-            <Text style={styles.label}>Fare overview</Text>
-            <Text style={styles.title}>{`\u20B1${fare?.final.toFixed(2)}`}</Text>
-            <Text style={styles.subtitle}>{fare?.distance} route points | {commuterType}</Text>
-          </View> : <Text style={styles.subtitle}>Fare and commuter discount will be confirmed after the commuter scans the QR code.</Text>}
+             {method !== "GCASH" && !groupMode ? <View style={styles.card}>
+             <Text style={styles.label}>Fare overview</Text>
+             <Text style={styles.title}>{`\u20B1${fare?.final.toFixed(2)}`}</Text>
+             <Text style={styles.subtitle}>{fare?.distance} route points | {commuterType}</Text>
+           </View> : method === "GCASH" && !groupMode ? <Text style={styles.subtitle}>Fare and commuter discount will be confirmed after the commuter scans the QR code.</Text> : null}
           <Pressable disabled={busy} style={styles.button} onPress={() => method === "GCASH" ? void submit() : setStep("confirm")}>
             <Text style={styles.buttonText}>{method === "GCASH" ? (busy ? "Generating..." : "Generate QR Code") : "Continue"}</Text>
           </Pressable>
@@ -244,10 +319,10 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
         <Text style={styles.cardTitle}>Confirm {method} payment</Text>
         <View style={styles.card}>
           <Row label="Route" value={`${pickupName} to ${dropoffName}`} />
-          <Row label="Passenger" value={method === "GCASH" ? "Detected after scan" : commuterType} />
+           <Row label="Passenger" value={groupMode ? `${groupCompanionCount} passengers` : method === "GCASH" ? "Detected after scan" : commuterType} />
           <Row label="Regular fare" value={`\u20B1${fare.regular.toFixed(2)}`} />
           {fare.discount > 0 ? <Row label="Discount" value={`-\u20B1${fare.discount.toFixed(2)}`} /> : null}
-          <Row label="Final amount" value={`\u20B1${fare.final.toFixed(2)}`} />
+           <Row label="Final amount" value={`\u20B1${(groupMode ? groupFare : fare.final).toFixed(2)}`} />
         </View>
         {method === "VOUCHER" ? <TextInput value={voucher} onChangeText={setVoucher} style={styles.input} placeholder="Voucher code" placeholderTextColor={colors.muted} autoCapitalize="characters" /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -266,7 +341,13 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
 
       {step === "success" ? <>
         <Text style={styles.title}>Payment recorded</Text>
-        <Text style={styles.subtitle}>The transaction is included in the dashboard and end-of-day report.</Text>
+         <Text style={styles.subtitle}>The transaction is included in the dashboard and end-of-day report.</Text>
+          {method !== "GCASH" && receiptTransactions.length > 0 ? <View style={styles.card}>
+            <Text style={styles.label}>Passenger receipt</Text>
+            {receiptTransactions[0]?.multiplePaymentReference ? <Text style={styles.subtitle}>Multiple payment reference: {receiptTransactions[0].multiplePaymentReference}</Text> : null}
+            {receiptTransactions[0]?.qrToken ? <View style={{ backgroundColor: "#fff", padding: 12, alignSelf: "center", marginTop: 12, borderRadius: 12 }}><QRCode value={receiptTransactions[0].qrToken} size={170} /></View> : <Text style={styles.subtitle}>No claim QR was issued for this payment.</Text>}
+           <Text style={styles.subtitle}>The commuter can scan this receipt to claim the ride.</Text>
+         </View> : null}
         <Pressable style={styles.button} onPress={close}><Text style={styles.buttonText}>Done</Text></Pressable>
       </> : null}
       {step === "failed" ? <>

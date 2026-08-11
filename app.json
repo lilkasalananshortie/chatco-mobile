@@ -9,7 +9,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ChatCo uses your location during an active shift so commuters can see the vehicle."
+          "locationWhenInUsePermission": "ChatCo uses your location during an active shift so commuters can see the vehicle.",
+          "locationAlwaysAndWhenInUsePermission": "ChatCo uses your location during an active shift, including when the app is minimized, so commuters can see the vehicle."
         }
       ],
       "expo-maps",
@@ -20,7 +21,8 @@
       "versionCode": 5,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "ios": {

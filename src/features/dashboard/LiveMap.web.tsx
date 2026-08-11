@@ -65,18 +65,22 @@ function distanceMeters(a: [number, number], b: [number, number]) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false }: {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates }: {
   latitude?: number;
   longitude?: number;
   hails: HailRequest[];
   unitNumber?: string;
   fill?: boolean;
+  routeCoordinates?: Array<[number, number]>;
 }) {
   const [tilesLoading, setTilesLoading] = useState(true);
   useEffect(() => {
     const fallback = setTimeout(() => setTilesLoading(false), 7000);
     return () => clearTimeout(fallback);
   }, []);
+  const routeCoords = routeCoordinates?.length && routeCoordinates.length > 1 ? routeCoordinates : ROUTE_COORDS;
+  const routeBounds = useMemo(() => L.latLngBounds(routeCoords), [routeCoords]);
+  const mapCenter: [number, number] = [routeBounds.getCenter().lat, routeBounds.getCenter().lng];
   const vehiclePosition: [number, number] = latitude !== undefined && longitude !== undefined
     ? [latitude, longitude]
     : MAP_CENTER;
@@ -107,11 +111,14 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   return (
     <div className={`chatco-map-shell${fill ? " chatco-map-fill" : ""}`}>
       <MapContainer
-        center={MAP_CENTER}
+        center={mapCenter}
         zoom={12}
         zoomControl={false}
         attributionControl={false}
-        maxBounds={MAP_BOUNDS}
+        maxBounds={[
+          [routeBounds.getSouth() - 0.04, routeBounds.getWest() - 0.10],
+          [routeBounds.getNorth() + 0.015, routeBounds.getEast() + 0.10],
+        ]}
         maxBoundsViscosity={1}
         minZoom={11}
         style={{ width: "100%", height: "100%", background: "#050F1A" }}
@@ -127,8 +134,8 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
             tileerror: () => setTilesLoading(false),
           }}
         />
-        <Polyline positions={ROUTE_COORDS} pathOptions={{ color: "#62A0EA", weight: 8, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
-        <Polyline positions={ROUTE_COORDS} pathOptions={{ color: "#62A0EA", weight: 4, opacity: 0.9, dashArray: "10 10", lineCap: "round", lineJoin: "round" }} />
+        <Polyline positions={routeCoords} pathOptions={{ color: "#62A0EA", weight: 8, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
+        <Polyline positions={routeCoords} pathOptions={{ color: "#62A0EA", weight: 4, opacity: 0.9, dashArray: "10 10", lineCap: "round", lineJoin: "round" }} />
         <Circle center={vehiclePosition} radius={RADIUS_METERS} pathOptions={{ color: "#1A5FB4", fillColor: "#1A5FB4", fillOpacity: 0.05, weight: 1.5, opacity: 0.3, dashArray: "8 4" }} />
         <Marker position={vehiclePosition} icon={vehicleIcon}>
           <Popup>

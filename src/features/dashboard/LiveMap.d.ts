@@ -7,6 +7,7 @@ export interface LiveMapProps {
   hails: HailRequest[];
   unitNumber?: string;
   fill?: boolean;
+  routeCoordinates?: Array<[number, number]>;
 }
 
 export const LiveMap: ComponentType<LiveMapProps>;

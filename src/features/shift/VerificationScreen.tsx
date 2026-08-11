@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
-import type { Driver, Shift, Unit } from "../../core/domain/types";
+import type { Driver, Remittance, Shift, Unit } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Header, Loading, ModalShell, ScreenShell } from "../../shared/ui";
 
@@ -14,18 +14,50 @@ export function VerificationScreen({ onStarted }: { onStarted: (shift: Shift) =>
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [pendingRemittances, setPendingRemittances] = useState<Remittance[]>([]);
+  const [declaredAmounts, setDeclaredAmounts] = useState<Record<string, string>>({});
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [availableUnits, availableDrivers] = await Promise.all([api.units(), api.drivers()]);
+      const [availableUnits, availableDrivers, remittances] = await Promise.all([api.units(), api.drivers(), api.remittances()]);
       setUnits(availableUnits);
       setDrivers(availableDrivers);
+      setPendingRemittances(remittances.filter(item => String(item.remittance_status ?? item.status).toUpperCase() === "PENDING"));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load assignments.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resolvePending = async (remittance: Remittance) => {
+    const id = String(remittance.shift_id ?? "");
+    const declared = Number(declaredAmounts[id] ?? "");
+    if (!id || !Number.isFinite(declared) || declared < 0) {
+      setError("Enter the physical cash amount before completing this pending remittance.");
+      return;
+    }
+    setResolvingId(id);
+    setError("");
+    try {
+      await api.remit({
+        shiftId: id,
+        conductorName: "",
+        unitNumber: remittance.unit_number ?? "",
+        route: "",
+        driverName: remittance.driver_name ?? "",
+        timeIn: remittance.time_in ?? "",
+        timeOut: remittance.time_out ?? null,
+        isActive: false,
+      }, Number(remittance.cash_total ?? 0), Number(remittance.gcash_total ?? 0), declared);
+      setPendingRemittances(current => current.filter(item => item.shift_id !== id));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to complete pending remittance.");
+    } finally {
+      setResolvingId(null);
     }
   };
 
@@ -57,6 +89,28 @@ export function VerificationScreen({ onStarted }: { onStarted: (shift: Shift) =>
         title={unit ? "Select Your Driver" : "Select Your Unit"}
         subtitle={unit ? "Choose the driver you will assist today." : "Choose the vehicle assigned to this shift."}
       />
+      {pendingRemittances.length ? <View style={styles.card}>
+        <Text style={styles.cardTitle}>Pending remittance</Text>
+        <Text style={styles.subtitle}>A previous shift was closed automatically. Complete the physical cash declaration before starting a new shift.</Text>
+        {pendingRemittances.map(item => {
+          const id = String(item.shift_id ?? "");
+          return <View key={id} style={[styles.card, { marginTop: 12 }]}>
+            <Text style={styles.label}>Unit {item.unit_number ?? "—"} · {item.date ?? "Previous shift"}</Text>
+            <Text style={styles.subtitle}>Expected cash: ₱{Number(item.cash_total ?? 0).toFixed(2)}</Text>
+            <TextInput
+              value={declaredAmounts[id] ?? ""}
+              onChangeText={value => setDeclaredAmounts(current => ({ ...current, [id]: value }))}
+              keyboardType="decimal-pad"
+              style={styles.input}
+              placeholder="Physical cash counted"
+              placeholderTextColor={colors.muted}
+            />
+            <Pressable disabled={resolvingId === id} style={[styles.button, resolvingId === id && { opacity: 0.55 }]} onPress={() => void resolvePending(item)}>
+              <Text style={styles.buttonText}>{resolvingId === id ? "Submitting…" : "Complete remittance"}</Text>
+            </Pressable>
+          </View>;
+        })}
+      </View> : null}
       {unit ? (
         <Pressable onPress={() => { setUnit(null); setDriver(null); setError(""); }}>
           <Text style={{ color: colors.primaryLight, marginTop: 18 }}>‹ Change unit</Text>

@@ -14,6 +14,8 @@ import type {
   Transaction,
   Unit,
   User,
+  Announcement,
+  RouteGeometry,
 } from "../domain/types";
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/$/, "");
@@ -80,10 +82,13 @@ const mapShift = (s: any): Shift => ({
   conductorName: s.conductor_name,
   unitNumber: s.unit_number,
   route: s.route?.name ?? "",
+  routeId: s.route_id ?? s.route?.id ?? undefined,
   driverName: s.driver_name,
   timeIn: s.time_in,
   timeOut: s.time_out ?? null,
   isActive: s.status === "ACTIVE",
+  isOnBreak: Boolean(s.is_on_break),
+  breakStartedAt: s.break_started_at ?? null,
 });
 const mapTransaction = (t: any): Transaction => ({
   transactionId: String(t.transaction_id),
@@ -105,6 +110,11 @@ const mapTransaction = (t: any): Transaction => ({
   voucherCode: t.voucher_code ?? undefined,
   status: t.status ?? undefined,
   paidAt: t.paid_at ?? null,
+  qrToken: t.qr_token ?? null,
+  groupId: t.group_id ?? null,
+  multiplePaymentReference: t.payment_group?.reference_number ?? t.multiple_payment_reference ?? null,
+  groupPosition: t.group_position ?? null,
+  totalPassengers: Number(t.total_passengers) || 1,
 });
 
 export const api = {
@@ -169,6 +179,9 @@ export const api = {
     discountAmount: number;
     passengerRole?: string;
     voucherCode?: string;
+    pickupStopId?: string;
+    dropoffStopId?: string;
+    idempotencyKey?: string;
   }) => mapTransaction(await post<any>("/conductor/transactions", {
     payment_method: input.voucherCode ? "VOUCHER" : "CASH",
     final_amount: input.amount,
@@ -178,11 +191,44 @@ export const api = {
     distance: input.distance,
     discount_amount: input.discountAmount,
     passenger_role: input.passengerRole,
-    idempotency_key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    pickup_stop_id: input.pickupStopId,
+    dropoff_stop_id: input.dropoffStopId,
+    idempotency_key: input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     voucher_code: input.voucherCode || undefined,
   })),
+  recordGroupCash: async (input: {
+    from: string;
+    to: string;
+    regularFare: number;
+    discountedFare: number;
+    passengers: Array<{ passenger_type: "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD"; quantity: number }>;
+    idempotencyKey?: string;
+  }) => {
+    const d = await post<any>("/conductor/transactions", {
+      payment_method: "CASH",
+      pickup_name: input.from,
+      dropoff_name: input.to,
+      idempotency_key: input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      group_passengers: input.passengers.map(passenger => {
+        const finalAmount = passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare;
+        return {
+          type: passenger.passenger_type,
+          quantity: passenger.quantity,
+          final_amount: finalAmount,
+          base_fare: input.regularFare,
+          discount_amount: Math.max(0, input.regularFare - finalAmount),
+        };
+      }),
+    });
+    return {
+      groupId: String(d.group_id),
+      multiplePaymentReference: d.multiple_payment_reference ?? null,
+      transactions: Array.isArray(d.transactions) ? d.transactions.map(mapTransaction) : [],
+    };
+  },
   initiateGcash: async (input: {
     amount: number; from: string; to: string; baseFare: number; distance: number; discountAmount: number;
+    groupPassengers?: Array<{ type: "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD"; quantity: number; final_amount: number; base_fare: number; discount_amount: number }>;
   }): Promise<GcashInitiation> => {
     const d = await post<any>("/conductor/payments/gcash/initiate", {
       payment_method: "GCASH",
@@ -192,6 +238,7 @@ export const api = {
       base_fare: input.baseFare,
       distance: input.distance,
       discount_amount: input.discountAmount,
+      group_passengers: input.groupPassengers,
     });
     return {
       transactionId: String(d.transaction_id),
@@ -201,6 +248,9 @@ export const api = {
       expiresAt: d.expires_at,
       from: d.pickup_name ?? null,
       to: d.dropoff_name ?? null,
+      groupId: d.group_id ?? null,
+      multiplePaymentReference: d.multiple_payment_reference ?? null,
+      receipts: Array.isArray(d.receipts) ? d.receipts.map(mapTransaction) : [],
     };
   },
   paymentStatus: async (id: string) => {
@@ -218,18 +268,26 @@ export const api = {
       expiresAt: d.expires_at,
       from: d.pickup_name ?? null,
       to: d.dropoff_name ?? null,
+      groupId: d.group_id ?? null,
+      multiplePaymentReference: d.multiple_payment_reference ?? null,
+      receipts: Array.isArray(d.receipts) ? d.receipts.map(mapTransaction) : [],
     };
   },
   cancelPayment: (id: string) => post(`/payments/${encodeURIComponent(id)}/cancel`, {}),
+  breakStatus: async (isOnBreak: boolean) => mapShift(await post<any>("/conductor/break-status", { is_on_break: isOnBreak })),
   fareMatrix: async (): Promise<FareMatrix> => {
     const d = await request<any>("/fare-matrix");
     const points = Array.isArray(d?.points) ? d.points : [];
     return {
       points: points.map((p: any) => ({
         pointNumber: Number(p.pointNumber ?? p.point_number),
+        id: String(p.id ?? ""),
         code: p.code ?? "",
         name: p.name,
         landmarks: p.landmarks ?? [],
+        subStops: p.subStops ?? p.sub_stops ?? [],
+        latitude: p.latitude === null || p.latitude === undefined ? undefined : Number(p.latitude),
+        longitude: p.longitude === null || p.longitude === undefined ? undefined : Number(p.longitude),
         regularFare: Number(p.regularFare ?? p.regular_fare) || 0,
         discountedFare: Number(p.discountedFare ?? p.discounted_fare) || 0,
       })),
@@ -243,6 +301,18 @@ export const api = {
       },
     };
   },
+  routeGeometry: async (routeId?: string): Promise<RouteGeometry> => {
+    const query = routeId ? `?route_id=${encodeURIComponent(routeId)}` : "";
+    const d = await request<any>(`/routes/active${query}`);
+    return {
+      id: String(d.id),
+      name: d.name ?? "Active route",
+      coordinates: Array.isArray(d.coordinates)
+        ? d.coordinates.map((point: any) => [Number(point[0] ?? point.latitude), Number(point[1] ?? point.longitude)] as [number, number]).filter((point: [number, number]) => point.every(Number.isFinite))
+        : [],
+      version: d.version ? { number: d.version.number, publishedAt: d.version.published_at ?? null } : null,
+    };
+  },
   hails: async (): Promise<HailRequest[]> => (await request<any[]>("/conductor/hails")).map(h => ({
     id: String(h.id),
     commuterName: h.commuter?.name ?? h.commuter_name ?? "Commuter",
@@ -254,17 +324,32 @@ export const api = {
   acceptHail: (id: string) => post(`/conductor/hails/${encodeURIComponent(id)}/accept`),
   rejectHail: (id: string) => post(`/conductor/hails/${encodeURIComponent(id)}/reject`),
   capacity: (capacity_status: string) => post("/conductor/capacity-status", { capacity_status }),
-  location: (latitude: number, longitude: number, speed?: number | null, heading?: number | null) =>
+  location: (latitude: number, longitude: number, speed?: number | null, heading?: number | null, accuracy?: number | null, fixTimestamp?: string | null) =>
     post("/conductor/location", {
       lat: latitude,
       lng: longitude,
       speed: Number.isFinite(speed) ? speed : null,
       heading: Number.isFinite(heading) ? heading : null,
+      accuracy: Number.isFinite(accuracy) ? accuracy : null,
+      fix_timestamp: fixTimestamp ?? new Date().toISOString(),
     }),
   sos: async (lat: number, lng: number, note?: string): Promise<SosAlert> => {
     const d = await post<any>("/conductor/sos", { lat, lng, note });
     return { id: String(d.id), status: d.status };
   },
+  announcements: async (): Promise<Announcement[]> => {
+    const d = await request<any>("/announcements");
+    const rows = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
+    return rows.map((row: any) => ({
+      id: String(row.id),
+      title: row.title ?? "ChatCo notice",
+      body: row.body ?? row.message ?? "",
+      isRead: Boolean(row.is_read ?? row.isRead),
+      createdAt: row.created_at ?? row.createdAt,
+      priority: row.priority,
+    }));
+  },
+  markAnnouncementRead: (id: string) => post(`/announcements/${encodeURIComponent(id)}/read`),
   sosStatus: async (id: string): Promise<SosAlert> => {
     const d = await request<any>(`/conductor/sos/${encodeURIComponent(id)}`);
     return { id: String(d.id), status: d.status };
@@ -290,13 +375,11 @@ export const api = {
       cash_total: Number(r.cash_total) || 0,
       gcash_total: Number(r.gcash_total) || 0,
       voucher_total: Number(r.voucher_total) || 0,
-      declared_amount: Number(r.cash_declared ?? r.total_collected) || 0,
-      total_collected: Number(r.total_collected) || 0,
-      remittance_status: ["COMPLETE", "SHORTAGE", "REMITTED"].includes(String(r.remittance_status ?? "").toUpperCase())
-        ? "Remitted"
-        : "Pending",
-      status: r.remittance_status,
-      remitted_at: r.remitted_at ?? r.created_at ?? "",
+       declared_amount: Number(r.remitted_amount ?? r.cash_declared ?? 0) || 0,
+       total_collected: Number(r.total_collected ?? r.expected_cash ?? r.cash_total ?? 0) || 0,
+       remittance_status: String(r.remittance_status ?? "PENDING").toUpperCase(),
+       status: r.remittance_status,
+       remitted_at: r.remitted_at ?? null,
       unit_number: r.unit_number ?? r.shift?.unit_number ?? "",
       conductor_name: r.conductor_name ?? r.shift?.conductor_name ?? "",
       driver_name: r.driver_name ?? r.shift?.driver_name ?? "",
@@ -306,15 +389,20 @@ export const api = {
       gcash_scanned_total: Number(r.gcash_scanned_total) || 0,
       gcash_direct_total: Number(r.gcash_direct_total) || 0,
       time_in: r.shift?.time_in ?? "",
-      time_out: r.shift?.time_out ?? "",
+       time_out: r.shift?.time_out ?? "",
+       shortage: Number(r.shortage) || 0,
+       overage: Number(r.overage) || 0,
+       due_at: r.remittance_due_at ?? null,
+       is_overdue: Boolean(r.is_overdue),
+       reminder_count: Number(r.reminder_count) || 0,
     }));
   },
-  remit: (shift: Shift, cash: number, gcash: number, declared: number) =>
+  remit: (shift: Shift, expectedCash: number, gcash: number, declaredCash: number) =>
     post("/conductor/remittances", {
       shift_id: shift.shiftId,
-      total_collected: declared,
-      remitted_amount: cash,
-      cash_total: cash,
+      total_collected: expectedCash,
+      remitted_amount: declaredCash,
+      cash_total: expectedCash,
       gcash_total: gcash,
     }),
 };

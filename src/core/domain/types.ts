@@ -28,10 +28,13 @@ export interface Shift {
   conductorName: string;
   unitNumber: string;
   route: string;
+  routeId?: string;
   driverName: string;
   timeIn: string;
   timeOut: string | null;
   isActive: boolean;
+  isOnBreak?: boolean;
+  breakStartedAt?: string | null;
 }
 
 export interface Transaction {
@@ -54,6 +57,11 @@ export interface Transaction {
   voucherCode?: string;
   status?: "PENDING" | "PROCESSING" | "PAID" | "FAILED" | "CANCELLED" | "EXPIRED" | "REFUNDED";
   paidAt?: string | null;
+  qrToken?: string | null;
+  groupId?: string | null;
+  multiplePaymentReference?: string | null;
+  groupPosition?: number | null;
+  totalPassengers?: number;
 }
 
 export interface ShiftEarnings {
@@ -96,6 +104,11 @@ export interface Remittance {
   gcash_direct_total?: number | string;
   time_in?: string;
   time_out?: string;
+  shortage?: number | string;
+  overage?: number | string;
+  due_at?: string | null;
+  is_overdue?: boolean;
+  reminder_count?: number | string;
 }
 
 export interface GcashInitiation {
@@ -106,6 +119,9 @@ export interface GcashInitiation {
   expiresAt: string;
   from?: string | null;
   to?: string | null;
+  groupId?: string | null;
+  multiplePaymentReference?: string | null;
+  receipts?: Transaction[];
 }
 
 export interface ConductorProfile {
@@ -125,10 +141,14 @@ export interface HailRequest {
 }
 
 export interface FarePoint {
+  id?: string;
   pointNumber: number;
   code: string;
   name: string;
   landmarks: string[];
+  subStops?: string[];
+  latitude?: number;
+  longitude?: number;
   regularFare: number;
   discountedFare: number;
 }
@@ -152,4 +172,20 @@ export type CommuterType = "REGULAR" | "STUDENT" | "SENIOR" | "PWD";
 export interface SosAlert {
   id: string;
   status: "ACTIVE" | "ACKNOWLEDGED" | "RESOLVED";
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt?: string;
+  priority?: string;
+}
+
+export interface RouteGeometry {
+  id: string;
+  name: string;
+  coordinates: Array<[number, number]>;
+  version?: { number?: number; publishedAt?: string | null } | null;
 }

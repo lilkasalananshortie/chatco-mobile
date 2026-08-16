@@ -65,13 +65,14 @@ function distanceMeters(a: [number, number], b: [number, number]) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates }: {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, routeSource = "fallback" }: {
   latitude?: number;
   longitude?: number;
   hails: HailRequest[];
   unitNumber?: string;
   fill?: boolean;
   routeCoordinates?: Array<[number, number]>;
+  routeSource?: "backend" | "fallback";
 }) {
   const [tilesLoading, setTilesLoading] = useState(true);
   useEffect(() => {
@@ -157,10 +158,12 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         ))}
       </MapContainer>
       {tilesLoading ? <div className="chatco-map-loading"><span></span><strong>Loading route map…</strong></div> : null}
+      {routeSource === "fallback" ? <div className="chatco-route-warning">Published route unavailable — showing local fallback</div> : null}
       <style>{`
         .chatco-map-shell{position:relative;height:420px;width:100%;overflow:hidden;border-radius:18px;margin-top:14px;border:1px solid rgba(255,255,255,.09);box-shadow:0 7px 18px rgba(0,0,0,.16);background:#050F1A}
         .chatco-map-shell.chatco-map-fill{position:absolute;inset:0;height:100%;margin:0;border:0;border-radius:0;box-shadow:none}
         .chatco-map-loading{position:absolute;inset:0;z-index:900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#91A0B4;background:#050F1A;pointer-events:none;font:12px system-ui}
+        .chatco-route-warning{position:absolute;top:10px;left:10px;right:10px;z-index:850;text-align:center;color:#FEF3C7;background:rgba(69,26,3,.92);border:1px solid rgba(252,211,77,.3);border-radius:6px;padding:5px 8px;font:700 10px system-ui;pointer-events:none}
         .chatco-map-loading span{width:28px;height:28px;border:3px solid #163452;border-top-color:#62A0EA;border-radius:50%;animation:chatco-spin .8s linear infinite}
         .chatco-map-shell .leaflet-container{background:#050F1A!important;font-family:inherit!important}
         .chatco-vehicle-marker,.chatco-hail-marker{background:transparent!important;border:0!important}

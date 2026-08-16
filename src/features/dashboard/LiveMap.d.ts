@@ -8,6 +8,7 @@ export interface LiveMapProps {
   unitNumber?: string;
   fill?: boolean;
   routeCoordinates?: Array<[number, number]>;
+  routeSource?: "backend" | "fallback";
 }
 
 export const LiveMap: ComponentType<LiveMapProps>;

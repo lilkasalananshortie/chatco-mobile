@@ -9,13 +9,14 @@ import {
   ROUTE_COORDINATES,
 } from "./route-data";
 
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates }: {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, routeSource = "fallback" }: {
   latitude?: number;
   longitude?: number;
   hails: HailRequest[];
   unitNumber?: string;
   fill?: boolean;
   routeCoordinates?: Array<[number, number]>;
+  routeSource?: "backend" | "fallback";
 }) {
   const googleMap = useRef<GoogleMaps.MapView>(null);
   const appleMap = useRef<AppleMaps.MapView>(null);
@@ -221,6 +222,11 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
           )}
         </View>
       ) : null}
+      {loaded && routeSource === "fallback" ? (
+        <View style={local.routeWarning} pointerEvents="none">
+          <Text style={local.routeWarningText}>Published route unavailable — showing local fallback</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -259,6 +265,22 @@ const local = StyleSheet.create({
   loadingText: {
     color: "#91A0B4",
     fontSize: 12,
+    fontWeight: "700",
+  },
+  routeWarning: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    right: 10,
+    alignItems: "center",
+  },
+  routeWarningText: {
+    color: "#FEF3C7",
+    backgroundColor: "rgba(69, 26, 3, 0.92)",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    fontSize: 10,
     fontWeight: "700",
   },
   unconfigured: {

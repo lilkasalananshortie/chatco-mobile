@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, Share, Text, TextInput, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
+import { syncPendingCashTransactions } from "../../core/api/chatco-api";
 import type { Remittance, Shift, ShiftEarnings, Transaction } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Header, ModalShell, ScreenShell } from "../../shared/ui";
@@ -93,6 +94,17 @@ export function ReportScreen({ shift, refreshKey, onEnded }: {
     setBusy(true);
     setError("");
     try {
+      // A local offline cash receipt is not part of the server's authoritative
+      // earnings yet. Flush it before remittance and block if it remains
+      // queued, so the official report cannot omit collected cash.
+      await syncPendingCashTransactions();
+      const pendingForShift = await api.pendingCashCount(shift.shiftId);
+      if (pendingForShift > 0) {
+        throw new Error(
+          "Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.",
+        );
+      }
+
       await api.remit(shift, accountableTotals.cash, accountableTotals.gcash, declaredCash);
       setConfirm(false);
       setSuccess(true);

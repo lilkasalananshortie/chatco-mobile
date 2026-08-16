@@ -187,5 +187,6 @@ export interface RouteGeometry {
   id: string;
   name: string;
   coordinates: Array<[number, number]>;
+  source?: "backend" | "fallback";
   version?: { number?: number; publishedAt?: string | null } | null;
 }

@@ -2,7 +2,7 @@ import { Component, useCallback, useEffect, useState, type ErrorInfo, type React
 import { StatusBar } from "expo-status-bar";
 import { AppState, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { api } from "./src/core/api/chatco-api";
+import { api, syncPendingCashTransactions } from "./src/core/api/chatco-api";
 import { appStorage } from "./src/core/storage/app-storage";
 import { ThemeProvider, useAppTheme } from "./src/core/theme/ThemeProvider";
 import { BottomNav, Loading } from "./src/shared/ui";
@@ -120,6 +120,22 @@ function AppRoot() {
     });
     return () => {
       active = false;
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    const flush = async () => {
+      const synced = await syncPendingCashTransactions();
+      if (synced > 0) setRefreshKey(key => key + 1);
+    };
+    void flush();
+    const timer = setInterval(() => void flush(), 20000);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") void flush();
+    });
+    return () => {
       clearInterval(timer);
       subscription.remove();
     };

@@ -1,4 +1,5 @@
 import { appStorage } from "../storage/app-storage";
+import { enqueuePendingCash, getPendingCash, pendingCashCount, pendingCashForShift, removePendingCash } from "../storage/offline-cash-queue";
 import type {
   Driver,
   ConductorProfile,
@@ -22,6 +23,13 @@ const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 const TOKEN_KEY = "chatco_session";
 const REQUEST_TIMEOUT_MS = 15000;
 
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
 type Envelope<T> = { data: T; message?: string; errors?: unknown };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -43,9 +51,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     });
   } catch (cause) {
     if (cause instanceof Error && cause.name === "AbortError") {
-      throw new Error("The ChatCo server did not respond. Check your connection and try again.");
+      throw new NetworkError("The ChatCo server did not respond. Check your connection and try again.");
     }
-    throw new Error("Unable to reach the ChatCo server. Check your internet connection.");
+    throw new NetworkError("Unable to reach the ChatCo server. Check your internet connection.");
   } finally {
     clearTimeout(timeout);
   }
@@ -60,6 +68,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 const post = <T>(path: string, body?: unknown) =>
   request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+
+/** Retry durable offline cash writes in order. Items stay queued when the
+ * server is unreachable or the originating shift is no longer writable. */
+export async function syncPendingCashTransactions(): Promise<number> {
+  const pending = await getPendingCash();
+  let synced = 0;
+  for (const item of pending) {
+    try {
+      await post("/conductor/transactions", item.payload);
+      await removePendingCash(item.id);
+      synced += item.localTransactions.length;
+    } catch (cause) {
+      if (cause instanceof NetworkError) break;
+      // Keep validation/closed-shift failures for explicit recovery instead
+      // of silently deleting a fare collected offline.
+    }
+  }
+  return synced;
+}
 
 const mapUnit = (v: any): Unit => ({
   id: String(v.id),
@@ -154,14 +181,30 @@ export const api = {
     const data = await request<any | null>("/conductor/shift");
     return data ? mapShift(data) : null;
   },
+  checkConnectivity: async (): Promise<boolean> => {
+    try {
+      await request<any>("/system-status");
+      return true;
+    } catch (cause) {
+      return !(cause instanceof NetworkError);
+    }
+  },
+  pendingCashCount: (shiftId?: string) => pendingCashCount(shiftId),
   startShift: async (unit: Unit, driver: Driver) =>
     mapShift(await post<any>("/conductor/shifts/start", {
       vehicle_id: unit.id,
       driver_id: driver.id,
       route_id: unit.routeId ?? null,
     })),
-  transactions: async (shiftId: string) =>
-    (await request<any[]>(`/conductor/transactions?shift_id=${encodeURIComponent(shiftId)}`)).map(mapTransaction),
+  transactions: async (shiftId: string) => {
+    const pending = await pendingCashForShift(shiftId);
+    try {
+      return (await request<any[]>(`/conductor/transactions?shift_id=${encodeURIComponent(shiftId)}`)).map(mapTransaction).concat(pending);
+    } catch (cause) {
+      if (cause instanceof NetworkError) return pending;
+      throw cause;
+    }
+  },
   earnings: async (shiftId: string): Promise<ShiftEarnings> => {
     const d = await request<any>(`/conductor/earnings?shift_id=${encodeURIComponent(shiftId)}`);
     return {
@@ -182,20 +225,53 @@ export const api = {
     pickupStopId?: string;
     dropoffStopId?: string;
     idempotencyKey?: string;
-  }) => mapTransaction(await post<any>("/conductor/transactions", {
-    payment_method: input.voucherCode ? "VOUCHER" : "CASH",
-    final_amount: input.amount,
-    pickup_name: input.from,
-    dropoff_name: input.to,
-    base_fare: input.baseFare,
-    distance: input.distance,
-    discount_amount: input.discountAmount,
-    passenger_role: input.passengerRole,
-    pickup_stop_id: input.pickupStopId,
-    dropoff_stop_id: input.dropoffStopId,
-    idempotency_key: input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    voucher_code: input.voucherCode || undefined,
-  })),
+    shiftId?: string;
+  }) => {
+    const idempotencyKey = input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const payload = {
+      shift_id: input.shiftId,
+      payment_method: input.voucherCode ? "VOUCHER" : "CASH",
+      final_amount: input.amount,
+      pickup_name: input.from,
+      dropoff_name: input.to,
+      base_fare: input.baseFare,
+      distance: input.distance,
+      discount_amount: input.discountAmount,
+      passenger_role: input.passengerRole,
+      pickup_stop_id: input.pickupStopId,
+      dropoff_stop_id: input.dropoffStopId,
+      idempotency_key: idempotencyKey,
+      voucher_code: input.voucherCode || undefined,
+    };
+    try {
+      return mapTransaction(await post<any>("/conductor/transactions", payload));
+    } catch (cause) {
+      if (!(cause instanceof NetworkError) || input.voucherCode) throw cause;
+      const local: Transaction = {
+        transactionId: `OFFLINE-${idempotencyKey}`,
+        paymentMethod: "Cash",
+        finalAmount: input.amount,
+        from: input.from,
+        to: input.to,
+        timestamp: Date.now(),
+        passengerRole: input.passengerRole,
+        distance: input.distance,
+        baseFare: input.baseFare,
+        discountAmount: input.discountAmount,
+        status: "PAID",
+      };
+      await enqueuePendingCash({
+        id: `pending-${idempotencyKey}`,
+        shiftId: input.shiftId ?? "",
+        kind: "single",
+        idempotencyKey,
+        payload,
+        localTransactions: [local],
+        createdAt: Date.now(),
+      });
+      return local;
+    }
+  },
   recordGroupCash: async (input: {
     from: string;
     to: string;
@@ -203,12 +279,15 @@ export const api = {
     discountedFare: number;
     passengers: Array<{ passenger_type: "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD"; quantity: number }>;
     idempotencyKey?: string;
+    shiftId?: string;
   }) => {
-    const d = await post<any>("/conductor/transactions", {
+    const idempotencyKey = input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const payload = {
+      shift_id: input.shiftId,
       payment_method: "CASH",
       pickup_name: input.from,
       dropoff_name: input.to,
-      idempotency_key: input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      idempotency_key: idempotencyKey,
       group_passengers: input.passengers.map(passenger => {
         const finalAmount = passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare;
         return {
@@ -219,12 +298,45 @@ export const api = {
           discount_amount: Math.max(0, input.regularFare - finalAmount),
         };
       }),
-    });
-    return {
-      groupId: String(d.group_id),
-      multiplePaymentReference: d.multiple_payment_reference ?? null,
-      transactions: Array.isArray(d.transactions) ? d.transactions.map(mapTransaction) : [],
     };
+    try {
+      const d = await post<any>("/conductor/transactions", payload);
+      return {
+        groupId: String(d.group_id),
+        multiplePaymentReference: d.multiple_payment_reference ?? null,
+        transactions: Array.isArray(d.transactions) ? d.transactions.map(mapTransaction) : [],
+      };
+    } catch (cause) {
+      if (!(cause instanceof NetworkError)) throw cause;
+      const reference = `OFFLINE-${idempotencyKey.slice(0, 8).toUpperCase()}`;
+      const totalPassengers = input.passengers.reduce((sum, row) => sum + row.quantity, 0);
+      const transactions = input.passengers.flatMap(passenger => Array.from({ length: passenger.quantity }, (_, index) => ({
+        transactionId: `OFFLINE-${idempotencyKey}-${index}`,
+        paymentMethod: "Cash" as const,
+        finalAmount: passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare,
+        from: input.from,
+        to: input.to,
+        timestamp: Date.now(),
+        passengerRole: passenger.passenger_type,
+        baseFare: input.regularFare,
+        discountAmount: passenger.passenger_type === "REGULAR" ? 0 : input.regularFare - input.discountedFare,
+        status: "PAID" as const,
+        groupId: `offline-${idempotencyKey}`,
+        multiplePaymentReference: reference,
+        groupPosition: index + 1,
+        totalPassengers,
+      })));
+      await enqueuePendingCash({
+        id: `pending-${idempotencyKey}`,
+        shiftId: input.shiftId ?? "",
+        kind: "group",
+        idempotencyKey,
+        payload,
+        localTransactions: transactions,
+        createdAt: Date.now(),
+      });
+      return { groupId: `offline-${idempotencyKey}`, multiplePaymentReference: reference, transactions };
+    }
   },
   initiateGcash: async (input: {
     amount: number; from: string; to: string; baseFare: number; distance: number; discountAmount: number;
@@ -304,12 +416,16 @@ export const api = {
   routeGeometry: async (routeId?: string): Promise<RouteGeometry> => {
     const query = routeId ? `?route_id=${encodeURIComponent(routeId)}` : "";
     const d = await request<any>(`/routes/active${query}`);
+    const coordinates = Array.isArray(d.coordinates)
+      ? d.coordinates
+        .map((point: any) => [Number(point[0] ?? point.latitude), Number(point[1] ?? point.longitude)] as [number, number])
+        .filter((point: [number, number]) => point.every(Number.isFinite))
+      : [];
     return {
       id: String(d.id),
       name: d.name ?? "Active route",
-      coordinates: Array.isArray(d.coordinates)
-        ? d.coordinates.map((point: any) => [Number(point[0] ?? point.latitude), Number(point[1] ?? point.longitude)] as [number, number]).filter((point: [number, number]) => point.every(Number.isFinite))
-        : [],
+      coordinates,
+      source: coordinates.length > 1 ? "backend" : "fallback",
       version: d.version ? { number: d.version.number, publishedAt: d.version.published_at ?? null } : null,
     };
   },
@@ -366,7 +482,7 @@ export const api = {
     createdAt: r.createdAt ?? r.created_at ?? new Date().toISOString(),
   })),
   remittances: async (): Promise<Remittance[]> => {
-    const d = await request<any>("/conductor/remittances");
+    const d = await request<any>("/conductor/remittances?per_page=100");
     const rows = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
     return rows.map((r: any) => ({
       id: String(r.id ?? r.remittance_id ?? r.shift_id ?? ""),

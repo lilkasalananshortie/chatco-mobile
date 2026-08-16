@@ -26,8 +26,11 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
   const [error, setError] = useState("");
   const [mapEnabled, setMapEnabled] = useState(Platform.OS === "web");
   const [routeCoordinates, setRouteCoordinates] = useState<Array<[number, number]>>([]);
+  const [routeSource, setRouteSource] = useState<"backend" | "fallback">("fallback");
   const [isOnBreak, setIsOnBreak] = useState(Boolean(shift.isOnBreak));
   const [announcements, setAnnouncements] = useState<import("../../core/domain/types").Announcement[]>([]);
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     void Promise.all([api.transactions(shift.shiftId), api.earnings(shift.shiftId)])
@@ -39,8 +42,27 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
   }, [shift.shiftId, refreshKey]);
 
   useEffect(() => {
+    void api.pendingCashCount(shift.shiftId).then(setPendingOfflineCount);
+  }, [shift.shiftId, refreshKey]);
+
+  useEffect(() => {
+    const check = () => void api.checkConnectivity().then(setIsOnline).catch(() => setIsOnline(false));
+    check();
+    const timer = setInterval(check, 20000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     setIsOnBreak(Boolean(shift.isOnBreak));
-    void api.routeGeometry(shift.routeId).then(route => setRouteCoordinates(route.coordinates)).catch(() => setRouteCoordinates([]));
+    void api.routeGeometry(shift.routeId)
+      .then(route => {
+        setRouteCoordinates(route.coordinates);
+        setRouteSource(route.source ?? (route.coordinates.length > 1 ? "backend" : "fallback"));
+      })
+      .catch(() => {
+        setRouteCoordinates([]);
+        setRouteSource("fallback");
+      });
     const loadAnnouncements = () => void api.announcements().then(setAnnouncements).catch(() => undefined);
     loadAnnouncements();
     const timer = setInterval(loadAnnouncements, 30000);
@@ -196,13 +218,15 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
 
   return (
     <ScreenShell>
+      {!isOnline ? <Text style={[styles.error, { marginBottom: 12 }]}>Offline mode: cash fares are saved on this device and will sync automatically. GCash is unavailable.</Text> : null}
       <Header title={`Unit ${shift.unitNumber}`} subtitle={`${shift.route || "Active route"} · ${shift.driverName}`} eyebrow="Conductor Dashboard" />
 
       <View style={[styles.card, { flexDirection: "row", alignItems: "center" }]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.label}>Total Collected</Text>
           <Text style={styles.title}>{`\u20B1${totals.total.toFixed(2)}`}</Text>
-          <Text style={styles.subtitle}>{transactions.length} passenger transactions</Text>
+        <Text style={styles.subtitle}>{transactions.length} passenger transactions</Text>
+        {pendingOfflineCount > 0 ? <Text style={[styles.subtitle, { color: colors.warning }]}>{pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync</Text> : null}
         </View>
         <Pressable style={[styles.button, styles.secondaryButton, { marginTop: 0 }]} onPress={() => setHistory(true)}>
           <Text style={styles.buttonText}>History</Text>
@@ -249,7 +273,7 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
 
       <Text style={[styles.label, { marginTop: 22 }]}>Live Route</Text>
       {mapEnabled ? (
-        <LiveMap latitude={position?.latitude} longitude={position?.longitude} hails={hails} unitNumber={shift.unitNumber} routeCoordinates={routeCoordinates} />
+        <LiveMap latitude={position?.latitude} longitude={position?.longitude} hails={hails} unitNumber={shift.unitNumber} routeCoordinates={routeCoordinates} routeSource={routeSource} />
       ) : (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Live map is paused</Text>

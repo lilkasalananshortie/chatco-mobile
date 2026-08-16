@@ -55,6 +55,7 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [receiptTransactions, setReceiptTransactions] = useState<import("../../core/domain/types").Transaction[]>([]);
+  const [isOnline, setIsOnline] = useState(false);
   const requestKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -71,6 +72,14 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
         }
       })
       .catch(e => setError(e instanceof Error ? e.message : "Unable to load fare data."));
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const check = () => void api.checkConnectivity().then(setIsOnline);
+    check();
+    const timer = setInterval(check, 20000);
+    return () => clearInterval(timer);
   }, [visible]);
 
   useEffect(() => {
@@ -136,6 +145,10 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
   }, [fare, groupPassengers]);
 
   const chooseMethod = (next: Method) => {
+    if (next === "GCASH" && !isOnline) {
+      setError("GCash is unavailable while offline. Use cash and it will sync when you reconnect.");
+      return;
+    }
     setMethod(next);
     setCommuterType("REGULAR");
     setStep("route");
@@ -168,6 +181,7 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
     setBusy(true); setError("");
     try {
       if (method === "GCASH") {
+        if (!isOnline) throw new Error("GCash is unavailable while offline.");
         const initiation = await api.initiateGcash({
           amount: groupMode ? groupFare : fare.regular,
           from: pickupName,
@@ -198,6 +212,7 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
               quantity: row.quantity,
             })),
             idempotencyKey: requestKeyRef.current,
+            shiftId: shift.shiftId,
           });
           setReceiptTransactions(result.transactions);
         } else {
@@ -213,6 +228,7 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
           pickupStopId: pickup?.id,
           dropoffStopId: dropoff?.id,
           idempotencyKey: requestKeyRef.current,
+          shiftId: shift.shiftId,
         });
           setReceiptTransactions([transaction]);
         }
@@ -250,8 +266,9 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
     <ModalShell visible={visible} title="Collect Payment" onClose={close}>
       {step === "method" ? <>
         <Text style={styles.subtitle}>Choose how the passenger will pay.</Text>
+        {!isOnline ? <Text style={styles.error}>Offline mode: cash fares are saved and will sync automatically. GCash is disabled.</Text> : null}
         <MethodCard title="Cash Payment" detail="Calculate fare and record cash collection" onPress={() => chooseMethod("CASH")} />
-        <MethodCard title="GCash Payment" detail="Generate a binding QR and track payment status" onPress={() => chooseMethod("GCASH")} />
+        <MethodCard title="GCash Payment" detail={isOnline ? "Generate a binding QR and track payment status" : "Unavailable offline — reconnect to generate a QR"} onPress={() => chooseMethod("GCASH")} disabled={!isOnline} />
         <MethodCard title="Voucher / Free Ride" detail="Validate a commuter voucher code" onPress={() => chooseMethod("VOUCHER")} />
       </> : null}
 
@@ -359,8 +376,8 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
     </ModalShell>
   );
 
-  function MethodCard({ title, detail, onPress }: { title: string; detail: string; onPress: () => void }) {
-    return <Pressable style={styles.card} onPress={onPress}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.subtitle}>{detail}</Text></Pressable>;
+  function MethodCard({ title, detail, onPress, disabled }: { title: string; detail: string; onPress: () => void; disabled?: boolean }) {
+    return <Pressable disabled={disabled} style={[styles.card, disabled ? { opacity: 0.5 } : null]} onPress={onPress}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.subtitle}>{detail}</Text></Pressable>;
   }
   function Row({ label, value }: { label: string; value: string }) {
     return <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 16, marginVertical: 6 }}><Text style={styles.subtitle}>{label}</Text><Text style={[styles.cardTitle, { flex: 1, textAlign: "right" }]}>{value}</Text></View>;

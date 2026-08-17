@@ -145,8 +145,8 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
   }, [fare, groupPassengers]);
 
   const chooseMethod = (next: Method) => {
-    if (next === "GCASH" && !isOnline) {
-      setError("GCash is unavailable while offline. Use cash and it will sync when you reconnect.");
+    if (next !== "CASH" && !isOnline) {
+      setError("GCash and voucher validation are unavailable offline. Use cash and it will sync when you reconnect.");
       return;
     }
     setMethod(next);
@@ -169,6 +169,10 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
   };
   const submit = async () => {
     if (!method || !pickup || !dropoff || !fare) return;
+    if (method !== "CASH" && !isOnline) {
+      setError("Reconnect before using GCash or a voucher.");
+      return;
+    }
     if (method === "VOUCHER" && !voucher.trim()) {
       setError("Enter the commuter's voucher code.");
       return;
@@ -265,10 +269,10 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
     <ModalShell visible={visible} title="Collect Payment" onClose={close}>
       {step === "method" ? <>
         <Text style={styles.subtitle}>Choose how the passenger will pay.</Text>
-        {!isOnline ? <Text style={styles.error}>Offline mode: cash fares are saved and will sync automatically. GCash is disabled.</Text> : null}
+        {!isOnline ? <Text style={styles.error}>Offline mode: cash fares are saved and will sync automatically. GCash and vouchers are disabled.</Text> : null}
         <MethodCard title="Cash Payment" detail="Calculate fare and record cash collection" onPress={() => chooseMethod("CASH")} />
         <MethodCard title="GCash Payment" detail={isOnline ? "Generate a binding QR and track payment status" : "Unavailable offline — reconnect to generate a QR"} onPress={() => chooseMethod("GCASH")} disabled={!isOnline} />
-        <MethodCard title="Voucher / Free Ride" detail="Validate a commuter voucher code" onPress={() => chooseMethod("VOUCHER")} />
+        <MethodCard title="Voucher / Free Ride" detail={isOnline ? "Validate a commuter voucher code" : "Unavailable offline — reconnect to validate a voucher"} onPress={() => chooseMethod("VOUCHER")} disabled={!isOnline} />
       </> : null}
 
       {step === "route" ? <>

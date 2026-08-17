@@ -1,5 +1,6 @@
 import { appStorage } from "../storage/app-storage";
-import { enqueuePendingCash, getPendingCash, pendingCashCount, pendingCashForShift, removePendingCash } from "../storage/offline-cash-queue";
+import { enqueuePendingCash, getPendingCash, pendingCashCount, pendingCashForShift, removePendingCash, updatePendingCash } from "../storage/offline-cash-queue";
+import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
 import type {
   Driver,
   ConductorProfile,
@@ -73,14 +74,26 @@ const post = <T>(path: string, body?: unknown) =>
  * server is unreachable or the originating shift is no longer writable. */
 export async function syncPendingCashTransactions(): Promise<number> {
   const pending = await getPendingCash();
+  const currentDeviceId = await getConductorDeviceId();
   let synced = 0;
   for (const item of pending) {
     try {
-      await post("/conductor/transactions", item.payload);
+      if (item.deviceId && item.deviceId !== currentDeviceId) continue;
+      await post("/conductor/transactions", {
+        ...item.payload,
+        device_id: item.deviceId ?? currentDeviceId,
+        device_type: CONDUCTOR_DEVICE_TYPE,
+        offline_created_at: item.offlineCreatedAt ?? new Date(item.createdAt).toISOString(),
+      });
       await removePendingCash(item.id);
       synced += item.localTransactions.length;
     } catch (cause) {
       if (cause instanceof NetworkError) break;
+      await updatePendingCash(item.id, {
+        attempts: (item.attempts ?? 0) + 1,
+        lastAttemptAt: Date.now(),
+        lastError: cause instanceof Error ? cause.message : "Synchronization failed.",
+      });
       // Keep validation/closed-shift failures for explicit recovery instead
       // of silently deleting a fare collected offline.
     }
@@ -114,6 +127,8 @@ const mapShift = (s: any): Shift => ({
   timeIn: s.time_in,
   timeOut: s.time_out ?? null,
   isActive: s.status === "ACTIVE",
+  operatingDeviceId: s.operating_device_id ?? null,
+  operatingDeviceType: s.operating_device_type ?? null,
   isOnBreak: Boolean(s.is_on_break),
   breakStartedAt: s.break_started_at ?? null,
 });
@@ -190,12 +205,28 @@ export const api = {
     }
   },
   pendingCashCount: (shiftId?: string) => pendingCashCount(shiftId),
-  startShift: async (unit: Unit, driver: Driver) =>
-    mapShift(await post<any>("/conductor/shifts/start", {
+  startShift: async (unit: Unit, driver: Driver) => {
+    const deviceId = await getConductorDeviceId();
+    return mapShift(await post<any>("/conductor/shifts/start", {
       vehicle_id: unit.id,
       driver_id: driver.id,
       route_id: unit.routeId ?? null,
-    })),
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    }));
+  },
+  claimShiftDevice: async (shiftId: string) => {
+    const deviceId = await getConductorDeviceId();
+    return mapShift(await post<any>("/conductor/shifts/device/claim", {
+      shift_id: shiftId, device_id: deviceId, device_type: CONDUCTOR_DEVICE_TYPE,
+    }));
+  },
+  releaseShiftDevice: async (shiftId: string) => {
+    const deviceId = await getConductorDeviceId();
+    return mapShift(await post<any>("/conductor/shifts/device/release", {
+      shift_id: shiftId, device_id: deviceId, device_type: CONDUCTOR_DEVICE_TYPE,
+    }));
+  },
   transactions: async (shiftId: string) => {
     const pending = await pendingCashForShift(shiftId);
     try {
@@ -228,6 +259,8 @@ export const api = {
     shiftId?: string;
   }) => {
     const idempotencyKey = input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const deviceId = await getConductorDeviceId();
+    const offlineCreatedAt = new Date().toISOString();
     const payload = {
       shift_id: input.shiftId,
       payment_method: input.voucherCode ? "VOUCHER" : "CASH",
@@ -242,6 +275,8 @@ export const api = {
       dropoff_stop_id: input.dropoffStopId,
       idempotency_key: idempotencyKey,
       voucher_code: input.voucherCode || undefined,
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
     };
     try {
       return mapTransaction(await post<any>("/conductor/transactions", payload));
@@ -265,9 +300,12 @@ export const api = {
         shiftId: input.shiftId ?? "",
         kind: "single",
         idempotencyKey,
-        payload,
+        payload: { ...payload, offline_created_at: offlineCreatedAt },
         localTransactions: [local],
         createdAt: Date.now(),
+        deviceId,
+        offlineCreatedAt,
+        attempts: 0,
       });
       return local;
     }
@@ -284,6 +322,8 @@ export const api = {
     shiftId?: string;
   }) => {
     const idempotencyKey = input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const deviceId = await getConductorDeviceId();
+    const offlineCreatedAt = new Date().toISOString();
     const payload = {
       shift_id: input.shiftId,
       payment_method: "CASH",
@@ -292,6 +332,8 @@ export const api = {
       pickup_stop_id: input.pickupStopId,
       dropoff_stop_id: input.dropoffStopId,
       idempotency_key: idempotencyKey,
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
       group_passengers: input.passengers.map(passenger => {
         const finalAmount = passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare;
         return {
@@ -335,9 +377,12 @@ export const api = {
         shiftId: input.shiftId ?? "",
         kind: "group",
         idempotencyKey,
-        payload,
+        payload: { ...payload, offline_created_at: offlineCreatedAt },
         localTransactions: transactions,
         createdAt: Date.now(),
+        deviceId,
+        offlineCreatedAt,
+        attempts: 0,
       });
       return { groupId: `offline-${idempotencyKey}`, multiplePaymentReference: reference, transactions };
     }
@@ -347,6 +392,7 @@ export const api = {
     pickupStopId?: string; dropoffStopId?: string;
     groupPassengers?: Array<{ type: "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD"; quantity: number }>;
   }): Promise<GcashInitiation> => {
+    const deviceId = await getConductorDeviceId();
     const d = await post<any>("/conductor/payments/gcash/initiate", {
       payment_method: "GCASH",
       final_amount: input.amount,
@@ -358,6 +404,8 @@ export const api = {
       distance: input.distance,
       discount_amount: input.discountAmount,
       group_passengers: input.groupPassengers,
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
     });
     return {
       transactionId: String(d.transaction_id),
@@ -520,12 +568,16 @@ export const api = {
        reminder_count: Number(r.reminder_count) || 0,
     }));
   },
-  remit: (shift: Shift, expectedCash: number, gcash: number, declaredCash: number) =>
-    post("/conductor/remittances", {
+  remit: async (shift: Shift, expectedCash: number, gcash: number, declaredCash: number) => {
+    const deviceId = await getConductorDeviceId();
+    return post("/conductor/remittances", {
       shift_id: shift.shiftId,
       total_collected: expectedCash,
       remitted_amount: declaredCash,
       cash_total: expectedCash,
       gcash_total: gcash,
-    }),
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    });
+  },
 };

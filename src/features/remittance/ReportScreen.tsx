@@ -8,9 +8,10 @@ import { Header, ModalShell, ScreenShell } from "../../shared/ui";
 
 const money = (value: number | string | undefined) => `₱${Number(value ?? 0).toFixed(2)}`;
 
-export function ReportScreen({ shift, refreshKey, onEnded }: {
+export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
   shift: Shift;
   refreshKey: number;
+  canOperate: boolean;
   onEnded: () => void;
 }) {
   const { colors, styles } = useAppTheme();
@@ -87,6 +88,10 @@ export function ReportScreen({ shift, refreshKey, onEnded }: {
   const visibleHistory = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const submit = async () => {
+    if (!canOperate) {
+      setError("This shift is active on another device. Complete the handoff before remitting here.");
+      return;
+    }
     if (!Number.isFinite(declaredCash) || declaredCash < 0) {
       setError("Enter a valid amount of cash physically counted.");
       return;
@@ -171,9 +176,10 @@ export function ReportScreen({ shift, refreshKey, onEnded }: {
         </View>
       </View>
 
-      <Pressable style={styles.button} onPress={() => setConfirm(true)}>
+      <Pressable disabled={!canOperate} style={[styles.button, !canOperate && { opacity: 0.45 }]} onPress={() => setConfirm(true)}>
         <Text style={styles.buttonText}>Remit to Admin and end shift</Text>
       </Pressable>
+      {!canOperate ? <Text style={styles.error}>Remittance is disabled because another device owns this shift.</Text> : null}
       <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => { setHistoryOpen(true); void loadHistory(); }}>
         <Text style={styles.buttonText}>Remittance history</Text>
       </Pressable>

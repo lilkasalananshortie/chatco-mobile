@@ -9,6 +9,11 @@ export type PendingCashItem = {
   payload: Record<string, unknown>;
   localTransactions: Transaction[];
   createdAt: number;
+  deviceId?: string;
+  offlineCreatedAt?: string;
+  attempts?: number;
+  lastAttemptAt?: number;
+  lastError?: string;
 };
 
 const KEY = "chatco_pending_cash_v1";
@@ -28,6 +33,11 @@ export async function removePendingCash(id: string): Promise<void> {
   const remaining = (await getPendingCash()).filter(entry => entry.id !== id);
   if (remaining.length) await appStorage.setItem(KEY, JSON.stringify(remaining));
   else await appStorage.removeItem(KEY);
+}
+
+export async function updatePendingCash(id: string, update: Partial<PendingCashItem>): Promise<void> {
+  const next = (await getPendingCash()).map(item => item.id === id ? { ...item, ...update } : item);
+  await appStorage.setItem(KEY, JSON.stringify(next));
 }
 
 export async function pendingCashForShift(shiftId: string): Promise<Transaction[]> {

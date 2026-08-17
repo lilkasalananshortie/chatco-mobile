@@ -35,6 +35,8 @@ export interface Shift {
   isActive: boolean;
   isOnBreak?: boolean;
   breakStartedAt?: string | null;
+  operatingDeviceId?: string | null;
+  operatingDeviceType?: "WEB" | "MOBILE" | null;
 }
 
 export interface Transaction {

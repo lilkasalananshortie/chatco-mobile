@@ -277,6 +277,8 @@ export const api = {
     to: string;
     regularFare: number;
     discountedFare: number;
+    pickupStopId?: string;
+    dropoffStopId?: string;
     passengers: Array<{ passenger_type: "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD"; quantity: number }>;
     idempotencyKey?: string;
     shiftId?: string;
@@ -287,6 +289,8 @@ export const api = {
       payment_method: "CASH",
       pickup_name: input.from,
       dropoff_name: input.to,
+      pickup_stop_id: input.pickupStopId,
+      dropoff_stop_id: input.dropoffStopId,
       idempotency_key: idempotencyKey,
       group_passengers: input.passengers.map(passenger => {
         const finalAmount = passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare;
@@ -340,13 +344,16 @@ export const api = {
   },
   initiateGcash: async (input: {
     amount: number; from: string; to: string; baseFare: number; distance: number; discountAmount: number;
-    groupPassengers?: Array<{ type: "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD"; quantity: number; final_amount: number; base_fare: number; discount_amount: number }>;
+    pickupStopId?: string; dropoffStopId?: string;
+    groupPassengers?: Array<{ type: "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD"; quantity: number }>;
   }): Promise<GcashInitiation> => {
     const d = await post<any>("/conductor/payments/gcash/initiate", {
       payment_method: "GCASH",
       final_amount: input.amount,
       pickup_name: input.from,
       dropoff_name: input.to,
+      pickup_stop_id: input.pickupStopId,
+      dropoff_stop_id: input.dropoffStopId,
       base_fare: input.baseFare,
       distance: input.distance,
       discount_amount: input.discountAmount,

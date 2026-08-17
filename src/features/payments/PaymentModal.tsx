@@ -189,12 +189,9 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
           baseFare: fare.regular,
           distance: fare.distance,
           discountAmount: 0,
-          groupPassengers: groupMode ? groupPassengers.map(row => ({
-            ...row,
-            final_amount: row.type === "REGULAR" ? fare.regular : fare.discounted,
-            base_fare: fare.regular,
-            discount_amount: Math.max(0, fare.regular - (row.type === "REGULAR" ? fare.regular : fare.discounted)),
-          })) : undefined,
+          pickupStopId: pickup.id,
+          dropoffStopId: dropoff.id,
+          groupPassengers: groupMode ? groupPassengers : undefined,
         });
         setGcash(initiation);
         setPaymentStatus("PENDING");
@@ -207,6 +204,8 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
             to: dropoffName,
             regularFare: fare.regular,
             discountedFare: fare.discounted,
+            pickupStopId: pickup.id,
+            dropoffStopId: dropoff.id,
             passengers: groupPassengers.map(row => ({
               passenger_type: row.type,
               quantity: row.quantity,

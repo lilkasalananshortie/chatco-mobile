@@ -37,6 +37,7 @@ export interface Shift {
   breakStartedAt?: string | null;
   operatingDeviceId?: string | null;
   operatingDeviceType?: "WEB" | "MOBILE" | null;
+  latestDeviceRecoveryAt?: string | null;
 }
 
 export interface Transaction {

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, Share, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, Pressable, Share, Text, TextInput, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
 import { syncPendingCashTransactions } from "../../core/api/chatco-api";
 import type { Remittance, Shift, ShiftEarnings, Transaction } from "../../core/domain/types";
@@ -27,19 +27,27 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"ALL" | "WEEK" | "MONTH">("ALL");
   const [page, setPage] = useState(1);
+  const loadInFlight = useRef<Promise<void> | null>(null);
 
-  const load = async () => {
-    try {
-      const [current, authoritativeEarnings] = await Promise.all([
-        api.transactions(shift.shiftId),
-        api.earnings(shift.shiftId),
-      ]);
-      setTransactions(current);
-      setEarnings(authoritativeEarnings);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load the report.");
-    }
-  };
+  const load = useCallback(async () => {
+    if (loadInFlight.current) return loadInFlight.current;
+    const request = (async () => {
+      try {
+        const [current, authoritativeEarnings] = await Promise.all([
+          api.transactions(shift.shiftId),
+          api.earnings(shift.shiftId),
+        ]);
+        setTransactions(current);
+        setEarnings(authoritativeEarnings);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Unable to load the report.");
+      } finally {
+        loadInFlight.current = null;
+      }
+    })();
+    loadInFlight.current = request;
+    return request;
+  }, [shift.shiftId]);
 
   const loadHistory = async () => {
     setError("");
@@ -53,7 +61,15 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
 
   useEffect(() => {
     void load();
-  }, [shift.shiftId, refreshKey]);
+    const timer = setInterval(() => void load(), 15000);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") void load();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [load, refreshKey]);
 
   const totals = useMemo(() => transactions.reduce((sum, transaction) => {
     if (transaction.paymentMethod === "Cash") sum.cash += transaction.finalAmount;

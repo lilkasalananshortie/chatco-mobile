@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Location from "expo-location";
-import { Platform, Pressable, Text, View } from "react-native";
+import { AppState, Platform, Pressable, Text, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
 import type { Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
@@ -11,7 +11,7 @@ import { LOCATION_TASK_NAME } from "./location-task";
 
 type SosState = "confirm" | "locating" | "sending" | "active" | "responded" | "error";
 
-export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnded }: { shift: Shift; refreshKey: number; onShiftUpdated?: (shift: Shift) => void; onShiftEnded?: () => void }) {
+export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShiftUpdated, onShiftEnded }: { shift: Shift; refreshKey: number; canOperate: boolean; isOnline: boolean; onShiftUpdated?: (shift: Shift) => void; onShiftEnded?: () => void }) {
   const { colors, styles } = useAppTheme();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [earnings, setEarnings] = useState<ShiftEarnings | null>(null);
@@ -30,31 +30,41 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
   const [isOnBreak, setIsOnBreak] = useState(Boolean(shift.isOnBreak));
   const [announcements, setAnnouncements] = useState<import("../../core/domain/types").Announcement[]>([]);
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
-  const [isOnline, setIsOnline] = useState(true);
+  const operationalRefreshInFlight = useRef<Promise<void> | null>(null);
 
-  useEffect(() => {
-    void Promise.all([api.transactions(shift.shiftId), api.earnings(shift.shiftId)])
-      .then(([records, authoritativeEarnings]) => {
+  const refreshOperationalData = useCallback(async () => {
+    if (operationalRefreshInFlight.current) return operationalRefreshInFlight.current;
+    const request = (async () => {
+      try {
+        const records = await api.transactions(shift.shiftId);
         setTransactions(records);
-        setEarnings(authoritativeEarnings);
-      })
-      .catch(cause => setError(cause instanceof Error ? cause.message : "Unable to load shift data."));
-  }, [shift.shiftId, refreshKey]);
+        setPendingOfflineCount(await api.pendingCashCount(shift.shiftId));
+        if (isOnline) setEarnings(await api.earnings(shift.shiftId));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Unable to load shift data.");
+      } finally {
+        operationalRefreshInFlight.current = null;
+      }
+    })();
+    operationalRefreshInFlight.current = request;
+    return request;
+  }, [isOnline, shift.shiftId]);
 
   useEffect(() => {
-    void api.pendingCashCount(shift.shiftId).then(setPendingOfflineCount);
-  }, [shift.shiftId, refreshKey]);
-
-  useEffect(() => {
-    const check = () => void api.checkConnectivity().then(setIsOnline).catch(() => setIsOnline(false));
-    check();
-    const timer = setInterval(check, 20000);
-    return () => clearInterval(timer);
-  }, []);
+    void refreshOperationalData();
+    const timer = setInterval(() => void refreshOperationalData(), 15000);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") void refreshOperationalData();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [refreshKey, refreshOperationalData]);
 
   useEffect(() => {
     setIsOnBreak(Boolean(shift.isOnBreak));
-    void api.routeGeometry(shift.routeId)
+    const loadRoute = () => void api.routeGeometry(shift.routeId)
       .then(route => {
         setRouteCoordinates(route.coordinates);
         setRouteSource(route.source ?? (route.coordinates.length > 1 ? "backend" : "fallback"));
@@ -63,21 +73,46 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
         setRouteCoordinates([]);
         setRouteSource("fallback");
       });
+    loadRoute();
     const loadAnnouncements = () => void api.announcements().then(setAnnouncements).catch(() => undefined);
     loadAnnouncements();
-    const timer = setInterval(loadAnnouncements, 30000);
-    return () => clearInterval(timer);
-  }, [shift.shiftId, shift.routeId, shift.isOnBreak]);
+    const announcementTimer = setInterval(loadAnnouncements, 30000);
+    const routeTimer = setInterval(loadRoute, 60000);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") {
+        loadAnnouncements();
+        loadRoute();
+      }
+    });
+    return () => {
+      clearInterval(announcementTimer);
+      clearInterval(routeTimer);
+      subscription.remove();
+    };
+  }, [refreshKey, shift.shiftId, shift.routeId, shift.isOnBreak]);
 
   useEffect(() => {
     const load = () => void api.hails().then(setHails).catch(() => undefined);
     load();
     const timer = setInterval(load, 10000);
-    return () => clearInterval(timer);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") load();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
   }, []);
 
   useEffect(() => {
-    if (!mapEnabled) return;
+    if (!mapEnabled || !canOperate) {
+      if (Platform.OS !== "web") {
+        void Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME)
+          .then(started => started ? Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME) : undefined)
+          .catch(() => undefined);
+      }
+      return;
+    }
     let subscription: Location.LocationSubscription | null = null;
     void Location.requestForegroundPermissionsAsync()
       .then(async permission => {
@@ -122,7 +157,7 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
       subscription?.remove();
       if (backgroundStarted) void Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => undefined);
     };
-  }, [mapEnabled]);
+  }, [canOperate, mapEnabled]);
 
   useEffect(() => {
     if (sosStatus !== "active" || !sosAlertId) return;
@@ -150,6 +185,7 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
     : transactionTotals;
 
   const updateCapacity = async (next: Capacity) => {
+    if (!canOperate) return;
     const previous = capacity;
     setCapacity(next);
     setError("");
@@ -162,6 +198,7 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
   };
 
   const updateBreak = async () => {
+    if (!canOperate) return;
     const next = !isOnBreak;
     setError("");
     setIsOnBreak(next);
@@ -176,6 +213,7 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
   };
 
   const handleHail = async (id: string, action: "accept" | "reject") => {
+    if (!canOperate) return;
     try {
       if (action === "accept") await api.acceptHail(id);
       else await api.rejectHail(id);
@@ -244,18 +282,20 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
         {(["AVAILABLE", "STANDING", "FULL"] as Capacity[]).map(value => (
           <Pressable
             key={value}
+            disabled={!canOperate}
             onPress={() => void updateCapacity(value)}
             style={[styles.button, styles.secondaryButton, {
               flex: 1,
               backgroundColor: capacity === value ? colors.primary : colors.surface2,
               borderColor: capacity === value ? colors.primaryLight : colors.border,
+              opacity: canOperate ? 1 : 0.45,
             }]}
           >
             <Text style={[styles.buttonText, { fontSize: 11 }]}>{value === "AVAILABLE" ? "Available" : value === "STANDING" ? "Standing" : "Full"}</Text>
           </Pressable>
         ))}
       </View>
-      <Pressable style={[styles.button, styles.secondaryButton, { marginTop: 10 }]} onPress={() => void updateBreak()}>
+      <Pressable disabled={!canOperate} style={[styles.button, styles.secondaryButton, { marginTop: 10, opacity: canOperate ? 1 : 0.45 }]} onPress={() => void updateBreak()}>
         <Text style={[styles.buttonText, styles.secondaryButtonText]}>{isOnBreak ? "End break" : "Take a break"}</Text>
       </Pressable>
       {isOnBreak ? <Text style={[styles.subtitle, { color: colors.warning }]}>Pickup requests and live operations are paused while you are on break.</Text> : null}
@@ -292,8 +332,8 @@ export function DashboardScreen({ shift, refreshKey, onShiftUpdated, onShiftEnde
               <Text style={styles.cardTitle}>{hail.commuterName}</Text>
               <Text style={styles.subtitle}>{hail.label || "Passenger waiting"}{hail.etaMinutes ? ` · ${hail.etaMinutes} min away` : ""}</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
-                <Pressable onPress={() => void handleHail(hail.id, "accept")} style={[styles.button, { flex: 1 }]}><Text style={styles.buttonText}>Accept</Text></Pressable>
-                <Pressable onPress={() => void handleHail(hail.id, "reject")} style={[styles.button, styles.secondaryButton, { flex: 1 }]}><Text style={styles.buttonText}>Reject</Text></Pressable>
+                <Pressable disabled={!canOperate} onPress={() => void handleHail(hail.id, "accept")} style={[styles.button, { flex: 1, opacity: canOperate ? 1 : 0.45 }]}><Text style={styles.buttonText}>Accept</Text></Pressable>
+                <Pressable disabled={!canOperate} onPress={() => void handleHail(hail.id, "reject")} style={[styles.button, styles.secondaryButton, { flex: 1, opacity: canOperate ? 1 : 0.45 }]}><Text style={styles.buttonText}>Reject</Text></Pressable>
               </View>
             </View>
           ))}

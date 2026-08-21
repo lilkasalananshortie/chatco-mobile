@@ -32,8 +32,8 @@ const defaultFareConfig: FareConfig = {
   totalPoints: 34,
 };
 
-export function PaymentModal({ visible, shift, onClose, onSaved }: {
-  visible: boolean; shift: Shift; onClose: () => void; onSaved: () => void;
+export function PaymentModal({ visible, shift, isOnline, onClose, onSaved }: {
+  visible: boolean; shift: Shift; isOnline: boolean; onClose: () => void; onSaved: () => void;
 }) {
   const { colors, styles } = useAppTheme();
   const [step, setStep] = useState<Step>("method");
@@ -55,15 +55,19 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [receiptTransactions, setReceiptTransactions] = useState<import("../../core/domain/types").Transaction[]>([]);
-  const [isOnline, setIsOnline] = useState(false);
   const requestKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
-    void Promise.all([api.fareMatrix(), api.pendingGcash()])
-      .then(([matrix, pending]) => {
+    const loadFareMatrix = () => void api.fareMatrix()
+      .then((matrix) => {
         setPoints(matrix.points);
         setFareConfig(matrix.config);
+      })
+      .catch(e => setError(e instanceof Error ? e.message : "Unable to load fare data."));
+    loadFareMatrix();
+    void api.pendingGcash()
+      .then((pending) => {
         if (pending) {
           setMethod("GCASH");
           setGcash(pending);
@@ -71,14 +75,8 @@ export function PaymentModal({ visible, shift, onClose, onSaved }: {
           setStep("qr");
         }
       })
-      .catch(e => setError(e instanceof Error ? e.message : "Unable to load fare data."));
-  }, [visible]);
-
-  useEffect(() => {
-    if (!visible) return;
-    const check = () => void api.checkConnectivity().then(setIsOnline);
-    check();
-    const timer = setInterval(check, 20000);
+      .catch(e => setError(e instanceof Error ? e.message : "Unable to resume the pending payment."));
+    const timer = setInterval(loadFareMatrix, 60000);
     return () => clearInterval(timer);
   }, [visible]);
 

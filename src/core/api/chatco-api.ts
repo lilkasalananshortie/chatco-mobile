@@ -129,6 +129,7 @@ const mapShift = (s: any): Shift => ({
   isActive: s.status === "ACTIVE",
   operatingDeviceId: s.operating_device_id ?? null,
   operatingDeviceType: s.operating_device_type ?? null,
+  latestDeviceRecoveryAt: s.latest_device_recovery?.created_at ?? null,
   isOnBreak: Boolean(s.is_on_break),
   breakStartedAt: s.break_started_at ?? null,
 });
@@ -441,7 +442,14 @@ export const api = {
     };
   },
   cancelPayment: (id: string) => post(`/payments/${encodeURIComponent(id)}/cancel`, {}),
-  breakStatus: async (isOnBreak: boolean) => mapShift(await post<any>("/conductor/break-status", { is_on_break: isOnBreak })),
+  breakStatus: async (isOnBreak: boolean) => {
+    const deviceId = await getConductorDeviceId();
+    return mapShift(await post<any>("/conductor/break-status", {
+      is_on_break: isOnBreak,
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    }));
+  },
   fareMatrix: async (): Promise<FareMatrix> => {
     const d = await request<any>("/fare-matrix");
     const points = Array.isArray(d?.points) ? d.points : [];
@@ -492,18 +500,42 @@ export const api = {
     label: h.label,
     etaMinutes: Number(h.eta_minutes) || undefined,
   })),
-  acceptHail: (id: string) => post(`/conductor/hails/${encodeURIComponent(id)}/accept`),
-  rejectHail: (id: string) => post(`/conductor/hails/${encodeURIComponent(id)}/reject`),
-  capacity: (capacity_status: string) => post("/conductor/capacity-status", { capacity_status }),
-  location: (latitude: number, longitude: number, speed?: number | null, heading?: number | null, accuracy?: number | null, fixTimestamp?: string | null) =>
-    post("/conductor/location", {
+  acceptHail: async (id: string) => {
+    const deviceId = await getConductorDeviceId();
+    return post(`/conductor/hails/${encodeURIComponent(id)}/accept`, {
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    });
+  },
+  rejectHail: async (id: string) => {
+    const deviceId = await getConductorDeviceId();
+    return post(`/conductor/hails/${encodeURIComponent(id)}/reject`, {
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    });
+  },
+  capacity: async (capacity_status: string) => {
+    const deviceId = await getConductorDeviceId();
+    return post("/conductor/capacity-status", {
+      capacity_status,
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    });
+  },
+  location: async (latitude: number, longitude: number, speed?: number | null, heading?: number | null, accuracy?: number | null, fixTimestamp?: string | null) => {
+    const deviceId = await getConductorDeviceId();
+    return post("/conductor/location", {
       lat: latitude,
       lng: longitude,
-      speed: Number.isFinite(speed) ? speed : null,
+      // Expo Location reports metres/second; Laravel stores and validates km/h.
+      speed: Number.isFinite(speed) ? Number(speed) * 3.6 : null,
       heading: Number.isFinite(heading) ? heading : null,
       accuracy: Number.isFinite(accuracy) ? accuracy : null,
       fix_timestamp: fixTimestamp ?? new Date().toISOString(),
-    }),
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    });
+  },
   sos: async (lat: number, lng: number, note?: string): Promise<SosAlert> => {
     const d = await post<any>("/conductor/sos", { lat, lng, note });
     return { id: String(d.id), status: d.status };

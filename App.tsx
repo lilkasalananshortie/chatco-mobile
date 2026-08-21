@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { StatusBar } from "expo-status-bar";
 import { Alert, AppState, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -74,8 +74,11 @@ function AppRoot() {
   const [deviceId, setDeviceId] = useState("");
   const [deviceBusy, setDeviceBusy] = useState(false);
   const [deviceError, setDeviceError] = useState("");
+  const [isOnline, setIsOnline] = useState(false);
+  const shiftRef = useRef<Shift | null>(null);
 
   useEffect(() => { void getConductorDeviceId().then(setDeviceId); }, []);
+  useEffect(() => { shiftRef.current = shift; }, [shift]);
 
   const loadSession = useCallback(async () => {
     try {
@@ -113,7 +116,20 @@ function AppRoot() {
           setScreen("verify");
           setPayment(false);
         } else {
+          const previous = shiftRef.current;
+          const ownershipChanged = previous?.operatingDeviceId !== current.operatingDeviceId;
+          if (previous?.operatingDeviceId === deviceId && current.operatingDeviceId !== deviceId) {
+            setPayment(false);
+            setDeviceError(
+              !current.operatingDeviceId && current.latestDeviceRecoveryAt
+                ? "An Admin released this unavailable device. Claim the shift from a different device."
+                : "This device no longer owns the shift. Refresh the operating-device handoff before collecting fares."
+            );
+          } else if (ownershipChanged) {
+            setDeviceError("");
+          }
           setShift(current);
+          if (ownershipChanged) setRefreshKey(key => key + 1);
         }
       } catch {
         // Keep the current operational state during a temporary network outage.
@@ -129,8 +145,8 @@ function AppRoot() {
       clearInterval(timer);
       subscription.remove();
     };
-  }, [user]);
-  const canOperate = Boolean(shift && (!shift.operatingDeviceId || shift.operatingDeviceId === deviceId));
+  }, [deviceId, user]);
+  const canOperate = Boolean(shift?.operatingDeviceId && shift.operatingDeviceId === deviceId);
 
   const claimDevice = async () => {
     if (!shift) return;
@@ -173,9 +189,24 @@ function AppRoot() {
   );
   useEffect(() => {
     if (!user) return;
+    let active = true;
+    let running = false;
     const flush = async () => {
-      const synced = await syncPendingCashTransactions();
-      if (synced > 0) setRefreshKey(key => key + 1);
+      if (running) return;
+      running = true;
+      try {
+        const online = await api.checkConnectivity();
+        if (!active) return;
+        setIsOnline(online);
+        if (!online) return;
+
+        const synced = await syncPendingCashTransactions();
+        if (active && synced > 0) setRefreshKey(key => key + 1);
+      } catch {
+        if (active) setIsOnline(false);
+      } finally {
+        running = false;
+      }
     };
     void flush();
     const timer = setInterval(() => void flush(), 20000);
@@ -183,6 +214,7 @@ function AppRoot() {
       if (state === "active") void flush();
     });
     return () => {
+      active = false;
       clearInterval(timer);
       subscription.remove();
     };
@@ -196,10 +228,12 @@ function AppRoot() {
         <StatusBar style={isLofi ? "dark" : "light"} />
         <View style={{ marginHorizontal: 14, marginTop: 8, padding: 12, borderRadius: 14, backgroundColor: canOperate ? colors.surface2 : "#3B2A10" }}>
           <Text style={{ color: canOperate ? colors.primaryLight : colors.warning, fontWeight: "800" }}>
-            {!shift.operatingDeviceId ? "Choose the operating device" : canOperate ? "This is the operating device" : "View-only on this device"}
+            {!shift.operatingDeviceId && shift.latestDeviceRecoveryAt ? "Admin released the unavailable device" : !shift.operatingDeviceId ? "Choose the operating device" : canOperate ? "This is the operating device" : "View-only on this device"}
           </Text>
           <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>
-            {!shift.operatingDeviceId
+            {!shift.operatingDeviceId && shift.latestDeviceRecoveryAt
+              ? "Use a different device to claim this shift. The recovered device cannot reclaim it."
+              : !shift.operatingDeviceId
               ? "Claim this shift before collecting fares."
               : canOperate
                 ? "Release only after offline cash is synchronized for a Web/Mobile handoff."
@@ -216,7 +250,7 @@ function AppRoot() {
           ) : null}
           {deviceError ? <Text style={{ color: "#FB7185", fontSize: 12, marginTop: 8 }}>{deviceError}</Text> : null}
         </View>
-        {screen === "home" ? <DashboardScreen shift={shift} refreshKey={refreshKey} onShiftUpdated={setShift} onShiftEnded={() => { setShift(null); setScreen("verify"); }} /> : null}
+        {screen === "home" ? <DashboardScreen shift={shift} refreshKey={refreshKey} canOperate={canOperate} isOnline={isOnline} onShiftUpdated={setShift} onShiftEnded={() => { setShift(null); setScreen("verify"); }} /> : null}
         {screen === "report" ? <ReportScreen shift={shift} refreshKey={refreshKey} canOperate={canOperate} onEnded={() => { setShift(null); setScreen("verify"); }} /> : null}
         {screen === "metrics" ? <MetricsScreen shift={shift} /> : null}
         {screen === "settings" ? <SettingsScreen user={user} shift={shift} onLogout={() => { setUser(null); setShift(null); setScreen("verify"); }} /> : null}
@@ -227,7 +261,7 @@ function AppRoot() {
           }
           setPayment(true);
         }} />
-        <PaymentModal visible={payment && canOperate} shift={shift} onClose={() => setPayment(false)} onSaved={() => setRefreshKey(k => k + 1)} />
+        <PaymentModal visible={payment && canOperate} shift={shift} isOnline={isOnline} onClose={() => setPayment(false)} onSaved={() => setRefreshKey(k => k + 1)} />
       </View>
   );
 }

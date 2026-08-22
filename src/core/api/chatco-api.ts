@@ -162,9 +162,15 @@ const mapTransaction = (t: any): Transaction => ({
 
 export const api = {
   async login(login: string, password: string): Promise<User> {
+    const deviceId = await getConductorDeviceId();
     const data = await request<any>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ login, password }),
+      body: JSON.stringify({
+        login,
+        password,
+        device_id: deviceId,
+        device_type: CONDUCTOR_DEVICE_TYPE,
+      }),
     });
     if (data.role !== "CONDUCTOR") throw new Error("This app is restricted to Conductor accounts.");
     await appStorage.setItem(TOKEN_KEY, data.token);

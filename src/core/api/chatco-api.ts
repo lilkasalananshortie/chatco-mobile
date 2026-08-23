@@ -24,6 +24,21 @@ const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 const TOKEN_KEY = "chatco_session";
 const REQUEST_TIMEOUT_MS = 15000;
 
+let sessionEndedHandler: (() => void) | null = null;
+let sessionEndedNotified = false;
+
+/**
+ * Lets the application shell react immediately when another device replaces
+ * this device's conductor session. Offline cash is deliberately untouched;
+ * only the revoked authentication token and in-memory operational UI reset.
+ */
+export function setSessionEndedHandler(handler: (() => void) | null): () => void {
+  sessionEndedHandler = handler;
+  return () => {
+    if (sessionEndedHandler === handler) sessionEndedHandler = null;
+  };
+}
+
 export class NetworkError extends Error {
   constructor(message: string) {
     super(message);
@@ -60,7 +75,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const payload = (await response.json().catch(() => null)) as Envelope<T> | null;
   if (!response.ok) {
-    if (response.status === 401) await appStorage.removeItem(TOKEN_KEY);
+    // A failed login also returns 401, but must not destroy an existing
+    // session merely because somebody mistyped credentials. Only an
+    // authenticated endpoint's 401 means this device has been replaced or
+    // its session has otherwise ended.
+    if (response.status === 401 && path !== "/auth/login") {
+      await appStorage.removeItem(TOKEN_KEY);
+      if (!sessionEndedNotified) {
+        sessionEndedNotified = true;
+        sessionEndedHandler?.();
+      }
+    }
     const message = payload?.message ?? `Request failed (${response.status}).`;
     throw new Error(`${message} [HTTP ${response.status}]`);
   }
@@ -174,6 +199,7 @@ export const api = {
     });
     if (data.role !== "CONDUCTOR") throw new Error("This app is restricted to Conductor accounts.");
     await appStorage.setItem(TOKEN_KEY, data.token);
+    sessionEndedNotified = false;
     return { id: String(data.id), email: data.email, role: data.role, name: data.name };
   },
   async logout() {

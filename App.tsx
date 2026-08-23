@@ -2,7 +2,7 @@ import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, ty
 import { StatusBar } from "expo-status-bar";
 import { Alert, AppState, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { api, syncPendingCashTransactions } from "./src/core/api/chatco-api";
+import { api, setSessionEndedHandler, syncPendingCashTransactions } from "./src/core/api/chatco-api";
 import { appStorage } from "./src/core/storage/app-storage";
 import { getConductorDeviceId } from "./src/core/storage/device-id";
 import { ThemeProvider, useAppTheme } from "./src/core/theme/ThemeProvider";
@@ -79,6 +79,17 @@ function AppRoot() {
 
   useEffect(() => { void getConductorDeviceId().then(setDeviceId); }, []);
   useEffect(() => { shiftRef.current = shift; }, [shift]);
+  useEffect(() => setSessionEndedHandler(() => {
+    setUser(null);
+    setShift(null);
+    setPayment(false);
+    setScreen("verify");
+    setDeviceError("");
+    Alert.alert(
+      "Signed out",
+      "This conductor account continued on another device. Pending offline cash remains saved on this device.",
+    );
+  }), []);
 
   const loadSession = useCallback(async () => {
     try {

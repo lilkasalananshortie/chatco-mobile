@@ -56,6 +56,7 @@ export function PaymentModal({ visible, shift, isOnline, onClose, onSaved }: {
   const [error, setError] = useState("");
   const [receiptTransactions, setReceiptTransactions] = useState<import("../../core/domain/types").Transaction[]>([]);
   const requestKeyRef = useRef<string | null>(null);
+  const paymentBusyRef = useRef(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -167,6 +168,7 @@ export function PaymentModal({ visible, shift, isOnline, onClose, onSaved }: {
   };
   const submit = async () => {
     if (!method || !pickup || !dropoff || !fare) return;
+    if (paymentBusyRef.current) return;
     if (method !== "CASH" && !isOnline) {
       setError("Reconnect before using GCash or a voucher.");
       return;
@@ -180,6 +182,7 @@ export function PaymentModal({ visible, shift, isOnline, onClose, onSaved }: {
       return;
     }
     if (!requestKeyRef.current) requestKeyRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    paymentBusyRef.current = true;
     setBusy(true); setError("");
     try {
       if (method === "GCASH") {
@@ -240,18 +243,23 @@ export function PaymentModal({ visible, shift, isOnline, onClose, onSaved }: {
       setError(e instanceof Error ? e.message : "Unable to record payment.");
       setStep("failed");
     } finally {
+      paymentBusyRef.current = false;
       setBusy(false);
     }
   };
   const cancelGcash = async () => {
-    if (!gcash) return;
+    if (!gcash || paymentBusyRef.current) return;
+    paymentBusyRef.current = true;
     setBusy(true);
     try {
       await api.cancelPayment(gcash.transactionId);
       reset();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to cancel payment.");
-    } finally { setBusy(false); }
+    } finally {
+      paymentBusyRef.current = false;
+      setBusy(false);
+    }
   };
   const reset = () => {
     setStep("method"); setMethod(null); setPickup(null); setDropoff(null);

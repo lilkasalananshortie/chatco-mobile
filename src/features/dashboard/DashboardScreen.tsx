@@ -5,6 +5,7 @@ import { api } from "../../core/api/chatco-api";
 import type { Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Header, ModalShell, ScreenShell } from "../../shared/ui";
+import { SlideToConfirm } from "../../shared/ui/SlideToConfirm";
 import { LiveMap } from "./LiveMap";
 import { TransactionHistoryModal } from "./TransactionHistoryModal";
 import { LOCATION_TASK_NAME } from "./location-task";
@@ -30,16 +31,23 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const [isOnBreak, setIsOnBreak] = useState(Boolean(shift.isOnBreak));
   const [announcements, setAnnouncements] = useState<import("../../core/domain/types").Announcement[]>([]);
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+  const [breakPending, setBreakPending] = useState(false);
+  const [breakConfirmOpen, setBreakConfirmOpen] = useState(false);
   const operationalRefreshInFlight = useRef<Promise<void> | null>(null);
+  const breakBusy = useRef(false);
 
   const refreshOperationalData = useCallback(async () => {
     if (operationalRefreshInFlight.current) return operationalRefreshInFlight.current;
     const request = (async () => {
       try {
-        const records = await api.transactions(shift.shiftId);
+        const [records, pendingCount, earnings] = await Promise.all([
+          api.transactions(shift.shiftId),
+          api.pendingCashCount(shift.shiftId),
+          isOnline ? api.earnings(shift.shiftId) : Promise.resolve(null),
+        ]);
         setTransactions(records);
-        setPendingOfflineCount(await api.pendingCashCount(shift.shiftId));
-        if (isOnline) setEarnings(await api.earnings(shift.shiftId));
+        setPendingOfflineCount(pendingCount);
+        if (earnings) setEarnings(earnings);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Unable to load shift data.");
       } finally {
@@ -197,8 +205,10 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
     }
   };
 
-  const updateBreak = async () => {
-    if (!canOperate) return;
+  const updateBreak = async (): Promise<boolean> => {
+    if (!canOperate || breakBusy.current) return false;
+    breakBusy.current = true;
+    setBreakPending(true);
     const next = !isOnBreak;
     setError("");
     setIsOnBreak(next);
@@ -206,9 +216,14 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
       const updated = await api.breakStatus(next);
       setIsOnBreak(Boolean(updated.isOnBreak));
       onShiftUpdated?.(updated);
+      return true;
     } catch (cause) {
       setIsOnBreak(!next);
       setError(cause instanceof Error ? cause.message : "Unable to update break status.");
+      return false;
+    } finally {
+      breakBusy.current = false;
+      setBreakPending(false);
     }
   };
 
@@ -295,8 +310,8 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
           </Pressable>
         ))}
       </View>
-      <Pressable disabled={!canOperate} style={[styles.button, styles.secondaryButton, { marginTop: 10, opacity: canOperate ? 1 : 0.45 }]} onPress={() => void updateBreak()}>
-        <Text style={[styles.buttonText, styles.secondaryButtonText]}>{isOnBreak ? "End break" : "Take a break"}</Text>
+      <Pressable disabled={!canOperate || breakPending} style={[styles.button, styles.secondaryButton, { marginTop: 10, opacity: canOperate && !breakPending ? 1 : 0.45 }]} onPress={() => setBreakConfirmOpen(true)}>
+        <Text style={[styles.buttonText, styles.secondaryButtonText]}>{isOnBreak ? "Resume duty" : "Take a break"}</Text>
       </Pressable>
       {isOnBreak ? <Text style={[styles.subtitle, { color: colors.warning }]}>Pickup requests and live operations are paused while you are on break.</Text> : null}
 
@@ -346,6 +361,18 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
       </Pressable>
 
       <TransactionHistoryModal visible={history} transactions={transactions} onClose={() => setHistory(false)} />
+      <ModalShell visible={breakConfirmOpen} title={isOnBreak ? "Resume duty" : "Take a break"} onClose={() => !breakPending && setBreakConfirmOpen(false)}>
+        <Text style={styles.subtitle}>
+          {isOnBreak ? "Slide all the way to the right when you are ready to resume operations." : "Slide all the way to the right to pause pickup requests and live operations."}
+        </Text>
+        <SlideToConfirm
+          label={isOnBreak ? "Slide to resume duty" : "Slide to start break"}
+          disabled={breakPending}
+          onComplete={async () => {
+            if (await updateBreak()) setBreakConfirmOpen(false);
+          }}
+        />
+      </ModalShell>
       <ModalShell visible={sos} title="Emergency SOS" onClose={closeSos}>
         <Text style={sosStatus === "error" ? styles.error : styles.cardTitle}>
           {sosStatus === "confirm" ? "Send Emergency SOS?"

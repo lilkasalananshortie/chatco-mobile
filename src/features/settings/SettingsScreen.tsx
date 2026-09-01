@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as Location from "expo-location";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
 import { appStorage } from "../../core/storage/app-storage";
 import { Header, ModalShell, ScreenShell } from "../../shared/ui";
@@ -45,11 +45,26 @@ export function SettingsScreen({ user, shift, onLogout }: {
     } catch (e) { setSosStatus(e instanceof Error ? e.message : "SOS could not be sent."); }
   };
   const signOut = async () => {
+    let logoutAttempted = false;
     try {
+      const pending = await api.pendingCashCount();
+      if (pending > 0) {
+        setLogout(false);
+        Alert.alert("Pending offline cash", "Reconnect and synchronize the pending cash transactions before logging out.");
+        return;
+      }
+      logoutAttempted = true;
       await api.logout();
+    } catch (cause) {
+      if (!logoutAttempted) {
+        Alert.alert("Unable to log out", cause instanceof Error ? cause.message : "Check your pending offline cash and try again.");
+      }
     } finally {
       setLogout(false);
-      onLogout();
+      // api.logout removes the local token even when the server is briefly
+      // unreachable, so leave the UI only after a logout was actually
+      // attempted. A queue/storage failure must not discard the session.
+      if (logoutAttempted) onLogout();
     }
   };
   const info = (label: string, value: string) => <View style={styles.card}><Text style={styles.label}>{label}</Text><Text style={styles.cardTitle}>{value}</Text></View>;

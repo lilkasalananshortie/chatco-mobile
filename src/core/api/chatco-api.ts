@@ -97,33 +97,43 @@ const post = <T>(path: string, body?: unknown) =>
 
 /** Retry durable offline cash writes in order. Items stay queued when the
  * server is unreachable or the originating shift is no longer writable. */
+let syncInFlight: Promise<number> | null = null;
+
 export async function syncPendingCashTransactions(): Promise<number> {
-  const pending = await getPendingCash();
-  const currentDeviceId = await getConductorDeviceId();
-  let synced = 0;
-  for (const item of pending) {
-    try {
-      if (item.deviceId && item.deviceId !== currentDeviceId) continue;
-      await post("/conductor/transactions", {
-        ...item.payload,
-        device_id: item.deviceId ?? currentDeviceId,
-        device_type: CONDUCTOR_DEVICE_TYPE,
-        offline_created_at: item.offlineCreatedAt ?? new Date(item.createdAt).toISOString(),
-      });
-      await removePendingCash(item.id);
-      synced += item.localTransactions.length;
-    } catch (cause) {
-      if (cause instanceof NetworkError) break;
-      await updatePendingCash(item.id, {
-        attempts: (item.attempts ?? 0) + 1,
-        lastAttemptAt: Date.now(),
-        lastError: cause instanceof Error ? cause.message : "Synchronization failed.",
-      });
-      // Keep validation/closed-shift failures for explicit recovery instead
-      // of silently deleting a fare collected offline.
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = (async () => {
+    const pending = await getPendingCash();
+    const currentDeviceId = await getConductorDeviceId();
+    let synced = 0;
+    for (const item of pending) {
+      try {
+        if (item.deviceId && item.deviceId !== currentDeviceId) continue;
+        await post("/conductor/transactions", {
+          ...item.payload,
+          device_id: item.deviceId ?? currentDeviceId,
+          device_type: CONDUCTOR_DEVICE_TYPE,
+          offline_created_at: item.offlineCreatedAt ?? new Date(item.createdAt).toISOString(),
+        });
+        await removePendingCash(item.id);
+        synced += item.localTransactions.length;
+      } catch (cause) {
+        if (cause instanceof NetworkError) break;
+        await updatePendingCash(item.id, {
+          attempts: (item.attempts ?? 0) + 1,
+          lastAttemptAt: Date.now(),
+          lastError: cause instanceof Error ? cause.message : "Synchronization failed.",
+        });
+        // Keep validation/closed-shift failures for explicit recovery instead
+        // of silently deleting a fare collected offline.
+      }
     }
+    return synced;
+  })();
+  try {
+    return await syncInFlight;
+  } finally {
+    syncInFlight = null;
   }
-  return synced;
 }
 
 const mapUnit = (v: any): Unit => ({
@@ -389,22 +399,26 @@ export const api = {
       if (!(cause instanceof NetworkError)) throw cause;
       const reference = `OFFLINE-${idempotencyKey.slice(0, 8).toUpperCase()}`;
       const totalPassengers = input.passengers.reduce((sum, row) => sum + row.quantity, 0);
-      const transactions = input.passengers.flatMap(passenger => Array.from({ length: passenger.quantity }, (_, index) => ({
-        transactionId: `OFFLINE-${idempotencyKey}-${index}`,
-        paymentMethod: "Cash" as const,
-        finalAmount: passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare,
-        from: input.from,
-        to: input.to,
-        timestamp: Date.now(),
-        passengerRole: passenger.passenger_type,
-        baseFare: input.regularFare,
-        discountAmount: passenger.passenger_type === "REGULAR" ? 0 : input.regularFare - input.discountedFare,
-        status: "PAID" as const,
-        groupId: `offline-${idempotencyKey}`,
-        multiplePaymentReference: reference,
-        groupPosition: index + 1,
-        totalPassengers,
-      })));
+      let groupPosition = 0;
+      const transactions = input.passengers.flatMap(passenger => Array.from({ length: passenger.quantity }, () => {
+        groupPosition += 1;
+        return {
+          transactionId: `OFFLINE-${idempotencyKey}-${groupPosition}`,
+          paymentMethod: "Cash" as const,
+          finalAmount: passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare,
+          from: input.from,
+          to: input.to,
+          timestamp: Date.now(),
+          passengerRole: passenger.passenger_type,
+          baseFare: input.regularFare,
+          discountAmount: passenger.passenger_type === "REGULAR" ? 0 : input.regularFare - input.discountedFare,
+          status: "PAID" as const,
+          groupId: `offline-${idempotencyKey}`,
+          multiplePaymentReference: reference,
+          groupPosition,
+          totalPassengers,
+        };
+      }));
       await enqueuePendingCash({
         id: `pending-${idempotencyKey}`,
         shiftId: input.shiftId ?? "",
@@ -632,12 +646,11 @@ export const api = {
        reminder_count: Number(r.reminder_count) || 0,
     }));
   },
-  remit: async (shift: Shift, expectedCash: number, gcash: number, declaredCash: number) => {
+  remit: async (shift: Shift, expectedCash: number, gcash: number) => {
     const deviceId = await getConductorDeviceId();
     return post("/conductor/remittances", {
       shift_id: shift.shiftId,
       total_collected: expectedCash,
-      remitted_amount: declaredCash,
       cash_total: expectedCash,
       gcash_total: gcash,
       device_id: deviceId,

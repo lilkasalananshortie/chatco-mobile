@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, Pressable, Share, Text, TextInput, View } from "react-native";
+import { AppState, Pressable, Share, Text, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
 import { syncPendingCashTransactions } from "../../core/api/chatco-api";
 import type { Remittance, Shift, ShiftEarnings, Transaction } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Header, ModalShell, ScreenShell } from "../../shared/ui";
+import { SlideToConfirm } from "../../shared/ui/SlideToConfirm";
 
 const money = (value: number | string | undefined) => `₱${Number(value ?? 0).toFixed(2)}`;
 
@@ -18,7 +19,6 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [earnings, setEarnings] = useState<ShiftEarnings | null>(null);
   const [history, setHistory] = useState<Remittance[]>([]);
-  const [declared, setDeclared] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selected, setSelected] = useState<Remittance | null>(null);
@@ -87,9 +87,6 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       }
     : totals;
 
-  const declaredCash = declared.trim() === "" ? accountableTotals.cash : Number(declared);
-  const variance = Number.isFinite(declaredCash) ? declaredCash - accountableTotals.cash : 0;
-
   const filtered = useMemo(() => history.filter(item => {
     if (filter === "ALL") return true;
     const rawDate = item.remitted_at ?? item.date;
@@ -108,10 +105,6 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       setError("This shift is active on another device. Complete the handoff before remitting here.");
       return;
     }
-    if (!Number.isFinite(declaredCash) || declaredCash < 0) {
-      setError("Enter a valid amount of cash physically counted.");
-      return;
-    }
     setBusy(true);
     setError("");
     try {
@@ -126,7 +119,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
         );
       }
 
-      await api.remit(shift, accountableTotals.cash, accountableTotals.gcash, declaredCash);
+      await api.remit(shift, accountableTotals.cash, accountableTotals.gcash);
       setConfirm(false);
       setSuccess(true);
       await load();
@@ -171,24 +164,11 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Cash declaration</Text>
-        <Text style={styles.subtitle}>Count the physical cash in your possession before remitting.</Text>
-        <TextInput
-          value={declared}
-          onChangeText={setDeclared}
-          keyboardType="decimal-pad"
-          style={styles.input}
-          placeholder={accountableTotals.cash.toFixed(2)}
-          placeholderTextColor={colors.muted}
-        />
+        <Text style={styles.cardTitle}>Cash handover</Text>
+        <Text style={styles.subtitle}>The conductor submits this shift report. Admin will count the physical cash and record the official declaration.</Text>
         <View style={{ marginTop: 12 }}>
-          <Breakdown label="Expected cash" value={accountableTotals.cash} />
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-            <Text style={styles.subtitle}>{variance === 0 ? "Balanced" : variance > 0 ? "Overage" : "Shortage"}</Text>
-            <Text style={[styles.cardTitle, { color: variance === 0 ? colors.success : colors.warning }]}>
-              {variance > 0 ? "+" : ""}{money(variance)}
-            </Text>
-          </View>
+          <Breakdown label="Cash to hand over" value={accountableTotals.cash} />
+          <Breakdown label="GCash (digital)" value={accountableTotals.gcash} />
         </View>
       </View>
 
@@ -205,21 +185,17 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <ModalShell visible={confirm} title="Confirm remittance" onClose={() => setConfirm(false)}>
-        <Text style={styles.subtitle}>Review these amounts carefully. Confirming submits the official report and closes the active shift.</Text>
+        <Text style={styles.subtitle}>Review these amounts carefully. Sliding submits the report and closes the active shift. Admin will count the physical cash separately.</Text>
         <View style={styles.card}>
           <Breakdown label="Total collected" value={accountableTotals.all} />
           <Breakdown label="Cash accountable" value={accountableTotals.cash} />
-          <Breakdown label="Cash declared" value={declaredCash} />
-          <Breakdown label={variance < 0 ? "Shortage" : "Overage"} value={Math.abs(variance)} />
+          <Breakdown label="GCash (digital)" value={accountableTotals.gcash} />
         </View>
-        {variance !== 0 ? (
-          <Text style={[styles.subtitle, { color: colors.warning }]}>
-            This report contains a cash {variance < 0 ? "shortage" : "overage"} and will be visible to the administrator.
-          </Text>
-        ) : null}
-        <Pressable disabled={busy} style={styles.button} onPress={() => void submit()}>
-          <Text style={styles.buttonText}>{busy ? "Submitting…" : "Confirm and end shift"}</Text>
-        </Pressable>
+        <SlideToConfirm
+          label="Slide to confirm remittance"
+          disabled={busy}
+          onComplete={() => void submit()}
+        />
       </ModalShell>
 
       <ModalShell visible={success} title="Remittance complete" onClose={() => { setSuccess(false); onEnded(); }}>
@@ -227,8 +203,8 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
         <Text style={styles.subtitle}>The official end-of-day report was submitted to the existing ChatCo backend.</Text>
         <View style={styles.card}>
           <Breakdown label="Grand total" value={accountableTotals.all} />
-          <Breakdown label="Cash declared" value={declaredCash} />
-          <Breakdown label="Variance" value={variance} />
+          <Breakdown label="Cash to hand over" value={accountableTotals.cash} />
+          <Breakdown label="GCash (digital)" value={accountableTotals.gcash} />
         </View>
         <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => void shareReport()}>
           <Text style={styles.buttonText}>Share report copy</Text>
@@ -336,7 +312,7 @@ function officialReportText(item: Remittance, shift: Shift) {
     `Cash: ${money(item.cash_total)}`,
     `GCash: ${money(item.gcash_total)}`,
     `Voucher: ${money(item.voucher_total)}`,
-    `Declared: ${money(item.declared_amount ?? item.total_collected)}`,
+    `Cash to hand over: ${money(item.cash_total)}`,
     `Status: ${item.remittance_status ?? item.status ?? "Submitted"}`,
   ].join("\n");
 }

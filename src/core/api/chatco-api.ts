@@ -215,6 +215,20 @@ export const api = {
   async logout() {
     try { await post("/auth/logout"); } finally { await appStorage.removeItem(TOKEN_KEY); }
   },
+  forgotPassword: async (email: string) => {
+    return post("/auth/forgot-password", { email });
+  },
+  verifyResetCode: async (email: string, code: string) => {
+    return post("/auth/verify-reset-code", { email, code });
+  },
+  resetPassword: async (input: { email: string; code: string; password: string; passwordConfirmation: string; }) => {
+    return post("/auth/reset-password", {
+      email: input.email,
+      code: input.code,
+      password: input.password,
+      password_confirmation: input.passwordConfirmation,
+    });
+  },
   async me(): Promise<User | null> {
     if (!(await appStorage.getItem(TOKEN_KEY))) return null;
     try {

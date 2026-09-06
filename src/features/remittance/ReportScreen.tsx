@@ -175,7 +175,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       <Pressable disabled={!canOperate} style={[styles.button, !canOperate && { opacity: 0.45 }]} onPress={() => setConfirm(true)}>
         <Text style={styles.buttonText}>Remit to Admin and end shift</Text>
       </Pressable>
-      {!canOperate ? <Text style={styles.error}>Remittance is disabled because another device owns this shift.</Text> : null}
+      {!canOperate ? <Text style={styles.error}>Remittance is unavailable right now.</Text> : null}
       <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => { setHistoryOpen(true); void loadHistory(); }}>
         <Text style={styles.buttonText}>Remittance history</Text>
       </Pressable>

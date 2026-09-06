@@ -272,18 +272,6 @@ export const api = {
       device_type: CONDUCTOR_DEVICE_TYPE,
     }));
   },
-  claimShiftDevice: async (shiftId: string) => {
-    const deviceId = await getConductorDeviceId();
-    return mapShift(await post<any>("/conductor/shifts/device/claim", {
-      shift_id: shiftId, device_id: deviceId, device_type: CONDUCTOR_DEVICE_TYPE,
-    }));
-  },
-  releaseShiftDevice: async (shiftId: string) => {
-    const deviceId = await getConductorDeviceId();
-    return mapShift(await post<any>("/conductor/shifts/device/release", {
-      shift_id: shiftId, device_id: deviceId, device_type: CONDUCTOR_DEVICE_TYPE,
-    }));
-  },
   transactions: async (shiftId: string) => {
     const pending = await pendingCashForShift(shiftId);
     try {
@@ -381,9 +369,16 @@ export const api = {
     const idempotencyKey = input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const deviceId = await getConductorDeviceId();
     const offlineCreatedAt = new Date().toISOString();
+    const totalAmount = input.passengers.reduce(
+      (sum, passenger) => sum + passenger.quantity * (passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare),
+      0,
+    );
     const payload = {
       shift_id: input.shiftId,
       payment_method: "CASH",
+      // Group total — the backend requires it when group_passengers is
+      // absent and uses the per-row amounts for the expanded transactions.
+      final_amount: Number(totalAmount.toFixed(2)),
       pickup_name: input.from,
       dropoff_name: input.to,
       pickup_stop_id: input.pickupStopId,
@@ -665,6 +660,9 @@ export const api = {
     return post("/conductor/remittances", {
       shift_id: shift.shiftId,
       total_collected: expectedCash,
+      // Declared cash defaults to the collected total; the backend also
+      // falls back to total_collected when this field is absent.
+      remitted_amount: expectedCash,
       cash_total: expectedCash,
       gcash_total: gcash,
       device_id: deviceId,

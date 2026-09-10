@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../core/api/chatco-api";
 import type { Driver, Remittance, Shift, Unit } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Header, Loading, ModalShell, ScreenShell } from "../../shared/ui";
 
-export function VerificationScreen({ onStarted }: { onStarted: (shift: Shift) => void }) {
+export function VerificationScreen({ onStarted, onLogout, onCompleteRemittance }: {
+  onStarted: (shift: Shift) => void;
+  onLogout?: () => void;
+  onCompleteRemittance?: (remittance: Remittance) => void;
+}) {
   const { colors, styles } = useAppTheme();
   const [units, setUnits] = useState<Unit[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -13,8 +18,22 @@ export function VerificationScreen({ onStarted }: { onStarted: (shift: Shift) =>
   const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
   const [pendingRemittances, setPendingRemittances] = useState<Remittance[]>([]);
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await api.logout();
+    } catch (cause) {
+      Alert.alert("Notice", cause instanceof Error ? cause.message : "Signed out.");
+    } finally {
+      setLoggingOut(false);
+      onLogout?.();
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -56,8 +75,24 @@ export function VerificationScreen({ onStarted }: { onStarted: (shift: Shift) =>
   const records: Array<Unit | Driver> = unit ? drivers : units;
   return (
     <ScreenShell>
-      <Text style={[styles.title, { textAlign: "center" }]}>CHATCO.</Text>
-      <Text style={[styles.label, { textAlign: "center", marginBottom: 32 }]}>Conductor Portal</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <View>
+          <Text style={styles.title}>CHATCO.</Text>
+          <Text style={[styles.label, { marginTop: 2 }]}>Conductor Portal</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+          disabled={loggingOut}
+          onPress={() => void handleLogout()}
+          style={[styles.button, styles.secondaryButton, { minHeight: 36, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 6 }]}
+        >
+          <Ionicons name="log-out-outline" size={16} color={colors.text} />
+          <Text style={[styles.buttonText, styles.secondaryButtonText, { fontSize: 12 }]}>
+            {loggingOut ? "Signing out..." : "Log Out"}
+          </Text>
+        </Pressable>
+      </View>
       <Header
         title={unit ? "Select Your Driver" : "Select Your Unit"}
         subtitle={unit ? "Choose the driver you will assist today." : "Choose the vehicle assigned to this shift."}
@@ -71,6 +106,14 @@ export function VerificationScreen({ onStarted }: { onStarted: (shift: Shift) =>
             <Text style={styles.label}>Unit {item.unit_number ?? "—"} · {item.date ?? "Previous shift"}</Text>
             <Text style={styles.subtitle}>Expected cash: ₱{Number(item.cash_total ?? 0).toFixed(2)}</Text>
             <Text style={styles.subtitle}>Status: {String(item.remittance_status ?? item.status ?? "PENDING")}</Text>
+            {onCompleteRemittance ? (
+              <Pressable
+                style={[styles.button, { marginTop: 10, backgroundColor: "#D97706" }]}
+                onPress={() => onCompleteRemittance(item)}
+              >
+                <Text style={[styles.buttonText, { color: "#fff", fontWeight: "700" }]}>Complete Remittance</Text>
+              </Pressable>
+            ) : null}
           </View>;
         })}
       </View> : null}

@@ -82,21 +82,33 @@ const tabs: { id: Screen; label: string; icon: keyof typeof Ionicons.glyphMap }[
   { id: "settings", label: "Settings", icon: "settings-outline" },
 ];
 
-export function BottomNav({ current, onNavigate, onPayment }: {
-  current: Screen; onNavigate: (screen: Screen) => void; onPayment: () => void;
+export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = false }: {
+  current: Screen; onNavigate: (screen: Screen) => void; onPayment: () => void; isPaymentDisabled?: boolean;
 }) {
   const { colors, isLofi } = useAppTheme();
   return (
     <SafeAreaView style={[local.navSafe, { backgroundColor: colors.surface }]}>
       <View style={[local.nav, { borderColor: colors.border }]}>
         {tabs.slice(0, 2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
-        <Pressable style={local.payWrap} onPress={onPayment} accessibilityLabel="Collect payment">
+        <Pressable
+          style={[local.payWrap, isPaymentDisabled && { opacity: 0.55 }]}
+          onPress={onPayment}
+          accessibilityLabel={isPaymentDisabled ? "Payment (Disabled during break)" : "Collect payment"}
+        >
           <View style={[local.payButton, {
-            backgroundColor: colors.primary,
+            backgroundColor: isPaymentDisabled ? colors.surface2 : colors.primary,
             borderColor: colors.surface,
             borderRadius: isLofi ? 2 : 27,
-          }]}><Ionicons name="wallet-outline" size={24} color={isLofi ? colors.text : "#fff"} /></View>
-          <Text style={[local.navLabel, { color: colors.muted }]}>Payment</Text>
+          }]}>
+            <Ionicons
+              name="wallet-outline"
+              size={24}
+              color={isPaymentDisabled ? colors.muted : (isLofi ? colors.text : "#fff")}
+            />
+          </View>
+          <Text style={[local.navLabel, { color: isPaymentDisabled ? colors.muted : colors.text }]}>
+            {isPaymentDisabled ? "On Break" : "Payment"}
+          </Text>
         </Pressable>
         {tabs.slice(2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
       </View>

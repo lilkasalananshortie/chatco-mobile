@@ -10,7 +10,7 @@ import { LiveMap } from "./LiveMap";
 import { TransactionHistoryModal } from "./TransactionHistoryModal";
 import { LOCATION_TASK_NAME } from "./location-task";
 
-type SosState = "confirm" | "locating" | "sending" | "active" | "responded" | "error";
+type SosState = "confirm" | "countdown" | "locating" | "sending" | "active" | "responded" | "error";
 
 export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShiftUpdated, onShiftEnded }: { shift: Shift; refreshKey: number; canOperate: boolean; isOnline: boolean; onShiftUpdated?: (shift: Shift) => void; onShiftEnded?: () => void }) {
   const { colors, styles } = useAppTheme();
@@ -20,8 +20,12 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const [history, setHistory] = useState(false);
   const [sos, setSos] = useState(false);
   const [sosStatus, setSosStatus] = useState<SosState>("confirm");
+  const [sosCountdown, setSosCountdown] = useState(5);
   const [sosAlertId, setSosAlertId] = useState<string | null>(null);
   const [sosSeconds, setSosSeconds] = useState(0);
+  const [deviceId, setDeviceId] = useState<string>("");
+  const [deviceBusy, setDeviceBusy] = useState(false);
+  const [deviceError, setDeviceError] = useState("");
   const [hails, setHails] = useState<HailRequest[]>([]);
   const [position, setPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [error, setError] = useState("");
@@ -35,6 +39,10 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const [breakConfirmOpen, setBreakConfirmOpen] = useState(false);
   const operationalRefreshInFlight = useRef<Promise<void> | null>(null);
   const breakBusy = useRef(false);
+
+  useEffect(() => {
+    void api.getDeviceId().then(setDeviceId);
+  }, []);
 
   const refreshOperationalData = useCallback(async () => {
     if (operationalRefreshInFlight.current) return operationalRefreshInFlight.current;
@@ -238,19 +246,81 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
     }
   };
 
+  const ownsShift = Boolean(shift.operatingDeviceId && deviceId && shift.operatingDeviceId === deviceId);
+  const unclaimed = !shift.operatingDeviceId;
+  const recoveredByAdmin = unclaimed && Boolean(shift.latestDeviceRecoveryAt);
+  const showDeviceBanner = !ownsShift || unclaimed;
+
+  const claimDevice = async () => {
+    setDeviceBusy(true);
+    setDeviceError("");
+    try {
+      const updated = await api.claimShiftDevice(shift.shiftId);
+      onShiftUpdated?.(updated);
+    } catch (cause) {
+      setDeviceError(cause instanceof Error ? cause.message : "Unable to claim this shift.");
+    } finally {
+      setDeviceBusy(false);
+    }
+  };
+
+  const releaseDevice = async () => {
+    setDeviceBusy(true);
+    setDeviceError("");
+    try {
+      const pending = await api.pendingCashCount(shift.shiftId);
+      if (pending > 0) {
+        throw new Error("Offline cash is still waiting to sync. Keep this device connected and try again.");
+      }
+      const updated = await api.releaseShiftDevice(shift.shiftId);
+      onShiftUpdated?.(updated);
+    } catch (cause) {
+      setDeviceError(cause instanceof Error ? cause.message : "Unable to release this shift.");
+    } finally {
+      setDeviceBusy(false);
+    }
+  };
+
+  const DEFAULT_LOCATION = { latitude: 14.8434, longitude: 120.875 };
+
+  const startSosCountdown = () => {
+    setSosStatus("countdown");
+    setSosCountdown(5);
+  };
+
+  const cancelSosCountdown = () => {
+    setSosStatus("confirm");
+    setSosCountdown(5);
+  };
+
+  useEffect(() => {
+    if (sosStatus !== "countdown") return;
+    if (sosCountdown <= 0) {
+      void sendSos();
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSosCountdown(c => c - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [sosStatus, sosCountdown]);
+
   const sendSos = async () => {
     setSosStatus("locating");
     setError("");
+    let coords = DEFAULT_LOCATION;
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      const location = permission.status === "granted"
-        ? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).catch(() => null)
-        : null;
-      if (!location) throw new Error("Current location is required before sending SOS. Enable location permission and try again.");
+      const permission = await Location.requestForegroundPermissionsAsync().catch(() => null);
+      if (permission?.status === "granted") {
+        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).catch(() => null);
+        if (location) {
+          coords = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+        }
+      }
       setSosStatus("sending");
       const alert = await api.sos(
-        location.coords.latitude,
-        location.coords.longitude,
+        coords.latitude,
+        coords.longitude,
         "Emergency alert from conductor mobile app",
       );
       setSosAlertId(alert.id);
@@ -265,6 +335,7 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
     if (sosStatus === "active" || sosStatus === "locating" || sosStatus === "sending") return;
     setSos(false);
     setSosStatus("confirm");
+    setSosCountdown(5);
     setSosAlertId(null);
     setSosSeconds(0);
   };
@@ -274,12 +345,64 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
       {!isOnline ? <Text style={[styles.error, { marginBottom: 12 }]}>Offline mode: cash fares are saved on this device and will sync automatically. GCash is unavailable.</Text> : null}
       <Header title={`Unit ${shift.unitNumber}`} subtitle={`${shift.route || "Active route"} · ${shift.driverName}`} eyebrow="Conductor Dashboard" />
 
+      {showDeviceBanner ? (
+        <View style={{
+          backgroundColor: ownsShift ? "#0284C720" : "#D9770620",
+          borderColor: ownsShift ? "#38BDF860" : "#F59E0B60",
+          borderWidth: 1,
+          borderRadius: 14,
+          padding: 14,
+          marginVertical: 12,
+        }}>
+          <Text style={{ color: ownsShift ? "#BAE6FD" : "#FDE68A", fontSize: 14, fontWeight: "700" }}>
+            {recoveredByAdmin
+              ? "Admin released the unavailable device"
+              : unclaimed
+              ? "Choose the operating device"
+              : ownsShift
+              ? "This is the operating device"
+              : "View-only on this device"}
+          </Text>
+          <Text style={{ color: ownsShift ? "#E0F2FE" : "#FEF3C7", fontSize: 12, marginTop: 4, lineHeight: 16 }}>
+            {recoveredByAdmin
+              ? "Use a different device to claim this shift. The recovered device cannot reclaim it."
+              : unclaimed
+              ? "Claim this shift before collecting fares."
+              : ownsShift
+              ? "Release only when moving the shift to Web or Mobile."
+              : `The ${shift.operatingDeviceType?.toLowerCase() ?? "other"} device must sync and release the shift first.`}
+          </Text>
+          {deviceError ? <Text style={{ color: "#FCA5A5", fontSize: 12, marginTop: 6 }}>{deviceError}</Text> : null}
+          {unclaimed ? (
+            <Pressable
+              disabled={deviceBusy}
+              style={[styles.button, { marginTop: 10, backgroundColor: "#0284C7" }]}
+              onPress={() => void claimDevice()}
+            >
+              <Text style={[styles.buttonText, { color: "#fff", fontWeight: "700" }]}>
+                {deviceBusy ? "Claiming…" : "Use this device"}
+              </Text>
+            </Pressable>
+          ) : ownsShift ? (
+            <Pressable
+              disabled={deviceBusy}
+              style={[styles.button, styles.secondaryButton, { marginTop: 10 }]}
+              onPress={() => void releaseDevice()}
+            >
+              <Text style={[styles.buttonText, styles.secondaryButtonText, { fontWeight: "700" }]}>
+                {deviceBusy ? "Checking sync…" : "Release for handoff"}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       <View style={[styles.card, { flexDirection: "row", alignItems: "center" }]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.label}>Total Collected</Text>
           <Text style={styles.title}>{`\u20B1${totals.total.toFixed(2)}`}</Text>
-        <Text style={styles.subtitle}>{transactions.length} passenger transactions</Text>
-        {pendingOfflineCount > 0 ? <Text style={[styles.subtitle, { color: colors.warning }]}>{pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync</Text> : null}
+          <Text style={styles.subtitle}>{transactions.length} passenger transactions</Text>
+          {pendingOfflineCount > 0 ? <Text style={[styles.subtitle, { color: colors.warning }]}>{pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync</Text> : null}
         </View>
         <Pressable style={[styles.button, styles.secondaryButton, { marginTop: 0 }]} onPress={() => setHistory(true)}>
           <Text style={styles.buttonText}>History</Text>
@@ -360,7 +483,7 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
         <Text style={[styles.buttonText, { color: "#fff" }]}>Emergency SOS</Text>
       </Pressable>
 
-      <TransactionHistoryModal visible={history} transactions={transactions} onClose={() => setHistory(false)} />
+      <TransactionHistoryModal visible={history} shiftId={shift.shiftId} transactions={transactions} onClose={() => setHistory(false)} />
       <ModalShell visible={breakConfirmOpen} title={isOnBreak ? "Resume duty" : "Take a break"} onClose={() => !breakPending && setBreakConfirmOpen(false)}>
         <Text style={styles.subtitle}>
           {isOnBreak ? "Slide all the way to the right when you are ready to resume operations." : "Slide all the way to the right to pause pickup requests and live operations."}

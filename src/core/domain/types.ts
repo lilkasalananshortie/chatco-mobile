@@ -170,7 +170,7 @@ export interface FareMatrix {
   config: FareConfig;
 }
 
-export type CommuterType = "REGULAR" | "STUDENT" | "SENIOR" | "PWD";
+export type CommuterType = "REGULAR" | "STUDENT" | "SENIOR_CITIZEN" | "PWD" | "SENIOR";
 
 export interface SosAlert {
   id: string;
@@ -192,4 +192,19 @@ export interface RouteGeometry {
   coordinates: Array<[number, number]>;
   source?: "backend" | "fallback";
   version?: { number?: number; publishedAt?: string | null } | null;
+}
+
+export interface ReceiptSettings {
+  businessName: string;
+  addressLine: string;
+  footerNote: string;
+  paperWidth: "58" | "80";
+  autoPrint: boolean;
+  showDateTime: boolean;
+  showTransactionId: boolean;
+  showRoute: boolean;
+  showUnit: boolean;
+  showConductor: boolean;
+  showPassenger: boolean;
+  showFareBreakdown: boolean;
 }

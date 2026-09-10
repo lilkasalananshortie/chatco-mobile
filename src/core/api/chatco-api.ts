@@ -18,6 +18,7 @@ import type {
   User,
   Announcement,
   RouteGeometry,
+  ReceiptSettings,
 } from "../domain/types";
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/$/, "");
@@ -272,12 +273,82 @@ export const api = {
       device_type: CONDUCTOR_DEVICE_TYPE,
     }));
   },
+  claimShiftDevice: async (shiftId: string): Promise<Shift> => {
+    const deviceId = await getConductorDeviceId();
+    const data = await post<any>("/conductor/shifts/device/claim", {
+      shift_id: shiftId,
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    });
+    return mapShift(data?.data ?? data);
+  },
+  releaseShiftDevice: async (shiftId: string): Promise<Shift> => {
+    const deviceId = await getConductorDeviceId();
+    const data = await post<any>("/conductor/shifts/device/release", {
+      shift_id: shiftId,
+      device_id: deviceId,
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    });
+    return mapShift(data?.data ?? data);
+  },
+  getDeviceId: () => getConductorDeviceId(),
   transactions: async (shiftId: string) => {
     const pending = await pendingCashForShift(shiftId);
     try {
       return (await request<any[]>(`/conductor/transactions?shift_id=${encodeURIComponent(shiftId)}`)).map(mapTransaction).concat(pending);
     } catch (cause) {
       if (cause instanceof NetworkError) return pending;
+      throw cause;
+    }
+  },
+  transactionsPage: async (shiftId: string, options: {
+    page: number;
+    perPage?: number;
+    paymentMethod?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<{
+    transactions: Transaction[];
+    currentPage: number;
+    perPage: number;
+    total: number;
+    totalPages: number;
+    totalAmount: number;
+  }> => {
+    const params = new URLSearchParams({
+      shift_id: shiftId,
+      page: String(options.page),
+      per_page: String(options.perPage ?? 25),
+    });
+    if (options.paymentMethod && options.paymentMethod !== "ALL") {
+      params.append("payment_method", options.paymentMethod.toUpperCase());
+    }
+    if (options.dateFrom) params.append("date_from", options.dateFrom);
+    if (options.dateTo) params.append("date_to", options.dateTo);
+
+    try {
+      const res = await request<any>(`/conductor/transactions?${params.toString()}`);
+      const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+      return {
+        transactions: rows.map(mapTransaction),
+        currentPage: Number(res?.current_page ?? options.page),
+        perPage: Number(res?.per_page ?? options.perPage ?? 25),
+        total: Number(res?.total ?? rows.length),
+        totalPages: Number(res?.last_page ?? 1),
+        totalAmount: Number(res?.total_amount ?? rows.reduce((s: number, r: any) => s + (Number(r.final_amount) || 0), 0)),
+      };
+    } catch (cause) {
+      if (cause instanceof NetworkError) {
+        const local = await pendingCashForShift(shiftId);
+        return {
+          transactions: local,
+          currentPage: 1,
+          perPage: 25,
+          total: local.length,
+          totalPages: 1,
+          totalAmount: local.reduce((s, t) => s + t.finalAmount, 0),
+        };
+      }
       throw cause;
     }
   },
@@ -306,6 +377,7 @@ export const api = {
     const idempotencyKey = input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const deviceId = await getConductorDeviceId();
     const offlineCreatedAt = new Date().toISOString();
+    const passengerRole = input.passengerRole === "SENIOR" ? "SENIOR_CITIZEN" : input.passengerRole;
     const payload = {
       shift_id: input.shiftId,
       payment_method: input.voucherCode ? "VOUCHER" : "CASH",
@@ -315,7 +387,7 @@ export const api = {
       base_fare: input.baseFare,
       distance: input.distance,
       discount_amount: input.discountAmount,
-      passenger_role: input.passengerRole,
+      passenger_role: passengerRole,
       pickup_stop_id: input.pickupStopId,
       dropoff_stop_id: input.dropoffStopId,
       idempotency_key: idempotencyKey,
@@ -334,7 +406,7 @@ export const api = {
         from: input.from,
         to: input.to,
         timestamp: Date.now(),
-        passengerRole: input.passengerRole,
+        passengerRole: passengerRole,
         distance: input.distance,
         baseFare: input.baseFare,
         discountAmount: input.discountAmount,
@@ -668,5 +740,40 @@ export const api = {
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,
     });
+  },
+  receiptSettings: async (): Promise<ReceiptSettings> => {
+    try {
+      const d = await request<any>("/conductor/receipt-settings");
+      const getBool = (v: any, fallback = true) => v === undefined || v === null ? fallback : v === "true" || v === true;
+      return {
+        businessName: d.receipt_business_name ?? "CHATCO",
+        addressLine: d.receipt_address_line ?? "",
+        footerNote: d.receipt_footer_note ?? "Thank you for riding with Chatco!",
+        paperWidth: d.receipt_paper_width === "80" ? "80" : "58",
+        autoPrint: getBool(d.receipt_auto_print, true),
+        showDateTime: getBool(d.receipt_show_datetime, true),
+        showTransactionId: getBool(d.receipt_show_transaction_id, true),
+        showRoute: getBool(d.receipt_show_route, true),
+        showUnit: getBool(d.receipt_show_unit, true),
+        showConductor: getBool(d.receipt_show_conductor, true),
+        showPassenger: getBool(d.receipt_show_passenger, true),
+        showFareBreakdown: getBool(d.receipt_show_fare_breakdown, true),
+      };
+    } catch {
+      return {
+        businessName: "CHATCO",
+        addressLine: "",
+        footerNote: "Thank you for riding with Chatco!",
+        paperWidth: "58",
+        autoPrint: true,
+        showDateTime: true,
+        showTransactionId: true,
+        showRoute: true,
+        showUnit: true,
+        showConductor: true,
+        showPassenger: true,
+        showFareBreakdown: true,
+      };
+    }
   },
 };

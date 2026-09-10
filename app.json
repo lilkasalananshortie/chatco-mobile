@@ -26,7 +26,10 @@
       ]
     },
     "ios": {
-      "bundleIdentifier": "com.chatco.conductor"
+      "bundleIdentifier": "com.chatco.conductor",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "extra": {
       "eas": {

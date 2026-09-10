@@ -67,10 +67,16 @@ function AppRoot() {
   const [booting, setBooting] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
+  const [remittanceShift, setRemittanceShift] = useState<Shift | null>(null);
+  const [deviceId, setDeviceId] = useState<string>("");
   const [screen, setScreen] = useState<Screen>("verify");
   const [payment, setPayment] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isOnline, setIsOnline] = useState(false);
+
+  useEffect(() => {
+    void api.getDeviceId().then(setDeviceId);
+  }, []);
 
   // Session ownership follows "latest login wins": logging in on a new
   // device revokes every earlier token on the backend, so this device's
@@ -176,20 +182,103 @@ function AppRoot() {
       subscription.remove();
     };
   }, [user]);
-  const canOperate = Boolean(shift);
+  const ownsShift = Boolean(shift?.operatingDeviceId && deviceId && shift.operatingDeviceId === deviceId);
+  const unclaimed = Boolean(shift && !shift.operatingDeviceId);
+  const isOperatingDevice = ownsShift || unclaimed;
+  const canOperate = Boolean((shift && isOperatingDevice) || remittanceShift);
+  const isViewOnlyDevice = Boolean(shift?.operatingDeviceId && !ownsShift);
+  const isPaymentDisabled = Boolean(shift?.isOnBreak) || isViewOnlyDevice || Boolean(!shift);
+
+  const handleCompleteRemittance = useCallback((item: import("./src/core/domain/types").Remittance) => {
+    const syntheticShift: Shift = {
+      shiftId: String(item.shift_id ?? ""),
+      unitNumber: item.unit_number ?? "—",
+      conductorName: user?.name ?? "Conductor",
+      driverName: "—",
+      route: "",
+      timeIn: item.date ?? new Date().toISOString(),
+      timeOut: new Date().toISOString(),
+      isActive: false,
+    };
+    setRemittanceShift(syntheticShift);
+    setScreen("report");
+  }, [user?.name]);
+
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
-  if (!shift || screen === "verify") return <VerificationScreen onStarted={s => { setShift(s); setScreen("home"); }} />;
+  if ((!shift && !remittanceShift) || screen === "verify") {
+    return (
+      <VerificationScreen
+        onStarted={s => { setShift(s); setRemittanceShift(null); setScreen("home"); }}
+        onLogout={() => { setUser(null); setShift(null); setRemittanceShift(null); setScreen("verify"); }}
+        onCompleteRemittance={handleCompleteRemittance}
+      />
+    );
+  }
+
+  const activeOrRemittanceShift = shift ?? remittanceShift!;
 
   return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <StatusBar style={isLofi ? "dark" : "light"} />
-        {screen === "home" ? <DashboardScreen shift={shift} refreshKey={refreshKey} canOperate={canOperate} isOnline={isOnline} onShiftUpdated={setShift} onShiftEnded={() => { setShift(null); setScreen("verify"); }} /> : null}
-        {screen === "report" ? <ReportScreen shift={shift} refreshKey={refreshKey} canOperate={canOperate} onEnded={() => { setShift(null); setScreen("verify"); }} /> : null}
-        {screen === "metrics" ? <MetricsScreen shift={shift} /> : null}
-        {screen === "settings" ? <SettingsScreen user={user} shift={shift} onLogout={() => { setUser(null); setShift(null); setScreen("verify"); }} /> : null}
-        <BottomNav current={screen} onNavigate={setScreen} onPayment={() => setPayment(true)} />
-        <PaymentModal visible={payment && canOperate} shift={shift} isOnline={isOnline} onClose={() => setPayment(false)} onSaved={() => setRefreshKey(k => k + 1)} />
+        {screen === "home" && shift ? (
+          <DashboardScreen
+            shift={shift}
+            refreshKey={refreshKey}
+            canOperate={canOperate}
+            isOnline={isOnline}
+            onShiftUpdated={setShift}
+            onShiftEnded={() => { setShift(null); setRemittanceShift(null); setScreen("verify"); }}
+          />
+        ) : null}
+        {screen === "report" ? (
+          <ReportScreen
+            shift={activeOrRemittanceShift}
+            refreshKey={refreshKey}
+            canOperate={canOperate}
+            onEnded={() => { setShift(null); setRemittanceShift(null); setScreen("verify"); }}
+          />
+        ) : null}
+        {screen === "metrics" ? <MetricsScreen shift={activeOrRemittanceShift} /> : null}
+        {screen === "settings" ? (
+          <SettingsScreen
+            user={user}
+            shift={activeOrRemittanceShift}
+            onLogout={() => { setUser(null); setShift(null); setRemittanceShift(null); setScreen("verify"); }}
+          />
+        ) : null}
+        <BottomNav
+          current={screen}
+          onNavigate={setScreen}
+          onPayment={() => {
+            if (Boolean(shift?.isOnBreak)) {
+              Alert.alert("Shift on Break", "Cannot collect payments while on an active break. Resume duty first.");
+              return;
+            }
+            if (isViewOnlyDevice) {
+              Alert.alert(
+                "View-Only Mode",
+                `The ${shift?.operatingDeviceType?.toLowerCase() ?? "other"} device is currently operating this shift. Sync and release the shift on that device before collecting fares here.`
+              );
+              return;
+            }
+            if (!shift) {
+              Alert.alert("No Active Shift", "Start or claim a shift to collect payments.");
+              return;
+            }
+            setPayment(true);
+          }}
+          isPaymentDisabled={isPaymentDisabled}
+        />
+        {shift ? (
+          <PaymentModal
+            visible={payment && canOperate && !isPaymentDisabled}
+            shift={shift}
+            isOnline={isOnline}
+            onClose={() => setPayment(false)}
+            onSaved={() => setRefreshKey(k => k + 1)}
+          />
+        ) : null}
       </View>
   );
 }

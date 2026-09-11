@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert } from "react-native";
 import * as Location from "expo-location";
 import { api } from "../../../core/api/chatco-api";
@@ -122,12 +122,9 @@ export function usePaymentFlow({
       .catch(() => undefined);
   }, [visible]);
 
-  const triggerSuccessAlert = useCallback((amount: number, method: string) => {
-    Alert.alert(
-      "Payment Recorded",
-      `Payment of ${formatCurrency(amount)} via ${method} has been recorded successfully.`,
-      [{ text: "OK" }],
-    );
+  const triggerSuccessAlert = useCallback((_amount: number, _method: string) => {
+    // Silent success - no modal alert popup ("sana wala na tanungan")
+    // The UI transitions to step === 'success' with full receipt summary and haptics
   }, []);
 
   // Auto-expand landmark when switching selectingField
@@ -325,6 +322,7 @@ export function usePaymentFlow({
     await new Promise((r) => setTimeout(r, 800));
 
     try {
+      let txns: Transaction[];
       if (isGroupMode) {
         const result = await api.recordGroupCash({
           from: selectedPointName(pickupPoint, pickupLandmark),
@@ -340,8 +338,9 @@ export function usePaymentFlow({
           shiftId: shift.shiftId,
           unitNumber: shift.unitNumber,
         });
-        setReceiptTransactions(result.transactions);
-        const first = result.transactions[0];
+        txns = result.transactions;
+        setReceiptTransactions(txns);
+        const first = txns[0];
         setCashReceiptToken(first?.receiptQrToken ?? null);
       } else {
         const transaction = await api.recordCash({
@@ -357,14 +356,17 @@ export function usePaymentFlow({
           shiftId: shift.shiftId,
           unitNumber: shift.unitNumber,
         });
+        txns = [transaction];
         setCashReceiptToken(transaction.receiptQrToken ?? null);
-        setReceiptTransactions([transaction]);
+        setReceiptTransactions(txns);
       }
-      const finalAmt = isGroupMode ? groupTotalFare : (fareInfo?.finalFare ?? 0);
       appHaptics.success();
-      triggerSuccessAlert(finalAmt, "Cash");
       setShowReceiptDetails(false);
       onSaved();
+
+      // Immediate auto-print dispatch: zero dialogs, zero delays
+      printer.autoPrintReceipt(txns);
+
       setStep("success");
     } catch (err) {
       appHaptics.error();
@@ -403,11 +405,15 @@ export function usePaymentFlow({
         shiftId: shift.shiftId,
         unitNumber: shift.unitNumber,
       });
-      setReceiptTransactions([transaction]);
+      const txns = [transaction];
+      setReceiptTransactions(txns);
       appHaptics.success();
-      triggerSuccessAlert(0, "Voucher");
       setShowReceiptDetails(false);
       onSaved();
+
+      // Immediate auto-print dispatch
+      printer.autoPrintReceipt(txns);
+
       setStep("success");
     } catch (err) {
       appHaptics.error();

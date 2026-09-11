@@ -275,8 +275,8 @@ export function PaymentSuccessStep({
               }}
             >
               {printerStatus === "connected"
-                ? pairedPrinterName || "Goojprt Belt Printer"
-                : "Goojprt: Disconnected"}
+                ? pairedPrinterName || "Thermal Printer"
+                : "Printer: Disconnected"}
             </Text>
           </View>
           <View
@@ -323,7 +323,7 @@ export function PaymentSuccessStep({
         >
           <Ionicons name="print-outline" size={16} color={colors.text} />
           <Text style={styles.printReceiptButtonText}>
-            Print {isGroupMode ? "All Receipts" : "Receipt"} (Goojprt 58mm)
+            Print {isGroupMode ? "All Receipts" : "Receipt"}
           </Text>
         </Pressable>
 

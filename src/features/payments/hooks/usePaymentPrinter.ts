@@ -86,16 +86,24 @@ export function usePaymentPrinter({
     ];
   };
 
-  // Auto-print receipt on payment success if enabled
-  useEffect(() => {
-    if (step === "success" && thermalPrinter.isAutoPrintEnabled()) {
-      const firstTxn = receiptTransactions[0];
-      const txnKey = firstTxn?.transactionId || `${step}-${Date.now()}`;
-      if (lastAutoPrintedRef.current === txnKey) return;
-      lastAutoPrintedRef.current = txnKey;
+  // Direct auto-print helper: prints immediately without waiting or asking questions
+  const autoPrintReceipt = (overrideTxns?: Transaction[]) => {
+    if (!thermalPrinter.isAutoPrintEnabled()) return;
 
-      const txnsToPrint = buildPrintTransactions();
-      void thermalPrinter.printReceipt(txnsToPrint, {
+    const txnsToPrint =
+      overrideTxns && overrideTxns.length > 0
+        ? overrideTxns
+        : receiptTransactions.length > 0
+        ? receiptTransactions
+        : buildPrintTransactions();
+
+    const firstTxn = txnsToPrint[0];
+    const txnKey = firstTxn?.transactionId || `txn-${Date.now()}`;
+    if (lastAutoPrintedRef.current === txnKey) return;
+    lastAutoPrintedRef.current = txnKey;
+
+    void thermalPrinter
+      .printReceipt(txnsToPrint, {
         shift,
         settings: receiptSettings,
         totalPassengers: isGroupMode ? groupPassengerCount : 1,
@@ -109,7 +117,25 @@ export function usePaymentPrinter({
                 p.quantity,
             }))
           : undefined,
+      })
+      .then((res) => {
+        if (!res.success) {
+          console.warn("[PaymentPrinter] Auto-print attempt:", res.error);
+        }
       });
+  };
+
+  // Reset auto-print latch when step leaves 'success'
+  useEffect(() => {
+    if (step !== "success") {
+      lastAutoPrintedRef.current = null;
+    }
+  }, [step]);
+
+  // Auto-print receipt on payment success if enabled
+  useEffect(() => {
+    if (step === "success" && thermalPrinter.isAutoPrintEnabled()) {
+      autoPrintReceipt();
     }
   }, [
     step,
@@ -150,25 +176,16 @@ export function usePaymentPrinter({
         : undefined,
     });
 
-    if (result.success && result.isDirectBluetooth) {
+    if (result.success) {
       appHaptics.success();
-      Alert.alert(
-        "Goojprt Belt Print",
-        `Ticket printed on ${pairedPrinterName || "Goojprt 58mm Belt Printer"}.`,
-      );
-    } else if (!result.success && !result.isDirectBluetooth) {
-      Alert.alert("Goojprt Belt Printer", "Bluetooth belt printer is not connected.", [
+    } else {
+      Alert.alert("Thermal Printer", "Printer is not connected or RawBT is unavailable.", [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Connect Goojprt",
+          text: "Connect Printer",
           onPress: async () => {
             const connectRes = await thermalPrinter.connect();
-            if (connectRes.success) {
-              Alert.alert(
-                "Printer Connected",
-                `Paired with ${connectRes.deviceName}. Tap print to output receipt.`,
-              );
-            } else if (connectRes.error) {
+            if (connectRes.error) {
               Alert.alert("Pairing Note", connectRes.error);
             }
           },
@@ -189,5 +206,6 @@ export function usePaymentPrinter({
     printerStatus,
     pairedPrinterName,
     handlePrint,
+    autoPrintReceipt,
   };
 }

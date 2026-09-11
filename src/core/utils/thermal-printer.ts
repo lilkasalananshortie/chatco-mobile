@@ -87,11 +87,12 @@ interface BluetoothDeviceLike {
 export type PrinterStatus = "disconnected" | "connecting" | "connected";
 
 class GoojprtPrinterManager {
-  private status: PrinterStatus = "disconnected";
+  private status: PrinterStatus = Platform.OS === "android" ? "connected" : "disconnected";
   private device: BluetoothDeviceLike | null = null;
   private writeCharacteristic: BluetoothCharacteristic | null = null;
   private autoPrint = true;
-  private pairedDeviceName: string | null = null;
+  private pairedDeviceName: string | null =
+    Platform.OS === "android" ? "RawBT Universal Printer" : null;
   private listeners = new Set<(status: PrinterStatus, deviceName: string | null) => void>();
 
   constructor() {
@@ -153,27 +154,23 @@ class GoojprtPrinterManager {
     }
   }
 
-  // Connect to Goojprt Bluetooth Belt Printer
+  // Connect to Bluetooth or RawBT Printer
   public async connect(): Promise<{ success: boolean; deviceName?: string; error?: string }> {
     if (!this.isWebBluetoothSupported()) {
       if (Platform.OS === "android") {
         try {
           // Open RawBT app to verify connected printer
-          const rawbtAppUrl = "rawbt:";
-          const canOpen = await Linking.canOpenURL(rawbtAppUrl).catch(() => true);
-          if (canOpen) {
-            await Linking.openURL(rawbtAppUrl);
-          }
+          await Linking.openURL("rawbt:").catch(() => undefined);
           this.status = "connected";
-          this.pairedDeviceName = "RawBT Print Service (Active)";
+          this.pairedDeviceName = "RawBT Universal Printer";
           this.notify();
           return {
             success: true,
-            deviceName: "RawBT Connected Printer",
+            deviceName: "RawBT Universal Printer",
           };
         } catch {
           this.status = "connected";
-          this.pairedDeviceName = "RawBT Active Printer";
+          this.pairedDeviceName = "RawBT Universal Printer";
           this.notify();
           return {
             success: true,
@@ -333,21 +330,27 @@ class GoojprtPrinterManager {
       const base64Data = uint8ArrayToBase64(bytes);
       const rawbtUrl = `rawbt:base64,${base64Data}`;
 
-      const canOpen = await Linking.canOpenURL(rawbtUrl).catch(() => true);
-      if (canOpen) {
+      try {
         await Linking.openURL(rawbtUrl);
         return { success: true };
-      } else {
-        // Fallback intent if URL scheme isn't directly bound yet
-        const intentUrl = `intent:#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;S.base64=${base64Data};end`;
-        await Linking.openURL(intentUrl);
-        return { success: true };
+      } catch (openErr) {
+        console.warn("[ThermalPrinter] Linking.openURL(rawbt:) failed, trying sendIntent:", openErr);
+        try {
+          await Linking.sendIntent("ru.a402d.rawbtprinter.action.PRINT_RAWBT", [
+            { key: "ru.a402d.rawbtprinter.extra.DATA", value: base64Data },
+          ]);
+          return { success: true };
+        } catch (intentErr) {
+          console.error("[ThermalPrinter] Both rawbt: openURL and sendIntent failed:", intentErr);
+          throw intentErr;
+        }
       }
     } catch (err: any) {
+      console.error("[ThermalPrinter] RawBT dispatch failed:", err);
       return {
         success: false,
         error:
-          "Unable to open RawBT. Please ensure the RawBT print service app is installed from the Google Play Store.",
+          "Unable to send print job to RawBT. Please ensure the RawBT app is installed from the Google Play Store.",
       };
     }
   }

@@ -13,6 +13,7 @@ import { PaymentModal } from "./src/features/payments/PaymentModal";
 import { ReportScreen } from "./src/features/remittance/ReportScreen";
 import { SettingsScreen } from "./src/features/settings/SettingsScreen";
 import { VerificationScreen } from "./src/features/shift/VerificationScreen";
+import { audioCues } from "./src/core/utils/audio-cues";
 import type { Screen, Shift, User } from "./src/core/domain/types";
 
 export default function App() {
@@ -125,6 +126,14 @@ function AppRoot() {
     let active = true;
     const revalidate = async () => {
       try {
+        if (shift?.isProvisional) {
+          const promoted = await api.reconcileProvisionalShift().catch(() => null);
+          if (!active) return;
+          if (promoted) {
+            setShift(promoted);
+            return;
+          }
+        }
         const current = await api.activeShift();
         if (!active) return;
         if (!current) {
@@ -148,7 +157,7 @@ function AppRoot() {
       clearInterval(timer);
       subscription.remove();
     };
-  }, [user]);
+  }, [shift?.isProvisional, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -162,6 +171,13 @@ function AppRoot() {
         if (!active) return;
         setIsOnline(online);
         if (!online) return;
+
+        if (shift?.isProvisional) {
+          const promoted = await api.reconcileProvisionalShift().catch(() => null);
+          if (active && promoted) {
+            setShift(promoted);
+          }
+        }
 
         const synced = await syncPendingCashTransactions();
         if (active && synced > 0) setRefreshKey(key => key + 1);
@@ -276,7 +292,10 @@ function AppRoot() {
             shift={shift}
             isOnline={isOnline}
             onClose={() => setPayment(false)}
-            onSaved={() => setRefreshKey(k => k + 1)}
+            onSaved={() => {
+              audioCues.playPaymentSound();
+              setRefreshKey(k => k + 1);
+            }}
           />
         ) : null}
       </View>

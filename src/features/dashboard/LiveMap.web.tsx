@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
+import Constants from "expo-constants";
 import L from "leaflet";
 import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer } from "react-leaflet";
 import "./leaflet-base.css";
 import type { HailRequest } from "../../core/domain/types";
+import { useAppTheme } from "../../core/theme/ThemeProvider";
+
+const CARTO_API_KEY =
+  process.env.EXPO_PUBLIC_CARTO_API_KEY ||
+  process.env.NEXT_PUBLIC_CARTO_API_KEY ||
+  (Constants.expoConfig?.extra?.cartoApiKey as string | undefined) ||
+  "cb1_2dut_1_0bf5bd46e8782ff0b7ba6f38";
 
 const RADIUS_METERS = 1000;
 const ROUTE_COORDS: [number, number][] = [
@@ -74,7 +82,9 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   routeCoordinates?: Array<[number, number]>;
   routeSource?: "backend" | "fallback";
 }) {
+  const { colors, isLofi } = useAppTheme();
   const [tilesLoading, setTilesLoading] = useState(true);
+  const [tileError, setTileError] = useState(false);
   useEffect(() => {
     const fallback = setTimeout(() => setTilesLoading(false), 7000);
     return () => clearTimeout(fallback);
@@ -88,6 +98,14 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const visibleHails = hails.filter(hail =>
     distanceMeters(vehiclePosition, [hail.latitude, hail.longitude]) <= RADIUS_METERS
   );
+
+  const cartoBase = isLofi
+    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+
+  const tileUrl = tileError
+    ? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    : `${cartoBase}${CARTO_API_KEY ? `?key=${CARTO_API_KEY}` : ""}`;
 
   const vehicleIcon = useMemo(() => L.divIcon({
     className: "chatco-vehicle-marker",
@@ -110,7 +128,15 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   }), []);
 
   return (
-    <div className={`chatco-map-shell${fill ? " chatco-map-fill" : ""}`}>
+    <div
+      className={`chatco-map-shell${fill ? " chatco-map-fill" : ""}`}
+      style={{
+        borderRadius: isLofi ? 4 : (fill ? 0 : 18),
+        borderColor: colors.border,
+        borderWidth: isLofi ? 1.5 : 1,
+        background: colors.surface,
+      }}
+    >
       <MapContainer
         center={mapCenter}
         zoom={12}
@@ -122,22 +148,28 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         ]}
         maxBoundsViscosity={1}
         minZoom={11}
-        style={{ width: "100%", height: "100%", background: "#050F1A" }}
+        style={{ width: "100%", height: "100%", background: colors.surface }}
       >
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          key={tileUrl}
+          url={tileUrl}
           keepBuffer={0}
           updateWhenIdle
           updateWhenZooming={false}
           eventHandlers={{
             loading: () => setTilesLoading(true),
             load: () => setTilesLoading(false),
-            tileerror: () => setTilesLoading(false),
+            tileerror: () => {
+              setTilesLoading(false);
+              setTileError(true);
+            },
           }}
         />
-        <Polyline positions={routeCoords} pathOptions={{ color: "#62A0EA", weight: 8, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
-        <Polyline positions={routeCoords} pathOptions={{ color: "#62A0EA", weight: 4, opacity: 0.9, dashArray: "10 10", lineCap: "round", lineJoin: "round" }} />
-        <Circle center={vehiclePosition} radius={RADIUS_METERS} pathOptions={{ color: "#1A5FB4", fillColor: "#1A5FB4", fillOpacity: 0.05, weight: 1.5, opacity: 0.3, dashArray: "8 4" }} />
+        {!isLofi ? (
+          <Polyline positions={routeCoords} pathOptions={{ color: "#62A0EA", weight: 8, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
+        ) : null}
+        <Polyline positions={routeCoords} pathOptions={{ color: isLofi ? colors.primary : "#62A0EA", weight: 4, opacity: 0.95, dashArray: isLofi ? undefined : "10 10", lineCap: "round", lineJoin: "round" }} />
+        <Circle center={vehiclePosition} radius={RADIUS_METERS} pathOptions={{ color: colors.primary, fillColor: colors.primary, fillOpacity: isLofi ? 0.08 : 0.05, weight: 1.5, opacity: isLofi ? 0.6 : 0.3, dashArray: isLofi ? undefined : "8 4" }} />
         <Marker position={vehiclePosition} icon={vehicleIcon}>
           <Popup>
             <div className="chatco-popup">
@@ -158,12 +190,10 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         ))}
       </MapContainer>
       {tilesLoading ? <div className="chatco-map-loading"><span></span><strong>Loading route map…</strong></div> : null}
-      {routeSource === "fallback" ? <div className="chatco-route-warning">Published route unavailable — showing local fallback</div> : null}
       <style>{`
         .chatco-map-shell{position:relative;height:420px;width:100%;overflow:hidden;border-radius:18px;margin-top:14px;border:1px solid rgba(255,255,255,.09);box-shadow:0 7px 18px rgba(0,0,0,.16);background:#050F1A}
         .chatco-map-shell.chatco-map-fill{position:absolute;inset:0;height:100%;margin:0;border:0;border-radius:0;box-shadow:none}
         .chatco-map-loading{position:absolute;inset:0;z-index:900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#91A0B4;background:#050F1A;pointer-events:none;font:12px system-ui}
-        .chatco-route-warning{position:absolute;top:10px;left:10px;right:10px;z-index:850;text-align:center;color:#FEF3C7;background:rgba(69,26,3,.92);border:1px solid rgba(252,211,77,.3);border-radius:6px;padding:5px 8px;font:700 10px system-ui;pointer-events:none}
         .chatco-map-loading span{width:28px;height:28px;border:3px solid #163452;border-top-color:#62A0EA;border-radius:50%;animation:chatco-spin .8s linear infinite}
         .chatco-map-shell .leaflet-container{background:#050F1A!important;font-family:inherit!important}
         .chatco-vehicle-marker,.chatco-hail-marker{background:transparent!important;border:0!important}

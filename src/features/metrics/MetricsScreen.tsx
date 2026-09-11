@@ -14,6 +14,7 @@ function getGaugeColor(pct: number): string {
 }
 
 function StarRating({ score, size = 16 }: { score: number; size?: number }) {
+  const { colors, isLofi } = useAppTheme();
   const rounded = Math.round(score);
   return (
     <View style={{ flexDirection: "row", gap: 2 }}>
@@ -22,7 +23,7 @@ function StarRating({ score, size = 16 }: { score: number; size?: number }) {
           key={i}
           name={i <= rounded ? "star" : "star-outline"}
           size={size}
-          color={i <= rounded ? "#FBBF24" : "rgba(255,255,255,0.2)"}
+          color={i <= rounded ? (isLofi ? colors.warning : "#FBBF24") : (isLofi ? colors.border : "rgba(255,255,255,0.2)")}
         />
       ))}
     </View>
@@ -30,7 +31,7 @@ function StarRating({ score, size = 16 }: { score: number; size?: number }) {
 }
 
 export function MetricsScreen({ shift }: { shift?: Shift | null }) {
-  const { colors, styles } = useAppTheme();
+  const { colors, isLofi, styles } = useAppTheme();
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -91,22 +92,22 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
           <Text style={[styles.subtitle, { marginTop: 12 }]}>Loading performance data…</Text>
         </View>
       ) : error ? (
-        <View style={[styles.card, { borderColor: "rgba(239, 68, 68, 0.3)", backgroundColor: "rgba(239, 68, 68, 0.08)", alignItems: "center", paddingVertical: 24 }]}>
+        <View style={[styles.card, { borderColor: isLofi ? colors.danger : "rgba(239, 68, 68, 0.3)", backgroundColor: isLofi ? "#FEE2E2" : "rgba(239, 68, 68, 0.08)", alignItems: "center", paddingVertical: 24 }]}>
           <Text style={[styles.error, { marginTop: 0 }]}>{error}</Text>
           {shift?.shiftId ? (
             <Pressable
               style={[styles.button, styles.secondaryButton, { marginTop: 14 }]}
               onPress={() => void loadRatings(shift.shiftId)}
             >
-              <Text style={styles.buttonText}>Retry</Text>
+              <Text style={[styles.buttonText, styles.secondaryButtonText]}>Retry</Text>
             </Pressable>
           ) : null}
         </View>
       ) : !shift ? (
         /* No active shift state */
         <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24 }}>
-          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-            <Ionicons name="time-outline" size={36} color="rgba(255,255,255,0.25)" />
+          <View style={{ width: 72, height: 72, borderRadius: isLofi ? 4 : 36, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+            <Ionicons name="time-outline" size={36} color={colors.muted} />
           </View>
           <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 6 }]}>No active shift</Text>
           <Text style={[styles.subtitle, { textAlign: "center", maxWidth: 280 }]}>
@@ -116,8 +117,8 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
       ) : ratings.length === 0 ? (
         /* Empty state: Shift active but no ratings submitted yet */
         <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24 }}>
-          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-            <Ionicons name="star-outline" size={36} color="rgba(255,255,255,0.25)" />
+          <View style={{ width: 72, height: 72, borderRadius: isLofi ? 4 : 36, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+            <Ionicons name="star-outline" size={36} color={colors.muted} />
           </View>
           <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 6 }]}>No ratings yet for this shift</Text>
           <Text style={[styles.subtitle, { textAlign: "center", maxWidth: 280 }]}>
@@ -135,14 +136,14 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
             <Text style={[styles.label, { marginTop: 6, letterSpacing: 1.5 }]}>SATISFACTION</Text>
 
             <View style={{ flexDirection: "row", gap: 12, width: "100%", marginTop: 20 }}>
-              <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" }}>
+              <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: isLofi ? 3 : 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: "center", borderWidth: isLofi ? 1.5 : 1, borderColor: colors.border }}>
                 <Text style={{ fontSize: 18 }}>⭐</Text>
                 <Text style={{ color: colors.text, fontSize: 18, fontWeight: "800", marginTop: 4 }}>
                   {metrics.average.toFixed(1)}
                 </Text>
                 <Text style={[styles.label, { fontSize: 9, marginTop: 2 }]}>Avg Rating</Text>
               </View>
-              <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" }}>
+              <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: isLofi ? 3 : 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: "center", borderWidth: isLofi ? 1.5 : 1, borderColor: colors.border }}>
                 <Text style={{ fontSize: 18 }}>👥</Text>
                 <Text style={{ color: colors.text, fontSize: 18, fontWeight: "800", marginTop: 4 }}>
                   {ratings.length}
@@ -159,7 +160,7 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
               <Text style={[styles.subtitle, { fontSize: 11, marginTop: 2 }]}>Conductor</Text>
               <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
                 <View>
-                  <Text style={{ color: "#62A0EA", fontSize: 32, fontWeight: "900", lineHeight: 34 }}>
+                  <Text style={{ color: isLofi ? colors.primary : "#62A0EA", fontSize: 32, fontWeight: "900", lineHeight: 34 }}>
                     {metrics.conductorAverage > 0 ? metrics.conductorAverage.toFixed(1) : "—"}
                   </Text>
                   <Text style={[styles.subtitle, { fontSize: 10, marginTop: 4 }]}>
@@ -179,7 +180,7 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
               </Text>
               <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
                 <View>
-                  <Text style={{ color: "#A78BFA", fontSize: 32, fontWeight: "900", lineHeight: 34 }}>
+                  <Text style={{ color: isLofi ? colors.primaryLight : "#A78BFA", fontSize: 32, fontWeight: "900", lineHeight: 34 }}>
                     {metrics.driverAverage > 0 ? metrics.driverAverage.toFixed(1) : "—"}
                   </Text>
                   <Text style={[styles.subtitle, { fontSize: 10, marginTop: 4 }]}>
@@ -206,14 +207,14 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
                   <View key={star} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", width: 34, gap: 3 }}>
                       <Text style={{ color: colors.text, fontSize: 13, fontWeight: "600" }}>{star}</Text>
-                      <Ionicons name="star" size={12} color="#FBBF24" />
+                      <Ionicons name="star" size={12} color={isLofi ? colors.warning : "#FBBF24"} />
                     </View>
-                    <View style={{ flex: 1, height: 8, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 999, overflow: "hidden" }}>
-                      <View style={{ width: `${barWidth}%`, height: "100%", backgroundColor: "#1A5FB4", borderRadius: 999 }} />
+                    <View style={{ flex: 1, height: 8, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.06)", borderRadius: isLofi ? 2 : 999, overflow: "hidden" }}>
+                      <View style={{ width: `${barWidth}%`, height: "100%", backgroundColor: colors.primary, borderRadius: isLofi ? 2 : 999 }} />
                     </View>
                     <View style={{ width: 62, alignItems: "flex-end" }}>
                       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "500" }}>
-                        {count} <Text style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>({pct}%)</Text>
+                        {count} <Text style={{ color: colors.muted, fontSize: 10 }}>({pct}%)</Text>
                       </Text>
                     </View>
                   </View>

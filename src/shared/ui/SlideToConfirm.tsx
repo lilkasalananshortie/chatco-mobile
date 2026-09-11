@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
+import { appHaptics } from "../../core/utils/haptics";
 
 type SlideToConfirmProps = {
   label: string;
@@ -13,7 +14,7 @@ const TRACK_PADDING = 4;
 
 /** Native equivalent of the web conductor's drag-to-confirm action. */
 export function SlideToConfirm({ label, onComplete, disabled = false }: SlideToConfirmProps) {
-  const { colors } = useAppTheme();
+  const { colors, isLofi } = useAppTheme();
   const [trackWidth, setTrackWidth] = useState(0);
   const dragX = useRef(new Animated.Value(0)).current;
   const dragValue = useRef(0);
@@ -29,7 +30,10 @@ export function SlideToConfirm({ label, onComplete, disabled = false }: SlideToC
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => !disabled && !completing.current,
     onMoveShouldSetPanResponder: (_, gesture) => !disabled && !completing.current && Math.abs(gesture.dx) > Math.abs(gesture.dy),
-    onPanResponderGrant: () => { startValue.current = dragValue.current; },
+    onPanResponderGrant: () => {
+      appHaptics.selection();
+      startValue.current = dragValue.current;
+    },
     onPanResponderMove: (_, gesture) => {
       const next = Math.min(Math.max(startValue.current + gesture.dx, 0), maxDrag);
       dragValue.current = next;
@@ -40,6 +44,7 @@ export function SlideToConfirm({ label, onComplete, disabled = false }: SlideToC
       if (dragValue.current / maxDrag >= 0.82) {
         completing.current = true;
         dragValue.current = maxDrag;
+        appHaptics.success();
         Animated.timing(dragX, { toValue: maxDrag, duration: 140, useNativeDriver: true }).start(() => {
           void (async () => {
             try {
@@ -66,12 +71,39 @@ export function SlideToConfirm({ label, onComplete, disabled = false }: SlideToC
       accessibilityRole="adjustable"
       accessibilityLabel={label}
       onLayout={onLayout}
-      style={[styles.track, { backgroundColor: colors.surface2, borderColor: colors.border }, disabled && styles.disabled]}
+      style={[
+        styles.track,
+        {
+          backgroundColor: colors.surface2,
+          borderColor: colors.border,
+          borderRadius: isLofi ? 4 : 30,
+          borderWidth: isLofi ? 1.5 : 1,
+        },
+        disabled && styles.disabled,
+      ]}
       {...panResponder.panHandlers}
     >
-      <Animated.View style={[styles.progress, { backgroundColor: colors.primary, width: progressWidth }]} />
+      <Animated.View
+        style={[
+          styles.progress,
+          {
+            backgroundColor: colors.primary,
+            width: progressWidth,
+            borderRadius: isLofi ? 2 : 26,
+          },
+        ]}
+      />
       <Text style={[styles.label, { color: colors.muted }]}>{disabled ? "Updating…" : label}</Text>
-      <Animated.View style={[styles.knob, { backgroundColor: colors.primaryLight, transform: [{ translateX: dragX }] }]}>
+      <Animated.View
+        style={[
+          styles.knob,
+          {
+            backgroundColor: colors.primaryLight,
+            borderRadius: isLofi ? 3 : KNOB_SIZE / 2,
+            transform: [{ translateX: dragX }],
+          },
+        ]}
+      >
         <Text style={styles.arrow}>›</Text>
       </Animated.View>
     </View>

@@ -103,7 +103,7 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
             <Ionicons
               name="wallet-outline"
               size={24}
-              color={isPaymentDisabled ? colors.muted : (isLofi ? colors.text : "#fff")}
+              color={isPaymentDisabled ? colors.muted : "#fff"}
             />
           </View>
           <Text style={[local.navLabel, { color: isPaymentDisabled ? colors.muted : colors.text }]}>
@@ -126,7 +126,7 @@ function NavItem({ label, icon, active, onPress }: {
         backgroundColor: active ? colors.primary : "transparent",
         borderRadius: isLofi ? 2 : 12,
       }]}>
-        <Ionicons name={icon} size={19} color={active ? (isLofi ? colors.text : "#fff") : colors.muted} />
+        <Ionicons name={icon} size={19} color={active ? "#fff" : colors.muted} />
       </View>
       <Text style={[local.navLabel, { color: active ? colors.text : colors.muted }]}>{label}</Text>
     </Pressable>

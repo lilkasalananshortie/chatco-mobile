@@ -38,6 +38,8 @@ export interface Shift {
   operatingDeviceId?: string | null;
   operatingDeviceType?: "WEB" | "MOBILE" | null;
   latestDeviceRecoveryAt?: string | null;
+  isProvisional?: boolean;
+  provisionalPayload?: { unitId: string; driverId: string; routeId?: string };
 }
 
 export interface Transaction {
@@ -61,6 +63,7 @@ export interface Transaction {
   status?: "PENDING" | "PROCESSING" | "PAID" | "FAILED" | "CANCELLED" | "EXPIRED" | "REFUNDED";
   paidAt?: string | null;
   qrToken?: string | null;
+  receiptQrToken?: string | null;
   groupId?: string | null;
   multiplePaymentReference?: string | null;
   groupPosition?: number | null;

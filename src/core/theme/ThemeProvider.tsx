@@ -110,7 +110,7 @@ function makeStyles(colors: typeof standardColors, isLofi: boolean) {
       borderWidth: isLofi ? 1.5 : 0,
       borderColor: colors.border,
     },
-    buttonText: { color: colors.text, fontWeight: "800", fontSize: 14 },
+    buttonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 14 },
     secondaryButton: {
       backgroundColor: colors.surface2,
       borderWidth: isLofi ? 1.5 : 1,

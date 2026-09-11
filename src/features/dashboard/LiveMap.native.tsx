@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 import { AppleMaps, GoogleMaps } from "expo-maps";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import type { HailRequest } from "../../core/domain/types";
+import { useAppTheme } from "../../core/theme/ThemeProvider";
 import {
   distanceMeters,
   PICKUP_RADIUS_METERS,
@@ -18,6 +19,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   routeCoordinates?: Array<[number, number]>;
   routeSource?: "backend" | "fallback";
 }) {
+  const { colors, isLofi } = useAppTheme();
   const googleMap = useRef<GoogleMaps.MapView>(null);
   const appleMap = useRef<AppleMaps.MapView>(null);
   const [loaded, setLoaded] = useState(Platform.OS === "ios");
@@ -53,21 +55,21 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   ), [hails, vehiclePosition]);
 
   const routeLines = useMemo(() => [
-    {
+    ...(isLofi ? [] : [{
       id: "route-shadow",
       coordinates: activeRoute,
       color: "rgba(98,160,234,0.22)",
       width: 10,
       geodesic: true,
-    },
+    }]),
     {
       id: "route",
       coordinates: activeRoute,
-      color: "#62A0EA",
-      width: 5,
+      color: isLofi ? colors.primary : "#62A0EA",
+      width: isLofi ? 4 : 5,
       geodesic: true,
     },
-  ], [activeRoute]);
+  ], [activeRoute, isLofi, colors.primary]);
 
   useEffect(() => {
     if (!hasLivePosition || !loaded) return;
@@ -145,7 +147,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   }
 
   return (
-    <View style={[local.frame, fill && local.fill]}>
+    <View style={[local.frame, fill ? local.fill : null, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: isLofi ? 4 : (fill ? 0 : 18), borderWidth: isLofi ? 1.5 : 1 }]}>
       {Platform.OS === "android" ? (
         <GoogleMaps.View
           ref={googleMap}
@@ -168,7 +170,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
             zoomControlsEnabled: false,
             zoomGesturesEnabled: true,
           }}
-          colorScheme={GoogleMaps.MapColorScheme.DARK}
+          colorScheme={isLofi ? GoogleMaps.MapColorScheme.LIGHT : GoogleMaps.MapColorScheme.DARK}
           userLocation={hasLivePosition ? {
             coordinates: vehiclePosition,
             followUserLocation: false,
@@ -202,29 +204,24 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
             myLocationButtonEnabled: hasLivePosition,
             scaleBarEnabled: true,
           }}
-          colorScheme={AppleMaps.MapColorScheme.DARK}
+          colorScheme={isLofi ? AppleMaps.MapColorScheme.LIGHT : AppleMaps.MapColorScheme.DARK}
         />
       )}
       {!loaded ? (
-        <View style={local.loading} pointerEvents="none">
+        <View style={[local.loading, { backgroundColor: colors.surface }]} pointerEvents="none">
           {loadTimedOut ? (
             <>
-              <Text style={local.unconfiguredTitle}>Map could not load</Text>
-              <Text style={local.unconfiguredText}>
+              <Text style={[local.unconfiguredTitle, { color: colors.text }]}>Map could not load</Text>
+              <Text style={[local.unconfiguredText, { color: colors.muted }]}>
                 Check the connection and Google Maps key, then reopen the map.
               </Text>
             </>
           ) : (
             <>
-              <ActivityIndicator color="#62A0EA" size="large" />
-              <Text style={local.loadingText}>Loading live route…</Text>
+              <ActivityIndicator color={colors.primary} size="large" />
+              <Text style={[local.loadingText, { color: colors.muted }]}>Loading live route…</Text>
             </>
           )}
-        </View>
-      ) : null}
-      {loaded && routeSource === "fallback" ? (
-        <View style={local.routeWarning} pointerEvents="none">
-          <Text style={local.routeWarningText}>Published route unavailable — showing local fallback</Text>
         </View>
       ) : null}
     </View>
@@ -265,22 +262,6 @@ const local = StyleSheet.create({
   loadingText: {
     color: "#91A0B4",
     fontSize: 12,
-    fontWeight: "700",
-  },
-  routeWarning: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    right: 10,
-    alignItems: "center",
-  },
-  routeWarningText: {
-    color: "#FEF3C7",
-    backgroundColor: "rgba(69, 26, 3, 0.92)",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    fontSize: 10,
     fontWeight: "700",
   },
   unconfigured: {

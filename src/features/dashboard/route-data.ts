@@ -1,11 +1,27 @@
+/**
+ * route-data.ts
+ *
+ * Franchise route polyline for the McArthur Highway — Calumpit to Meycauayan
+ * corridor in Bulacan, Philippines.
+ *
+ * ROUTE_POINTS: 78 GPS waypoints from Calumpit terminal (14.9255°N, 120.7651°E)
+ * to Meycauayan terminal (14.7256°N, 120.9605°E), encoded as [lat, lng] pairs.
+ *
+ * Used by:
+ * - corridor-guard.ts — deviation detection (>300 m off corridor = alert)
+ * - voice-announcer.ts — geofence proximity check for stop announcements
+ * - LiveMap — rendered as the route polyline overlay on the live map
+ */
+
 export type RouteCoordinate = {
   latitude: number;
   longitude: number;
 };
 
+
 export const PICKUP_RADIUS_METERS = 1000;
 
-const ROUTE_POINTS: ReadonlyArray<readonly [number, number]> = [
+export const ROUTE_POINTS: ReadonlyArray<readonly [number, number]> = [
   [14.925460996033356, 120.76512235423647], [14.92420402124189, 120.76528787872712],
   [14.920152600670095, 120.76571706129354], [14.915220582966443, 120.76619717003261],
   [14.901323759501945, 120.7719224852731], [14.886458903875173, 120.78596796657541],

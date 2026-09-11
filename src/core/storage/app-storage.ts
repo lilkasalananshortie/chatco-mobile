@@ -1,3 +1,20 @@
+/**
+ * app-storage.ts
+ *
+ * Unified cross-platform storage abstraction for ChatCo Mobile.
+ *
+ * Storage strategy:
+ * - Web:    window.localStorage (synchronous, no capacity issues for our use case)
+ * - Native (session token only): expo-secure-store (iOS Keychain / Android Keystore)
+ * - Native (all other keys): @react-native-async-storage/async-storage
+ *
+ * All operations include a 4-second timeout to prevent the app from hanging
+ * on storage failures. Reads fall back to null; writes throw on failure.
+ *
+ * SECURE_KEYS contains only "chatco_session" — the Sanctum bearer token.
+ * All other keys (queue, settings, cache) use AsyncStorage.
+ */
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";

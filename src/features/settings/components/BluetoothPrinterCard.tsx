@@ -47,7 +47,7 @@ export function BluetoothPrinterCard({
           }}
         >
           <Text style={{ fontSize: 9, fontWeight: "800", color: isLofi ? colors.text : "#34D399" }}>
-            GOOJPRT 58MM ESC/POS
+            58MM / 80MM ESC/POS
           </Text>
         </View>
       </View>
@@ -77,12 +77,12 @@ export function BluetoothPrinterCard({
           </View>
           <Text style={[styles.rowValue, { marginTop: 2, fontSize: 13 }]}>
             {printerStatus === "connected"
-              ? printerName || "Goojprt Belt Printer"
+              ? printerName || "Bluetooth Thermal Printer"
               : printerStatus === "connecting"
               ? "Searching / Connecting..."
               : printerName
               ? `Saved: ${printerName} (Disconnected)`
-              : "No Goojprt Paired"}
+              : "No Printer Paired"}
           </Text>
         </View>
 
@@ -115,7 +115,7 @@ export function BluetoothPrinterCard({
             }}
           >
             <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>
-              {isConnectingPrinter ? "Pairing..." : "Connect Goojprt"}
+              {isConnectingPrinter ? "Pairing..." : "Connect Printer"}
             </Text>
           </Pressable>
         )}

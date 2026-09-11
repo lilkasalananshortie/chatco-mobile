@@ -132,7 +132,7 @@ class GoojprtPrinterManager {
         return {
           success: false,
           error:
-            "To connect your Goojprt PT-210 on Android:\n\n1. Turn on your Goojprt printer.\n2. Open your Android Settings > Bluetooth and pair with 'PT-210' (PIN: 0000 or 1234).\n3. You can test print immediately using the 'Test Print Slip' button or print any ticket using 'System Print / Slip'.",
+            "To connect your Bluetooth thermal printer on Android:\n\n1. Turn on your printer.\n2. Open Android Settings > Bluetooth and pair your printer (common PIN: 0000 or 1234).\n3. Any standard 58mm / 80mm ESC/POS printer is supported.\n4. You can test print immediately using 'Test Print Slip' or print any ticket via 'System Print / Slip'.",
         };
       }
       return {

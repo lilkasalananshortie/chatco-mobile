@@ -128,10 +128,17 @@ class GoojprtPrinterManager {
   // Connect to Goojprt Bluetooth Belt Printer
   public async connect(): Promise<{ success: boolean; deviceName?: string; error?: string }> {
     if (!this.isWebBluetoothSupported()) {
+      if (Platform.OS === "android") {
+        return {
+          success: false,
+          error:
+            "To connect your Goojprt PT-210 on Android:\n\n1. Turn on your Goojprt printer.\n2. Open your Android Settings > Bluetooth and pair with 'PT-210' (PIN: 0000 or 1234).\n3. You can test print immediately using the 'Test Print Slip' button or print any ticket using 'System Print / Slip'.",
+        };
+      }
       return {
         success: false,
         error:
-          "Web Bluetooth is not available in this browser. You can still print receipts via the System Print / Slip option.",
+          "Bluetooth pairing is not supported in this browser. Please test on Google Chrome or use the System Print / Slip option.",
       };
     }
 

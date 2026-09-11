@@ -68,7 +68,6 @@ function AppRoot() {
   const [booting, setBooting] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
-  const [remittanceShift, setRemittanceShift] = useState<Shift | null>(null);
   const [deviceId, setDeviceId] = useState<string>("");
   const [screen, setScreen] = useState<Screen>("verify");
   const [payment, setPayment] = useState(false);
@@ -201,38 +200,20 @@ function AppRoot() {
   const ownsShift = Boolean(shift?.operatingDeviceId && deviceId && shift.operatingDeviceId === deviceId);
   const unclaimed = Boolean(shift && !shift.operatingDeviceId);
   const isOperatingDevice = ownsShift || unclaimed;
-  const canOperate = Boolean((shift && isOperatingDevice) || remittanceShift);
+  const canOperate = Boolean(shift && isOperatingDevice);
   const isViewOnlyDevice = Boolean(shift?.operatingDeviceId && !ownsShift);
   const isPaymentDisabled = Boolean(shift?.isOnBreak) || isViewOnlyDevice || Boolean(!shift);
 
-  const handleCompleteRemittance = useCallback((item: import("./src/core/domain/types").Remittance) => {
-    const syntheticShift: Shift = {
-      shiftId: String(item.shift_id ?? ""),
-      unitNumber: item.unit_number ?? "—",
-      conductorName: user?.name ?? "Conductor",
-      driverName: "—",
-      route: "",
-      timeIn: item.date ?? new Date().toISOString(),
-      timeOut: new Date().toISOString(),
-      isActive: false,
-    };
-    setRemittanceShift(syntheticShift);
-    setScreen("report");
-  }, [user?.name]);
-
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
-  if ((!shift && !remittanceShift) || screen === "verify") {
+  if (!shift || screen === "verify") {
     return (
       <VerificationScreen
-        onStarted={s => { setShift(s); setRemittanceShift(null); setScreen("home"); }}
-        onLogout={() => { setUser(null); setShift(null); setRemittanceShift(null); setScreen("verify"); }}
-        onCompleteRemittance={handleCompleteRemittance}
+        onStarted={s => { setShift(s); setScreen("home"); }}
+        onLogout={() => { setUser(null); setShift(null); setScreen("verify"); }}
       />
     );
   }
-
-  const activeOrRemittanceShift = shift ?? remittanceShift!;
 
   return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -244,23 +225,23 @@ function AppRoot() {
             canOperate={canOperate}
             isOnline={isOnline}
             onShiftUpdated={setShift}
-            onShiftEnded={() => { setShift(null); setRemittanceShift(null); setScreen("verify"); }}
+            onShiftEnded={() => { setShift(null); setScreen("verify"); }}
           />
         ) : null}
         {screen === "report" ? (
           <ReportScreen
-            shift={activeOrRemittanceShift}
+            shift={shift}
             refreshKey={refreshKey}
             canOperate={canOperate}
-            onEnded={() => { setShift(null); setRemittanceShift(null); setScreen("verify"); }}
+            onEnded={() => { setShift(null); setScreen("verify"); }}
           />
         ) : null}
-        {screen === "metrics" ? <MetricsScreen shift={activeOrRemittanceShift} /> : null}
+        {screen === "metrics" ? <MetricsScreen shift={shift} /> : null}
         {screen === "settings" ? (
           <SettingsScreen
             user={user}
-            shift={activeOrRemittanceShift}
-            onLogout={() => { setUser(null); setShift(null); setRemittanceShift(null); setScreen("verify"); }}
+            shift={shift}
+            onLogout={() => { setUser(null); setShift(null); setScreen("verify"); }}
           />
         ) : null}
         <BottomNav

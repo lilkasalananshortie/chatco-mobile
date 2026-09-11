@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../core/api/chatco-api";
@@ -12,11 +12,9 @@ import { ShiftSetupModal } from "./components/ShiftSetupModal";
 export function VerificationScreen({
   onStarted,
   onLogout,
-  onCompleteRemittance,
 }: {
   onStarted: (shift: Shift) => void;
   onLogout?: () => void;
-  onCompleteRemittance?: (remittance: Remittance) => void;
 }) {
   const { colors, styles } = useAppTheme();
   const [units, setUnits] = useState<Unit[]>([]);
@@ -28,7 +26,6 @@ export function VerificationScreen({
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
   const [isOfflineDepot, setIsOfflineDepot] = useState(false);
-  const [pendingRemittances, setPendingRemittances] = useState<Remittance[]>([]);
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -49,19 +46,12 @@ export function VerificationScreen({
     try {
       const isConnected = await api.checkConnectivity().catch(() => false);
       setIsOfflineDepot(!isConnected);
-      const [availableUnits, availableDrivers, remittances] = await Promise.all([
+      const [availableUnits, availableDrivers] = await Promise.all([
         api.units(),
         api.drivers(),
-        api.remittances().catch(() => []),
       ]);
       setUnits(availableUnits);
       setDrivers(availableDrivers);
-      setPendingRemittances(
-        remittances.filter((item) => {
-          const status = String(item.remittance_status ?? item.status).toUpperCase();
-          return ["PENDING", "FOR CASH DECLARATION", "OVERDUE"].includes(status);
-        }),
-      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load assignments.");
     } finally {
@@ -133,11 +123,7 @@ export function VerificationScreen({
         subtitle={unit ? "Choose the driver you will assist today." : "Choose the vehicle assigned to this shift."}
       />
 
-      <OfflineDepotNotice
-        isOfflineDepot={isOfflineDepot}
-        pendingRemittances={pendingRemittances}
-        onCompleteRemittance={onCompleteRemittance}
-      />
+      <OfflineDepotNotice isOfflineDepot={isOfflineDepot} />
 
       {unit ? (
         <Pressable

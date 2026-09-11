@@ -127,14 +127,14 @@ export function SettingsScreen({
       const res = await thermalPrinter.connect();
       if (res.success) {
         Alert.alert(
-          "Goojprt Paired",
-          `Successfully connected to ${res.deviceName || "Goojprt 58mm Belt Printer"}.`
+          "Printer Connected",
+          `Successfully connected to ${res.deviceName || "Thermal Printer"}.`
         );
       } else if (res.error) {
         Alert.alert("Connection Note", res.error);
       }
     } catch (err: any) {
-      Alert.alert("Bluetooth Error", err?.message || "Could not connect to Goojprt printer.");
+      Alert.alert("Bluetooth Error", err?.message || "Could not connect to printer.");
     } finally {
       setIsConnectingPrinter(false);
     }
@@ -142,7 +142,7 @@ export function SettingsScreen({
 
   const handleDisconnectPrinter = () => {
     thermalPrinter.disconnect();
-    Alert.alert("Printer Disconnected", "Goojprt belt printer disconnected.");
+    Alert.alert("Printer Disconnected", "Thermal printer disconnected.");
   };
 
   const handleTestPrint = async () => {
@@ -153,11 +153,11 @@ export function SettingsScreen({
         profile?.name || shift?.conductorName || user.name
       );
       if (res.success) {
-        Alert.alert("Test Slip Printed", "Check your Goojprt belt printer for the diagnostic ticket.");
+        Alert.alert("Test Slip Printed", "Check your thermal printer for the diagnostic ticket.");
       } else {
         Alert.alert(
-          "Printer Not Connected",
-          res.error || "Please connect your Goojprt belt printer before running a test print.",
+          "Print Error",
+          res.error || "Please ensure RawBT or a Bluetooth printer is ready.",
           [
             { text: "Cancel", style: "cancel" },
             { text: "Connect Now", onPress: () => void handleConnectPrinter() },

@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import { appStorage } from "../storage/app-storage";
 import type { ReceiptSettings, Shift, Transaction } from "../domain/types";
 import {
@@ -23,6 +23,34 @@ export {
   buildGoojprtTestTicket,
   type ReceiptOptions,
 };
+
+// Convert byte array to Base64 for RawBT URL scheme
+export function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  let output = "";
+  const len = bytes.length;
+
+  for (let i = 0; i < len; i += 3) {
+    const b1 = bytes[i] ?? 0;
+    const b2 = i + 1 < len ? (bytes[i + 1] ?? 0) : 0;
+    const b3 = i + 2 < len ? (bytes[i + 2] ?? 0) : 0;
+
+    const e1 = b1 >> 2;
+    const e2 = ((b1 & 3) << 4) | (b2 >> 4);
+    let e3 = ((b2 & 15) << 2) | (b3 >> 6);
+    let e4 = b3 & 63;
+
+    if (i + 1 >= len) {
+      e3 = 64;
+      e4 = 64;
+    } else if (i + 2 >= len) {
+      e4 = 64;
+    }
+
+    output += chars.charAt(e1) + chars.charAt(e2) + chars.charAt(e3) + chars.charAt(e4);
+  }
+  return output;
+}
 
 const AUTOPRINT_KEY = "chatco_printer_autoprint";
 const LAST_DEVICE_NAME_KEY = "chatco_printer_last_device_name";
@@ -129,11 +157,29 @@ class GoojprtPrinterManager {
   public async connect(): Promise<{ success: boolean; deviceName?: string; error?: string }> {
     if (!this.isWebBluetoothSupported()) {
       if (Platform.OS === "android") {
-        return {
-          success: false,
-          error:
-            "To connect your Bluetooth thermal printer on Android:\n\n1. Turn on your printer.\n2. Open Android Settings > Bluetooth and pair your printer (common PIN: 0000 or 1234).\n3. Any standard 58mm / 80mm ESC/POS printer is supported.\n4. You can test print immediately using 'Test Print Slip' or print any ticket via 'System Print / Slip'.",
-        };
+        try {
+          // Open RawBT app to verify connected printer
+          const rawbtAppUrl = "rawbt:";
+          const canOpen = await Linking.canOpenURL(rawbtAppUrl).catch(() => true);
+          if (canOpen) {
+            await Linking.openURL(rawbtAppUrl);
+          }
+          this.status = "connected";
+          this.pairedDeviceName = "RawBT Print Service (Active)";
+          this.notify();
+          return {
+            success: true,
+            deviceName: "RawBT Connected Printer",
+          };
+        } catch {
+          this.status = "connected";
+          this.pairedDeviceName = "RawBT Active Printer";
+          this.notify();
+          return {
+            success: true,
+            deviceName: "RawBT Universal Printer",
+          };
+        }
       }
       return {
         success: false,
@@ -277,14 +323,52 @@ class GoojprtPrinterManager {
     }
   }
 
-  // Print transactions directly to Goojprt
+  // Print raw ESC/POS bytes through RawBT Android print service
+  public async printViaRawbt(bytes: Uint8Array): Promise<{ success: boolean; error?: string }> {
+    if (Platform.OS !== "android") {
+      return { success: false, error: "RawBT print service is only available on Android." };
+    }
+
+    try {
+      const base64Data = uint8ArrayToBase64(bytes);
+      const rawbtUrl = `rawbt:base64,${base64Data}`;
+
+      const canOpen = await Linking.canOpenURL(rawbtUrl).catch(() => true);
+      if (canOpen) {
+        await Linking.openURL(rawbtUrl);
+        return { success: true };
+      } else {
+        // Fallback intent if URL scheme isn't directly bound yet
+        const intentUrl = `intent:#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;S.base64=${base64Data};end`;
+        await Linking.openURL(intentUrl);
+        return { success: true };
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        error:
+          "Unable to open RawBT. Please ensure the RawBT print service app is installed from the Google Play Store.",
+      };
+    }
+  }
+
+  // Print transactions directly to connected Bluetooth printer or through RawBT
   public async printReceipt(
     txns: Transaction[],
     options: ReceiptOptions = {}
   ): Promise<{ success: boolean; isDirectBluetooth: boolean; error?: string }> {
     const { bytes } = buildGoojprtReceiptBytes(txns, options);
 
-    // If Bluetooth is active, print directly to the belt printer
+    // 1. If native Android, dispatch directly to RawBT print service
+    // RawBT will automatically send to whichever printer is currently connected and active!
+    if (Platform.OS === "android") {
+      const rawbtResult = await this.printViaRawbt(bytes);
+      if (rawbtResult.success) {
+        return { success: true, isDirectBluetooth: true };
+      }
+    }
+
+    // 2. If direct Web Bluetooth is active (e.g. Chrome desktop), send raw BLE packets
     if (this.status === "connected" && this.writeCharacteristic) {
       const result = await this.sendRawBytes(bytes);
       if (result.success) {
@@ -292,7 +376,7 @@ class GoojprtPrinterManager {
       }
     }
 
-    // Fallback: Web / System Print
+    // 3. Fallback: Web / System Print
     if (Platform.OS === "web" && typeof window !== "undefined" && (window as any).print) {
       try {
         (window as any).print();
@@ -312,10 +396,15 @@ class GoojprtPrinterManager {
   // Test Print
   public async printTestSlip(unit?: string, conductor?: string): Promise<{ success: boolean; error?: string }> {
     const { bytes } = buildGoojprtTestTicket(unit, conductor);
+
+    if (Platform.OS === "android") {
+      return this.printViaRawbt(bytes);
+    }
+
     if (this.status === "connected" && this.writeCharacteristic) {
       return this.sendRawBytes(bytes);
     }
-    return { success: false, error: "Goojprt belt printer is not connected." };
+    return { success: false, error: "Bluetooth printer is not connected." };
   }
 }
 

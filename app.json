@@ -27,6 +27,14 @@
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH_SCAN"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": {
+            "scheme": "chatco"
+          }
+        }
       ]
     },
     "ios": {

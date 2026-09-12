@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Constants from "expo-constants";
 import { AppleMaps, GoogleMaps } from "expo-maps";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { WebView } from "react-native-webview";
 import type { HailRequest } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import {
@@ -22,6 +23,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const { colors, isLofi } = useAppTheme();
   const googleMap = useRef<GoogleMaps.MapView>(null);
   const appleMap = useRef<AppleMaps.MapView>(null);
+  const webViewRef = useRef<WebView>(null);
   const [loaded, setLoaded] = useState(Platform.OS === "ios");
   const [loadTimedOut, setLoadTimedOut] = useState(false);
   const isMapConfigured = Platform.OS !== "android"
@@ -135,13 +137,152 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
     lineWidth: 2,
   }];
 
-  if (!isMapConfigured) {
+  // If native Google Maps API key is not configured, render Leaflet / OpenStreetMap via WebView
+  if (Platform.OS === "android" && !isMapConfigured) {
+    const routePointsJs = JSON.stringify(activeRoute.map((p) => [p.latitude, p.longitude]));
+    const initialHailsJs = JSON.stringify(visibleHails);
+    const tileBase = isLofi
+      ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+    const tileUrl = `${tileBase}?key=cb1_2dut_1_0bf5bd46e8782ff0b7ba6f38`;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body, #map {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: ${colors.surface};
+      overflow: hidden;
+    }
+    .leaflet-control-attribution, .leaflet-control-zoom { display: none !important; }
+    .vehicle-marker {
+      width: 36px;
+      height: 36px;
+      background: #1A5FB4;
+      border: 2px solid #FFFFFF;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+      color: white;
+      font-family: sans-serif;
+      font-weight: bold;
+      font-size: 10px;
+    }
+    .hail-marker {
+      width: 18px;
+      height: 18px;
+      background: #F59E0B;
+      border: 2px solid #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', {
+      center: [${routeCenter.latitude}, ${routeCenter.longitude}],
+      zoom: 12,
+      zoomControl: false,
+      attributionControl: false
+    });
+
+    L.tileLayer('${tileUrl}', {
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    var routeCoords = ${routePointsJs};
+    if (routeCoords && routeCoords.length > 1) {
+      L.polyline(routeCoords, {
+        color: '#62A0EA',
+        weight: 5,
+        opacity: 0.85
+      }).addTo(map);
+      map.fitBounds(L.latLngBounds(routeCoords).pad(0.08));
+    }
+
+    var vIcon = L.divIcon({
+      className: 'c-v',
+      html: '<div class="vehicle-marker">${unitNumber}</div>',
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+
+    var vehicleMarker = L.marker([${vehiclePosition.latitude}, ${vehiclePosition.longitude}], { icon: vIcon, zIndexOffset: 1000 }).addTo(map);
+    var circle = L.circle([${vehiclePosition.latitude}, ${vehiclePosition.longitude}], {
+      radius: 1000,
+      color: '#1A5FB4',
+      weight: 1.5,
+      fillColor: '#1A5FB4',
+      fillOpacity: 0.08
+    }).addTo(map);
+
+    var hailsGroup = L.layerGroup().addTo(map);
+    var hIcon = L.divIcon({
+      className: 'c-h',
+      html: '<div class="hail-marker"></div>',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+
+    (${initialHailsJs}).forEach(function(h) {
+      if (h.latitude && h.longitude) {
+        L.marker([h.latitude, h.longitude], { icon: hIcon }).addTo(hailsGroup);
+      }
+    });
+
+    window.updateState = function(data) {
+      if (!data) return;
+      if (data.lat && data.lng) {
+        vehicleMarker.setLatLng([data.lat, data.lng]);
+        circle.setLatLng([data.lat, data.lng]);
+        if (data.hasLive) {
+          map.panTo([data.lat, data.lng], { animate: true, duration: 0.5 });
+        }
+      }
+    };
+  </script>
+</body>
+</html>
+    `;
+
     return (
-      <View style={[local.frame, local.unconfigured, fill && local.fill]}>
-        <Text style={local.unconfiguredTitle}>Android map setup required</Text>
-        <Text style={local.unconfiguredText}>
-          Add GOOGLE_MAPS_API_KEY to the EAS preview environment, then create a new APK.
-        </Text>
+      <View
+        style={[
+          local.frame,
+          fill ? local.fill : null,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: isLofi ? 4 : fill ? 0 : 18,
+            borderWidth: isLofi ? 1.5 : 1,
+            overflow: "hidden",
+          },
+        ]}
+      >
+        <WebView
+          ref={webViewRef}
+          originWhitelist={["*"]}
+          source={{ html: htmlContent }}
+          style={{ flex: 1, backgroundColor: colors.surface }}
+          javaScriptEnabled
+          domStorageEnabled
+          scrollEnabled={false}
+          overScrollMode="never"
+        />
       </View>
     );
   }

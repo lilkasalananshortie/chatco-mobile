@@ -1,4 +1,4 @@
-﻿import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
+import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
 import type { FareMatrix, GcashInitiation, ReceiptSettings } from "../domain/types";
 import { post, request } from "./api-client";
 import { mapTransaction } from "./api-mappers";
@@ -16,7 +16,7 @@ export const paymentService = {
     groupPassengers?: Array<{ type: "REGULAR" | "SENIOR_CITIZEN" | "STUDENT" | "PWD"; quantity: number }>;
   }): Promise<GcashInitiation> => {
     const deviceId = await getConductorDeviceId();
-    const d = await post<any>("/conductor/payments/gcash/initiate", {
+    const d = await post<any>("/mobile/conductor/payments/gcash/initiate", {
       payment_method: "GCASH",
       final_amount: input.amount,
       pickup_name: input.from,
@@ -50,7 +50,7 @@ export const paymentService = {
   },
 
   pendingGcash: async (): Promise<GcashInitiation | null> => {
-    const d = await request<any | null>("/conductor/payments/gcash/pending");
+    const d = await request<any | null>("/mobile/conductor/payments/gcash/pending");
     if (!d) return null;
     return {
       transactionId: String(d.transaction_id),
@@ -101,7 +101,7 @@ export const paymentService = {
 
   receiptSettings: async (): Promise<ReceiptSettings> => {
     try {
-      const d = await request<any>("/conductor/receipt-settings");
+      const d = await request<any>("/mobile/conductor/receipt-settings");
       const getBool = (v: any, fallback = true) =>
         v === undefined || v === null ? fallback : v === "true" || v === true;
       return {

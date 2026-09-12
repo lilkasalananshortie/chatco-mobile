@@ -1,4 +1,4 @@
-﻿import {
+import {
   enqueuePendingCash,
   getNextOfflineTicketSequence,
   pendingCashCount,
@@ -15,7 +15,7 @@ export const transactionService = {
   transactions: async (shiftId: string) => {
     const pending = await pendingCashForShift(shiftId);
     try {
-      return (await request<any[]>(`/conductor/transactions?shift_id=${encodeURIComponent(shiftId)}`))
+      return (await request<any[]>(`/mobile/conductor/transactions?shift_id=${encodeURIComponent(shiftId)}`))
         .map(mapTransaction)
         .concat(pending);
     } catch (cause) {
@@ -53,7 +53,7 @@ export const transactionService = {
     if (options.dateTo) params.append("date_to", options.dateTo);
 
     try {
-      const res = await request<any>(`/conductor/transactions?${params.toString()}`);
+      const res = await request<any>(`/mobile/conductor/transactions?${params.toString()}`);
       const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
       return {
         transactions: rows.map(mapTransaction),
@@ -80,7 +80,7 @@ export const transactionService = {
   },
 
   earnings: async (shiftId: string): Promise<ShiftEarnings> => {
-    const d = await request<any>(`/conductor/earnings?shift_id=${encodeURIComponent(shiftId)}`);
+    const d = await request<any>(`/mobile/conductor/earnings?shift_id=${encodeURIComponent(shiftId)}`);
     return {
       cashTotal: Number(d.cash_total) || 0,
       gcashTotal: Number(d.gcash_total) || 0,
@@ -125,7 +125,7 @@ export const transactionService = {
       device_type: CONDUCTOR_DEVICE_TYPE,
     };
     try {
-      return mapTransaction(await post<any>("/conductor/transactions", payload));
+      return mapTransaction(await post<any>("/mobile/conductor/transactions", payload));
     } catch (cause) {
       if (!(cause instanceof NetworkError) || input.voucherCode) throw cause;
       const seq = await getNextOfflineTicketSequence(input.shiftId ?? "local", 1);
@@ -205,7 +205,7 @@ export const transactionService = {
       }),
     };
     try {
-      const d = await post<any>("/conductor/transactions", payload);
+      const d = await post<any>("/mobile/conductor/transactions", payload);
       return {
         groupId: String(d.group_id),
         multiplePaymentReference: d.multiple_payment_reference ?? null,

@@ -1,4 +1,4 @@
-﻿import { appStorage } from "../storage/app-storage";
+import { appStorage } from "../storage/app-storage";
 import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
 import type { ConductorProfile, Driver, Shift, Unit } from "../domain/types";
 import {
@@ -15,7 +15,7 @@ import { mapDriver, mapShift, mapUnit } from "./api-mappers";
 export const shiftService = {
   units: async (): Promise<Unit[]> => {
     try {
-      const units = (await request<any[]>("/conductor/units")).map(mapUnit);
+      const units = (await request<any[]>("/mobile/conductor/units")).map(mapUnit);
       await appStorage.setItem(CACHED_UNITS_KEY, JSON.stringify(units)).catch(() => null);
       return units;
     } catch (cause) {
@@ -33,7 +33,7 @@ export const shiftService = {
 
   drivers: async (): Promise<Driver[]> => {
     try {
-      const drivers = (await request<any[]>("/conductor/drivers")).map(mapDriver);
+      const drivers = (await request<any[]>("/mobile/conductor/drivers")).map(mapDriver);
       await appStorage.setItem(CACHED_DRIVERS_KEY, JSON.stringify(drivers)).catch(() => null);
       return drivers;
     } catch (cause) {
@@ -51,7 +51,7 @@ export const shiftService = {
 
   profile: async (): Promise<ConductorProfile> => {
     try {
-      const d = await request<any>("/conductor/profile");
+      const d = await request<any>("/mobile/conductor/profile");
       const prof: ConductorProfile = {
         id: String(d.id),
         name: d.name ?? "Conductor",
@@ -75,7 +75,7 @@ export const shiftService = {
 
   activeShift: async (): Promise<Shift | null> => {
     try {
-      const data = await request<any | null>("/conductor/shift");
+      const data = await request<any | null>("/mobile/conductor/shift");
       if (data) {
         await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
         return mapShift(data);
@@ -112,7 +112,7 @@ export const shiftService = {
   startShift: async (unit: Unit, driver: Driver): Promise<Shift> => {
     const deviceId = await getConductorDeviceId();
     try {
-      const official = await post<any>("/conductor/shifts/start", {
+      const official = await post<any>("/mobile/conductor/shifts/start", {
         vehicle_id: unit.id,
         driver_id: driver.id,
         route_id: unit.routeId ?? null,
@@ -153,7 +153,7 @@ export const shiftService = {
 
   claimShiftDevice: async (shiftId: string): Promise<Shift> => {
     const deviceId = await getConductorDeviceId();
-    const data = await post<any>("/conductor/shifts/device/claim", {
+    const data = await post<any>("/mobile/conductor/shifts/device/claim", {
       shift_id: shiftId,
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,
@@ -163,7 +163,7 @@ export const shiftService = {
 
   releaseShiftDevice: async (shiftId: string): Promise<Shift> => {
     const deviceId = await getConductorDeviceId();
-    const data = await post<any>("/conductor/shifts/device/release", {
+    const data = await post<any>("/mobile/conductor/shifts/device/release", {
       shift_id: shiftId,
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,

@@ -50,7 +50,7 @@ export async function reconcileProvisionalShift(): Promise<Shift | null> {
       return null;
     }
     const deviceId = await getConductorDeviceId();
-    const response = await post<any>("/conductor/shifts/start", {
+    const response = await post<any>("/mobile/conductor/shifts/start", {
       vehicle_id: provisional.provisionalPayload.unitId,
       driver_id: provisional.provisionalPayload.driverId,
       route_id: provisional.provisionalPayload.routeId ?? null,
@@ -67,7 +67,7 @@ export async function reconcileProvisionalShift(): Promise<Shift | null> {
     if (cause instanceof NetworkError) return null;
     // If backend reports shift conflict / already started, fetch active shift to resolve
     try {
-      const active = await request<any | null>("/conductor/shift");
+      const active = await request<any | null>("/mobile/conductor/shift");
       if (active) {
         const officialShift = mapShift(active);
         const provisional = JSON.parse(provisionalRaw) as Shift;
@@ -101,7 +101,7 @@ export async function syncPendingCashTransactions(): Promise<number> {
       for (const item of pending) {
         try {
           if (item.deviceId && item.deviceId !== currentDeviceId) continue;
-          await post("/conductor/transactions", {
+          await post("/mobile/conductor/transactions", {
             ...item.payload,
             device_id: item.deviceId ?? currentDeviceId,
             device_type: CONDUCTOR_DEVICE_TYPE,

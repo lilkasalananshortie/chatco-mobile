@@ -1,4 +1,4 @@
-﻿import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
+import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
 import type {
   Announcement,
   HailRequest,
@@ -15,7 +15,7 @@ export const fleetService = {
   breakStatus: async (isOnBreak: boolean) => {
     const deviceId = await getConductorDeviceId();
     return mapShift(
-      await post<any>("/conductor/break-status", {
+      await post<any>("/mobile/conductor/break-status", {
         is_on_break: isOnBreak,
         device_id: deviceId,
         device_type: CONDUCTOR_DEVICE_TYPE,
@@ -58,7 +58,7 @@ export const fleetService = {
   },
 
   hails: async (): Promise<HailRequest[]> =>
-    (await request<any[]>("/conductor/hails")).map(h => ({
+    (await request<any[]>("/mobile/conductor/hails")).map(h => ({
       id: String(h.id),
       commuterName: h.commuter?.name ?? h.commuter_name ?? "Commuter",
       latitude: Number(h.commuter_lat ?? h.latitude),
@@ -69,7 +69,7 @@ export const fleetService = {
 
   acceptHail: async (id: string) => {
     const deviceId = await getConductorDeviceId();
-    return post(`/conductor/hails/${encodeURIComponent(id)}/accept`, {
+    return post(`/mobile/conductor/hails/${encodeURIComponent(id)}/accept`, {
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,
     });
@@ -77,7 +77,7 @@ export const fleetService = {
 
   rejectHail: async (id: string) => {
     const deviceId = await getConductorDeviceId();
-    return post(`/conductor/hails/${encodeURIComponent(id)}/reject`, {
+    return post(`/mobile/conductor/hails/${encodeURIComponent(id)}/reject`, {
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,
     });
@@ -85,7 +85,7 @@ export const fleetService = {
 
   capacity: async (capacity_status: string) => {
     const deviceId = await getConductorDeviceId();
-    return post("/conductor/capacity-status", {
+    return post("/mobile/conductor/capacity-status", {
       capacity_status,
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,
@@ -101,7 +101,7 @@ export const fleetService = {
     fixTimestamp?: string | null,
   ) => {
     const deviceId = await getConductorDeviceId();
-    return post("/conductor/location", {
+    return post("/mobile/conductor/location", {
       lat: latitude,
       lng: longitude,
       // Expo Location reports metres/second; Laravel stores and validates km/h.
@@ -115,7 +115,7 @@ export const fleetService = {
   },
 
   sos: async (lat: number, lng: number, note?: string): Promise<SosAlert> => {
-    const d = await post<any>("/conductor/sos", { lat, lng, note });
+    const d = await post<any>("/mobile/conductor/sos", { lat, lng, note });
     return { id: String(d.id), status: d.status };
   },
 
@@ -135,12 +135,12 @@ export const fleetService = {
   markAnnouncementRead: (id: string) => post(`/announcements/${encodeURIComponent(id)}/read`),
 
   sosStatus: async (id: string): Promise<SosAlert> => {
-    const d = await request<any>(`/conductor/sos/${encodeURIComponent(id)}`);
+    const d = await request<any>(`/mobile/conductor/sos/${encodeURIComponent(id)}`);
     return { id: String(d.id), status: d.status };
   },
 
   ratings: async (shiftId: string): Promise<Rating[]> =>
-    (await request<any[]>(`/conductor/ratings?shift_id=${encodeURIComponent(shiftId)}`)).map(r => ({
+    (await request<any[]>(`/mobile/conductor/ratings?shift_id=${encodeURIComponent(shiftId)}`)).map(r => ({
       ratingId: String(r.ratingId ?? r.rating_id ?? r.id),
       commuterId: String(r.commuterId ?? r.commuter_id ?? ""),
       commuterName: r.commuterName ?? r.commuter_name ?? "Commuter",
@@ -154,7 +154,7 @@ export const fleetService = {
 
   remittances: async (): Promise<Remittance[]> => {
     try {
-      const d = await request<any>("/conductor/remittances?per_page=100");
+      const d = await request<any>("/mobile/conductor/remittances?per_page=100");
       const rows = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
       return rows.map((r: any) => ({
         id: String(r.id ?? r.remittance_id ?? r.shift_id ?? ""),
@@ -192,7 +192,7 @@ export const fleetService = {
 
   remit: async (shift: Shift, expectedCash: number, gcash: number) => {
     const deviceId = await getConductorDeviceId();
-    return post("/conductor/remittances", {
+    return post("/mobile/conductor/remittances", {
       shift_id: shift.shiftId,
       total_collected: expectedCash,
       // Declared cash defaults to the collected total; the backend also

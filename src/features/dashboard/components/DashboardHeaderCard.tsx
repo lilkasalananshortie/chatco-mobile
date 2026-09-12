@@ -192,7 +192,7 @@ export function DashboardHeaderCard({
         </View>
       </View>
 
-      {/* Trip Cycle Counter & Turnaround HUD Bar ("Ikot" Tracker) */}
+      {/* Trip Cycle Counter & Turnaround HUD Bar */}
       {tripCycleState ? (
         <Pressable
           onPress={onOpenTripLogbook}
@@ -200,52 +200,55 @@ export function DashboardHeaderCard({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            backgroundColor: isLofi ? colors.surface2 : "rgba(255, 255, 255, 0.04)",
+            backgroundColor: colors.surface2,
             borderWidth: 1,
-            borderColor: isLofi ? colors.border : "rgba(255, 255, 255, 0.08)",
-            borderRadius: isLofi ? 3 : 10,
+            borderColor: colors.border,
+            borderRadius: 8,
             paddingHorizontal: 12,
             paddingVertical: 10,
             marginTop: 10,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
             <View
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: isLofi ? colors.primary : "rgba(98, 160, 234, 0.2)",
+                width: 30,
+                height: 30,
+                borderRadius: 6,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Ionicons name="repeat" size={15} color={isLofi ? "#FFFFFF" : "#62A0EA"} />
+              <Ionicons name="repeat" size={16} color={colors.primaryLight} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>
+                <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>
                   Trip #{tripCycleState.activeTrip.tripNumber}
                 </Text>
                 <Text
                   style={{
                     fontSize: 10,
-                    fontWeight: "700",
-                    color: isLofi ? colors.primary : "#62A0EA",
+                    fontWeight: "800",
+                    color: colors.primaryLight,
                     textTransform: "uppercase",
+                    letterSpacing: 0.3,
                   }}
                 >
                   {tripCycleState.activeTrip.direction === "SOUTHBOUND" ? "SB (to Meyc)" : "NB (to Clmp)"}
                 </Text>
               </View>
-              <Text style={{ fontSize: 10, color: colors.muted, marginTop: 1 }}>
+              <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
                 {currentTripStats.paxCount} pax · ₱{currentTripStats.revenue.toFixed(0)} ({currentTripStats.durationMinutes}m elapsed)
               </Text>
             </View>
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: isLofi ? colors.primary : "#62A0EA" }}>
+            <Text style={{ fontSize: 11, fontWeight: "800", color: colors.primaryLight, textTransform: "uppercase", letterSpacing: 0.4 }}>
               Logbook
             </Text>
             <Ionicons name="chevron-forward" size={14} color={colors.muted} />
@@ -253,14 +256,14 @@ export function DashboardHeaderCard({
         </Pressable>
       ) : null}
 
-      {/* Terminal Headway Timer ("Oras ng Byahe") */}
+      {/* Terminal Headway Timer */}
       {headway.phase === "WAITING" ? (
         <View
           style={{
-            backgroundColor: isLofi ? "#FEF3C7" : "rgba(245, 158, 11, 0.08)",
+            backgroundColor: colors.surface2,
             borderWidth: 1,
-            borderColor: isLofi ? colors.warning : "rgba(245, 158, 11, 0.25)",
-            borderRadius: isLofi ? 3 : 10,
+            borderColor: isLofi ? colors.warning : "rgba(245, 158, 11, 0.3)",
+            borderRadius: 8,
             padding: 12,
             marginTop: 10,
           }}
@@ -268,7 +271,7 @@ export function DashboardHeaderCard({
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Ionicons name="time-outline" size={18} color={isLofi ? "#D97706" : "#FBBF24"} />
-              <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 Terminal Wait
               </Text>
             </View>
@@ -280,8 +283,8 @@ export function DashboardHeaderCard({
           <View style={{ height: 4, backgroundColor: isLofi ? colors.border : "rgba(255,255,255,0.08)", borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
             <View style={{ height: 4, borderRadius: 2, backgroundColor: isLofi ? "#D97706" : "#FBBF24", width: `${Math.round(headwayProgress(headway) * 100)}%` }} />
           </View>
-          <Text style={{ fontSize: 10, color: colors.muted, marginTop: 6 }}>
-            ⏳ Hintayin muna bago umalis · Auto-start kapag gumalaw ang jeep
+          <Text style={{ fontSize: 11, color: colors.muted, marginTop: 6 }}>
+            Hold at terminal · Auto-starts when vehicle begins moving
           </Text>
           {/* Early departure button */}
           <Pressable
@@ -291,16 +294,16 @@ export function DashboardHeaderCard({
               alignItems: "center",
               justifyContent: "center",
               gap: 6,
-              backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.06)",
+              backgroundColor: colors.surface,
               borderWidth: 1,
               borderColor: colors.border,
-              borderRadius: isLofi ? 3 : 8,
+              borderRadius: 6,
               paddingVertical: 8,
               marginTop: 10,
             }}
           >
-            <Ionicons name="play" size={14} color={colors.muted} />
-            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.muted }}>
+            <Ionicons name="play" size={14} color={colors.text} />
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.text }}>
               Start Trip Early
             </Text>
           </Pressable>
@@ -308,18 +311,18 @@ export function DashboardHeaderCard({
       ) : headway.phase === "READY" ? (
         <View
           style={{
-            backgroundColor: isLofi ? "rgba(22, 112, 90, 0.1)" : "rgba(16, 185, 129, 0.1)",
+            backgroundColor: colors.surface2,
             borderWidth: 1,
-            borderColor: isLofi ? colors.success : "rgba(16, 185, 129, 0.35)",
-            borderRadius: isLofi ? 3 : 10,
+            borderColor: isLofi ? colors.success : "rgba(16, 185, 129, 0.4)",
+            borderRadius: 8,
             padding: 12,
             marginTop: 10,
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Ionicons name="checkmark-circle" size={20} color={isLofi ? colors.success : "#34D399"} />
-            <Text style={{ fontSize: 13, fontWeight: "800", color: isLofi ? colors.success : "#34D399" }}>
-              Oras Na — Ready to Depart!
+            <Ionicons name="checkmark-circle" size={18} color={isLofi ? colors.success : "#34D399"} />
+            <Text style={{ fontSize: 13, fontWeight: "800", color: isLofi ? colors.success : "#34D399", textTransform: "uppercase", letterSpacing: 0.4 }}>
+              Ready to Depart
             </Text>
           </View>
           <SlideToConfirm
@@ -327,7 +330,7 @@ export function DashboardHeaderCard({
             onComplete={onStartNextTrip}
           />
           <Text style={{ fontSize: 10, color: colors.muted, marginTop: 6, textAlign: "center" }}>
-            Or just start driving — auto-starts at 8+ km/h
+            Or drive to auto-start at 8+ km/h
           </Text>
         </View>
       ) : null}

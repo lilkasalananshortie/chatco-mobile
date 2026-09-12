@@ -1,7 +1,7 @@
 import { ROUTE_POINTS } from "../../features/dashboard/route-data";
 import { appHaptics } from "./haptics";
 import * as Speech from "expo-speech";
-import { isVoiceAnnouncerActive } from "./voice-announcer";
+import { isVoiceAnnouncerActive, FEMALE_VOICE_PITCH } from "./voice-announcer";
 
 // Matches backend LocationService speed limit & admin monitoring threshold (50 km/h)
 export const SPEED_LIMIT_KMH = 50;
@@ -125,6 +125,7 @@ export function evaluateSpeedWarning(speedMps: number | null | undefined): {
       try {
         void Speech.speak(`Warning: ${speedKmh} kilometers per hour. Please slow down.`, {
           language: "en-US",
+          pitch: FEMALE_VOICE_PITCH,
           rate: 1.0,
         });
       } catch {

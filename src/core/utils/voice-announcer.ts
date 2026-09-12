@@ -7,10 +7,82 @@ const VOICE_ANNOUNCER_KEY = "chatco_voice_announcer_enabled";
 const ANNOUNCER_RADIUS_METERS = 250; // Geofence radius in meters to announce approaching stop
 const ANNOUNCER_COOLDOWN_MS = 240000; // 4 minutes cooldown per stop to prevent spam
 
+export const FEMALE_VOICE_PITCH = 1.2; // Elevated pitch for a clear, crisp, natural female announcer tone
+export const ANNOUNCER_SPEECH_RATE = 0.92; // Articulate, steady pacing for transit stop announcements
+
 let isVoiceAnnouncerEnabled = false;
 let isAnnouncing = false;
 let lastAnnouncedStopKey = "";
 let lastAnnouncedTimestamp = 0;
+
+let cachedFemaleVoiceId: string | null = null;
+let voiceDetectionAttempted = false;
+
+export async function getPreferredFemaleVoice(): Promise<string | undefined> {
+  if (cachedFemaleVoiceId) return cachedFemaleVoiceId;
+  if (voiceDetectionAttempted) return undefined;
+  voiceDetectionAttempted = true;
+
+  try {
+    const voices = await Speech.getAvailableVoicesAsync();
+    if (!voices || !Array.isArray(voices) || voices.length === 0) {
+      return undefined;
+    }
+
+    // 1. Priority: Filipino female voice
+    const filFemale = voices.find((v) => {
+      const lang = (v.language || "").toLowerCase();
+      const name = (v.name || "").toLowerCase();
+      const id = (v.identifier || "").toLowerCase();
+      const isFil = lang.startsWith("fil") || lang.startsWith("tl");
+      const isFemale =
+        name.includes("female") ||
+        name.includes("woman") ||
+        id.includes("female") ||
+        id.includes("-fie-") ||
+        id.includes("-fid-");
+      return isFil && isFemale;
+    });
+    if (filFemale) {
+      cachedFemaleVoiceId = filFemale.identifier;
+      return cachedFemaleVoiceId;
+    }
+
+    // 2. Fallback: Any Filipino voice (pitch 1.2 shifts formant into female register)
+    const anyFil = voices.find((v) => {
+      const lang = (v.language || "").toLowerCase();
+      return lang.startsWith("fil") || lang.startsWith("tl");
+    });
+    if (anyFil) {
+      cachedFemaleVoiceId = anyFil.identifier;
+      return cachedFemaleVoiceId;
+    }
+
+    // 3. Fallback: English female voice (e.g. en-PH, en-US)
+    const enFemale = voices.find((v) => {
+      const lang = (v.language || "").toLowerCase();
+      const name = (v.name || "").toLowerCase();
+      const id = (v.identifier || "").toLowerCase();
+      const isEn = lang.startsWith("en");
+      const isFemale =
+        name.includes("female") ||
+        name.includes("woman") ||
+        id.includes("female") ||
+        id.includes("-f-") ||
+        id.includes("sfg") ||
+        id.includes("tpf");
+      return isEn && isFemale;
+    });
+    if (enFemale) {
+      cachedFemaleVoiceId = enFemale.identifier;
+      return cachedFemaleVoiceId;
+    }
+  } catch {
+    // getAvailableVoicesAsync not supported or failed
+  }
+
+  return undefined;
+}
 
 const listeners = new Set<(enabled: boolean) => void>();
 
@@ -22,6 +94,7 @@ export async function initVoiceAnnouncer(): Promise<boolean> {
   } catch {
     isVoiceAnnouncerEnabled = true;
   }
+  void getPreferredFemaleVoice();
   notifyListeners();
   return isVoiceAnnouncerEnabled;
 }
@@ -73,20 +146,24 @@ export async function playAnnouncement(text: string): Promise<void> {
   try {
     stopAnnouncement();
     isAnnouncing = true;
+    const femaleVoice = await getPreferredFemaleVoice().catch(() => undefined);
+
     Speech.speak(text, {
       language: "fil-PH",
-      pitch: 1.0,
-      rate: 0.9,
+      pitch: FEMALE_VOICE_PITCH,
+      rate: ANNOUNCER_SPEECH_RATE,
+      ...(femaleVoice ? { voice: femaleVoice } : {}),
       onDone: () => {
         isAnnouncing = false;
       },
       onError: () => {
-        // Fallback to English if Tagalog voice synthesis is unavailable
+        // Fallback to English female voice if Tagalog voice synthesis is unavailable
         try {
           Speech.speak(text, {
             language: "en-US",
-            pitch: 1.0,
-            rate: 0.9,
+            pitch: FEMALE_VOICE_PITCH,
+            rate: ANNOUNCER_SPEECH_RATE,
+            ...(femaleVoice ? { voice: femaleVoice } : {}),
             onDone: () => {
               isAnnouncing = false;
             },
@@ -154,17 +231,24 @@ export function checkAndAnnounceApproachingStop(
   return null;
 }
 
-export function testVoiceAnnouncement(sampleStop = "Terminal"): void {
+export async function testVoiceAnnouncement(sampleStop = "Terminal"): Promise<void> {
   const text = `Susunod na hintuan: ${sampleStop}. Next stop: ${sampleStop}.`;
   try {
     stopAnnouncement();
+    const femaleVoice = await getPreferredFemaleVoice().catch(() => undefined);
     Speech.speak(text, {
       language: "fil-PH",
-      pitch: 1.0,
-      rate: 0.9,
+      pitch: FEMALE_VOICE_PITCH,
+      rate: ANNOUNCER_SPEECH_RATE,
+      ...(femaleVoice ? { voice: femaleVoice } : {}),
       onError: () => {
         try {
-          Speech.speak(text, { language: "en-US", pitch: 1.0, rate: 0.9 });
+          Speech.speak(text, {
+            language: "en-US",
+            pitch: FEMALE_VOICE_PITCH,
+            rate: ANNOUNCER_SPEECH_RATE,
+            ...(femaleVoice ? { voice: femaleVoice } : {}),
+          });
         } catch {}
       },
     });

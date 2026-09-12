@@ -1,4 +1,4 @@
-﻿import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { audioCues } from "../../../core/utils/audio-cues";
 import { testVoiceAnnouncement } from "../../../core/utils/voice-announcer";
@@ -80,7 +80,7 @@ export function AudioVoicePreferences({
           </View>
           <Text style={styles.prefSubtitle}>
             {voiceAnnouncer
-              ? "Active: Filipino automated stop voice cues via device speaker"
+              ? "Active: Clear female voice cues (Filipino/English) via device speaker"
               : "Muted: Next-stop visual notifications only"}
           </Text>
         </View>
@@ -99,7 +99,7 @@ export function AudioVoicePreferences({
       {/* Voice Announcement Test Button */}
       {voiceAnnouncer ? (
         <Pressable
-          onPress={() => testVoiceAnnouncement()}
+          onPress={() => void testVoiceAnnouncement()}
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -117,7 +117,7 @@ export function AudioVoicePreferences({
         >
           <Ionicons name="volume-medium-outline" size={16} color={isLofi ? colors.primary : "#60A5FA"} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: isLofi ? colors.primary : "#93C5FD" }}>
-            Test Voice Announcement
+            Test Female Voice Announcement
           </Text>
         </Pressable>
       ) : null}

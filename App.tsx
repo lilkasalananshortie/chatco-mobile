@@ -13,7 +13,6 @@ import { PaymentModal } from "./src/features/payments/PaymentModal";
 import { ReportScreen } from "./src/features/remittance/ReportScreen";
 import { SettingsScreen } from "./src/features/settings/SettingsScreen";
 import { VerificationScreen } from "./src/features/shift/VerificationScreen";
-import { audioCues } from "./src/core/utils/audio-cues";
 import type { Screen, Shift, User } from "./src/core/domain/types";
 
 export default function App() {
@@ -274,7 +273,6 @@ function AppRoot() {
             isOnline={isOnline}
             onClose={() => setPayment(false)}
             onSaved={() => {
-              audioCues.playPaymentSound();
               setRefreshKey(k => k + 1);
             }}
           />

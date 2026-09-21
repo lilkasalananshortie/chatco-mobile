@@ -5,7 +5,6 @@ import { syncPendingCashTransactions } from "../../core/api/chatco-api";
 import type { Remittance, Shift, ShiftEarnings, Transaction } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Header, ScreenShell } from "../../shared/ui";
-import { loadTripCycleState, type TripCycleState } from "../../core/utils/trip-cycle-tracker";
 import { money, officialReportText } from "./remittance-helpers";
 import { RemittanceConfirmModal } from "./components/RemittanceConfirmModal";
 import { RemittanceSuccessModal } from "./components/RemittanceSuccessModal";
@@ -32,14 +31,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
   const [historyError, setHistoryError] = useState("");
   const [filter, setFilter] = useState<"ALL" | "WEEK" | "MONTH">("ALL");
   const [page, setPage] = useState(1);
-  const [tripCycle, setTripCycle] = useState<TripCycleState | null>(null);
   const loadInFlight = useRef<Promise<void> | null>(null);
-
-  useEffect(() => {
-    if (shift.shiftId) {
-      void loadTripCycleState(shift.shiftId, shift.timeIn).then(setTripCycle);
-    }
-  }, [shift.shiftId, shift.timeIn]);
 
   const load = useCallback(async () => {
     if (loadInFlight.current) return loadInFlight.current;
@@ -207,7 +199,6 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
         totalAmount={accountableTotals.all}
         totalPassengers={totalPassengers}
         transactionCount={transactions.length}
-        tripCycle={tripCycle}
         accountableTotals={accountableTotals}
         voucherTotal={totals.voucher}
         cashCount={cashCount}

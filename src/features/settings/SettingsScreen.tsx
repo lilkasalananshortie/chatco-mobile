@@ -6,21 +6,10 @@ import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { ScreenShell } from "../../shared/ui";
 import { SosConfirmModal } from "../../shared/ui/SosConfirmModal";
 import type { ConductorProfile, Remittance, Shift, Transaction, User } from "../../core/domain/types";
-import {
-  initVoiceAnnouncer,
-  isVoiceAnnouncerActive,
-  setVoiceAnnouncerActive,
-  subscribeVoiceAnnouncer,
-} from "../../core/utils/voice-announcer";
-import { thermalPrinter, type PrinterStatus } from "../../core/utils/thermal-printer";
-import { thermalGuard, type ThermalGuardState } from "../../core/utils/thermal-guard";
-import { audioCues, initAudioCues, isAudioCuesActive, toggleAudioCues } from "../../core/utils/audio-cues";
-import { getHeadwayMinutes, setHeadwayMinutes } from "../../core/utils/terminal-headway";
 import { createSettingsStyles } from "./settings-styles";
 import { ProfileCard } from "./components/ProfileCard";
 import { ActiveAssignmentCard } from "./components/ActiveAssignmentCard";
 import { AppPreferencesCard } from "./components/AppPreferencesCard";
-import { BluetoothPrinterCard } from "./components/BluetoothPrinterCard";
 import { AccountSessionSection } from "./components/AccountSessionSection";
 
 const SCAN_SOUND_KEY = "conductor_scan_sound";
@@ -41,48 +30,9 @@ export function SettingsScreen({
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [history, setHistory] = useState<Remittance[]>([]);
   const [scanSound, setScanSound] = useState(true);
-  const [voiceAnnouncer, setVoiceAnnouncer] = useState(isVoiceAnnouncerActive());
-  const [printerStatus, setPrinterStatus] = useState<PrinterStatus>(thermalPrinter.getStatus());
-  const [printerName, setPrinterName] = useState<string | null>(thermalPrinter.getPairedDeviceName());
-  const [autoPrint, setAutoPrint] = useState(thermalPrinter.isAutoPrintEnabled());
-  const [isConnectingPrinter, setIsConnectingPrinter] = useState(false);
-  const [isTestingPrinter, setIsTestingPrinter] = useState(false);
-  const [thermalState, setThermalState] = useState<ThermalGuardState>(thermalGuard.getState());
-  const [audioCuesEnabled, setAudioCuesEnabled] = useState(isAudioCuesActive());
-  const [headwayMins, setHeadwayMins] = useState(15);
   const [showSOS, setShowSOS] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-
-  useEffect(() => {
-    void initAudioCues().then(setAudioCuesEnabled);
-    void getHeadwayMinutes().then(setHeadwayMins);
-  }, []);
-
-  const handleToggleAudio = async () => {
-    const next = await toggleAudioCues();
-    setAudioCuesEnabled(next);
-    if (next) {
-      audioCues.playPaymentSound();
-    }
-  };
-
-  useEffect(() => {
-    void initVoiceAnnouncer().then(setVoiceAnnouncer);
-    return subscribeVoiceAnnouncer(setVoiceAnnouncer);
-  }, []);
-
-  useEffect(() => {
-    return thermalPrinter.subscribe((status, name) => {
-      setPrinterStatus(status);
-      setPrinterName(name);
-      setAutoPrint(thermalPrinter.isAutoPrintEnabled());
-    });
-  }, []);
-
-  useEffect(() => {
-    return thermalGuard.subscribe(setThermalState);
-  }, []);
 
   useEffect(() => {
     void Promise.all([
@@ -102,73 +52,6 @@ export function SettingsScreen({
     const next = !scanSound;
     setScanSound(next);
     await appStorage.setItem(SCAN_SOUND_KEY, next ? "on" : "off");
-  };
-
-  const toggleVoice = async () => {
-    const next = !voiceAnnouncer;
-    setVoiceAnnouncer(next);
-    await setVoiceAnnouncerActive(next);
-  };
-
-  const toggleAutoPrint = async () => {
-    const next = !autoPrint;
-    setAutoPrint(next);
-    await thermalPrinter.setAutoPrintEnabled(next);
-  };
-
-  const toggleThermalGuard = async () => {
-    const next = !thermalState.enabled;
-    await thermalGuard.setEnabled(next);
-  };
-
-  const handleConnectPrinter = async () => {
-    setIsConnectingPrinter(true);
-    try {
-      const res = await thermalPrinter.connect();
-      if (res.success) {
-        Alert.alert(
-          "Printer Connected",
-          `Successfully connected to ${res.deviceName || "Thermal Printer"}.`
-        );
-      } else if (res.error) {
-        Alert.alert("Connection Note", res.error);
-      }
-    } catch (err: any) {
-      Alert.alert("Bluetooth Error", err?.message || "Could not connect to printer.");
-    } finally {
-      setIsConnectingPrinter(false);
-    }
-  };
-
-  const handleDisconnectPrinter = () => {
-    thermalPrinter.disconnect();
-    Alert.alert("Printer Disconnected", "Thermal printer disconnected.");
-  };
-
-  const handleTestPrint = async () => {
-    setIsTestingPrinter(true);
-    try {
-      const res = await thermalPrinter.printTestSlip(
-        shift?.unitNumber,
-        profile?.name || shift?.conductorName || user.name
-      );
-      if (res.success) {
-        Alert.alert("Test Slip Printed", "Check your thermal printer for the diagnostic ticket.");
-      } else {
-        Alert.alert(
-          "Print Error",
-          res.error || "Please ensure RawBT or a Bluetooth printer is ready.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Connect Now", onPress: () => void handleConnectPrinter() },
-          ]
-        );
-      }
-    } catch (err: any) {
-      Alert.alert("Print Error", err?.message || "Failed to print test slip.");
-    } finally {
-      setIsTestingPrinter(false);
-    }
   };
 
   const logoutLocked = useMemo(() => {
@@ -281,33 +164,6 @@ export function SettingsScreen({
         setLofi={setLofi}
         scanSound={scanSound}
         onToggleScanSound={() => void toggleSound()}
-        voiceAnnouncer={voiceAnnouncer}
-        onToggleVoice={() => void toggleVoice()}
-        audioCuesEnabled={audioCuesEnabled}
-        onToggleAudio={() => void handleToggleAudio()}
-        headwayMins={headwayMins}
-        onUpdateHeadway={(mins) => {
-          setHeadwayMins(mins);
-          void setHeadwayMinutes(mins);
-        }}
-        thermalState={thermalState}
-        onToggleThermalGuard={() => void toggleThermalGuard()}
-      />
-
-      {/* Bluetooth Belt Printer */}
-      <BluetoothPrinterCard
-        styles={styles}
-        colors={colors}
-        isLofi={isLofi}
-        printerStatus={printerStatus}
-        printerName={printerName}
-        isConnectingPrinter={isConnectingPrinter}
-        onConnectPrinter={() => void handleConnectPrinter()}
-        onDisconnectPrinter={handleDisconnectPrinter}
-        autoPrint={autoPrint}
-        onToggleAutoPrint={() => void toggleAutoPrint()}
-        isTestingPrinter={isTestingPrinter}
-        onTestPrint={() => void handleTestPrint()}
       />
 
       {/* Account & Session */}

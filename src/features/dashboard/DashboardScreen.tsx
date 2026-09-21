@@ -1,25 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
 import { Ionicons } from "@expo/vector-icons";
 import type { Shift } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
-import { appHaptics } from "../../core/utils/haptics";
-import { audioCues } from "../../core/utils/audio-cues";
 import { Header, ScreenShell } from "../../shared/ui";
 import { SosConfirmModal } from "../../shared/ui/SosConfirmModal";
 import { TransactionHistoryModal } from "./TransactionHistoryModal";
-import { TripLogbookModal } from "./TripLogbookModal";
 import { createDashStyles } from "./dashboard-styles";
-import {
-  completeAndAdvanceTrip,
-  computeTripStats,
-  loadTripCycleState,
-  saveTripCycleState,
-  switchActiveTripDirection,
-  undoLastTurnaround,
-  type TripCycleState,
-} from "../../core/utils/trip-cycle-tracker";
 import { useDashboardShift } from "./hooks/useDashboardShift";
 import { useDashboardGps } from "./hooks/useDashboardGps";
 import { DeviceOwnershipBanner } from "./components/DeviceOwnershipBanner";
@@ -48,9 +36,6 @@ export function DashboardScreen({
 
   const [history, setHistory] = useState(false);
   const [sos, setSos] = useState(false);
-  const [tripModalOpen, setTripModalOpen] = useState(false);
-  const [tripCycleState, setTripCycleState] = useState<TripCycleState | null>(null);
-  const tripCycleStateRef = useRef<TripCycleState | null>(null);
 
   const shiftData = useDashboardShift({
     shift,
@@ -66,52 +51,6 @@ export function DashboardScreen({
     canOperate,
     refreshKey,
   });
-
-  useEffect(() => {
-    tripCycleStateRef.current = tripCycleState;
-  }, [tripCycleState]);
-
-  useEffect(() => {
-    if (shift?.shiftId) {
-      void loadTripCycleState(shift.shiftId, shift.timeIn).then((state) => {
-        setTripCycleState(state);
-        tripCycleStateRef.current = state;
-      });
-    }
-  }, [shift?.shiftId, shift?.timeIn]);
-
-  const handleAdvanceTrip = useCallback(async () => {
-    if (!tripCycleStateRef.current) return;
-    audioCues.playDutySound();
-    const nextState = completeAndAdvanceTrip(tripCycleStateRef.current, shiftData.transactions);
-    setTripCycleState(nextState);
-    tripCycleStateRef.current = nextState;
-    await saveTripCycleState(nextState);
-    await gpsData.triggerHeadwayAfterTrip();
-  }, [shiftData.transactions, gpsData]);
-
-  const handleSwitchDirection = useCallback(async () => {
-    if (!tripCycleStateRef.current) return;
-    const nextState = switchActiveTripDirection(tripCycleStateRef.current);
-    setTripCycleState(nextState);
-    tripCycleStateRef.current = nextState;
-    await saveTripCycleState(nextState);
-  }, []);
-
-  const handleUndoTurnaround = useCallback(async () => {
-    if (!tripCycleStateRef.current) return;
-    const nextState = undoLastTurnaround(tripCycleStateRef.current);
-    setTripCycleState(nextState);
-    tripCycleStateRef.current = nextState;
-    await saveTripCycleState(nextState);
-  }, []);
-
-  const currentTripStats = useMemo(() => {
-    if (!tripCycleState) {
-      return { paxCount: 0, revenue: 0, durationMinutes: 1, cashAmount: 0, gcashAmount: 0 };
-    }
-    return computeTripStats(tripCycleState.activeTrip, shiftData.transactions);
-  }, [tripCycleState, shiftData.transactions]);
 
   const combinedError = shiftData.error || gpsData.gpsError;
 
@@ -209,31 +148,15 @@ export function DashboardScreen({
         onOpenHistory={() => setHistory(true)}
         totals={shiftData.totals}
         transactionTotals={shiftData.transactionTotals}
-        tripCycleState={tripCycleState}
-        currentTripStats={currentTripStats}
-        onOpenTripLogbook={() => {
-          appHaptics.selection();
-          setTripModalOpen(true);
-        }}
-        headway={gpsData.headway}
-        onStartNextTrip={gpsData.handleStartNextTrip}
         pendingOfflineCount={shiftData.pendingOfflineCount}
       />
 
-      {/* Route Map, Speedometer, Warnings, and Pickup Hails */}
+      {/* Route Map and Pickup Hails */}
       <RouteMapSection
         shift={shift}
         canOperate={canOperate}
         announcements={shiftData.announcements}
         onMarkAnnouncementRead={shiftData.handleMarkAnnouncementRead}
-        currentSpeedKmh={gpsData.currentSpeedKmh}
-        isOverspeeding={gpsData.isOverspeeding}
-        isNearSpeedLimit={gpsData.isNearSpeedLimit}
-        thermalState={gpsData.thermalState}
-        voiceActive={gpsData.voiceActive}
-        onToggleVoice={() => void gpsData.handleToggleVoice()}
-        corridorDeviationMeters={gpsData.corridorDeviationMeters}
-        approachingStop={gpsData.approachingStop}
         mapEnabled={gpsData.mapEnabled}
         setMapEnabled={gpsData.setMapEnabled}
         position={gpsData.position}
@@ -258,19 +181,6 @@ export function DashboardScreen({
         transactions={shiftData.transactions}
         onClose={() => setHistory(false)}
       />
-
-      {/* Trip Turnaround Logbook Modal ("Ikot" Tracker) */}
-      {tripCycleState ? (
-        <TripLogbookModal
-          visible={tripModalOpen}
-          onClose={() => setTripModalOpen(false)}
-          state={tripCycleState}
-          transactions={shiftData.transactions}
-          onAdvanceTrip={() => void handleAdvanceTrip()}
-          onSwitchDirection={() => void handleSwitchDirection()}
-          onUndoTurnaround={() => void handleUndoTurnaround()}
-        />
-      ) : null}
 
       {/* Break Confirm Modal */}
       <BreakConfirmModal

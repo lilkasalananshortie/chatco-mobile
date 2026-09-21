@@ -2,13 +2,6 @@ import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Capacity, Shift } from "../../../core/domain/types";
-import { SlideToConfirm } from "../../../shared/ui/SlideToConfirm";
-import type { TripCycleState } from "../../../core/utils/trip-cycle-tracker";
-import {
-  formatCountdown,
-  headwayProgress,
-  type HeadwayTimerState,
-} from "../../../core/utils/terminal-headway";
 
 export interface DashboardHeaderCardProps {
   shift: Shift;
@@ -24,11 +17,6 @@ export interface DashboardHeaderCardProps {
   onOpenHistory: () => void;
   totals: { total: number; cash: number; gcash: number; voucher?: number };
   transactionTotals: { voucher: number };
-  tripCycleState: TripCycleState | null;
-  currentTripStats: { paxCount: number; revenue: number; durationMinutes: number };
-  onOpenTripLogbook: () => void;
-  headway: HeadwayTimerState;
-  onStartNextTrip: () => void;
   pendingOfflineCount: number;
 }
 
@@ -46,11 +34,6 @@ export function DashboardHeaderCard({
   onOpenHistory,
   totals,
   transactionTotals,
-  tripCycleState,
-  currentTripStats,
-  onOpenTripLogbook,
-  headway,
-  onStartNextTrip,
   pendingOfflineCount,
 }: DashboardHeaderCardProps) {
   return (
@@ -191,149 +174,6 @@ export function DashboardHeaderCard({
           </View>
         </View>
       </View>
-
-      {/* Trip Cycle Counter & Turnaround HUD Bar */}
-      {tripCycleState ? (
-        <Pressable
-          onPress={onOpenTripLogbook}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: colors.surface2,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 8,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            marginTop: 10,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            <View
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 6,
-                backgroundColor: colors.surface,
-                borderWidth: 1,
-                borderColor: colors.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="repeat" size={16} color={colors.primaryLight} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>
-                  Trip #{tripCycleState.activeTrip.tripNumber}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 10,
-                    fontWeight: "800",
-                    color: colors.primaryLight,
-                    textTransform: "uppercase",
-                    letterSpacing: 0.3,
-                  }}
-                >
-                  {tripCycleState.activeTrip.direction === "SOUTHBOUND" ? "SB (to Meyc)" : "NB (to Clmp)"}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
-                {currentTripStats.paxCount} pax · ₱{currentTripStats.revenue.toFixed(0)} ({currentTripStats.durationMinutes}m elapsed)
-              </Text>
-            </View>
-          </View>
-
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: "800", color: colors.primaryLight, textTransform: "uppercase", letterSpacing: 0.4 }}>
-              Logbook
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.muted} />
-          </View>
-        </Pressable>
-      ) : null}
-
-      {/* Terminal Headway Timer */}
-      {headway.phase === "WAITING" ? (
-        <View
-          style={{
-            backgroundColor: colors.surface2,
-            borderWidth: 1,
-            borderColor: isLofi ? colors.warning : "rgba(245, 158, 11, 0.3)",
-            borderRadius: 8,
-            padding: 12,
-            marginTop: 10,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name="time-outline" size={18} color={isLofi ? "#D97706" : "#FBBF24"} />
-              <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Terminal Wait
-              </Text>
-            </View>
-            <Text style={{ fontSize: 20, fontWeight: "900", color: isLofi ? "#D97706" : "#FBBF24", fontVariant: ["tabular-nums"] }}>
-              {formatCountdown(headway.remainingSeconds)}
-            </Text>
-          </View>
-          {/* Progress bar */}
-          <View style={{ height: 4, backgroundColor: isLofi ? colors.border : "rgba(255,255,255,0.08)", borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
-            <View style={{ height: 4, borderRadius: 2, backgroundColor: isLofi ? "#D97706" : "#FBBF24", width: `${Math.round(headwayProgress(headway) * 100)}%` }} />
-          </View>
-          <Text style={{ fontSize: 11, color: colors.muted, marginTop: 6 }}>
-            Hold at terminal · Auto-starts when vehicle begins moving
-          </Text>
-          {/* Early departure button */}
-          <Pressable
-            onPress={onStartNextTrip}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 6,
-              paddingVertical: 8,
-              marginTop: 10,
-            }}
-          >
-            <Ionicons name="play" size={14} color={colors.text} />
-            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.text }}>
-              Start Trip Early
-            </Text>
-          </Pressable>
-        </View>
-      ) : headway.phase === "READY" ? (
-        <View
-          style={{
-            backgroundColor: colors.surface2,
-            borderWidth: 1,
-            borderColor: isLofi ? colors.success : "rgba(16, 185, 129, 0.4)",
-            borderRadius: 8,
-            padding: 12,
-            marginTop: 10,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Ionicons name="checkmark-circle" size={18} color={isLofi ? colors.success : "#34D399"} />
-            <Text style={{ fontSize: 13, fontWeight: "800", color: isLofi ? colors.success : "#34D399", textTransform: "uppercase", letterSpacing: 0.4 }}>
-              Ready to Depart
-            </Text>
-          </View>
-          <SlideToConfirm
-            label="Slide to start next trip"
-            onComplete={onStartNextTrip}
-          />
-          <Text style={{ fontSize: 10, color: colors.muted, marginTop: 6, textAlign: "center" }}>
-            Or drive to auto-start at 8+ km/h
-          </Text>
-        </View>
-      ) : null}
 
       {pendingOfflineCount > 0 ? (
         <View style={dashStyles.syncPendingBox}>

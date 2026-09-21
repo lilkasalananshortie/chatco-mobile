@@ -1,14 +1,12 @@
 import React from "react";
 import { Text, View } from "react-native";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
-import type { TripCycleState } from "../../../core/utils/trip-cycle-tracker";
 import { money } from "../remittance-helpers";
 
 interface RemittanceCollectionsCardProps {
   totalAmount: number;
   totalPassengers: number;
   transactionCount: number;
-  tripCycle: TripCycleState | null;
   accountableTotals: {
     cash: number;
     gcash: number;
@@ -24,7 +22,6 @@ export function RemittanceCollectionsCard({
   totalAmount,
   totalPassengers,
   transactionCount,
-  tripCycle,
   accountableTotals,
   voucherTotal,
   cashCount,
@@ -46,9 +43,6 @@ export function RemittanceCollectionsCard({
         </Text>
         <Text style={[styles.subtitle, { fontSize: 11, marginTop: 4 }]}>
           {totalPassengers} passenger{totalPassengers !== 1 ? "s" : ""} · {transactionCount} transaction{transactionCount !== 1 ? "s" : ""}
-          {tripCycle && (tripCycle.completedTrips.length > 0 || tripCycle.currentTripNumber > 1)
-            ? ` · ${tripCycle.completedTrips.length} trip${tripCycle.completedTrips.length === 1 ? "" : "s"} (${Math.floor(tripCycle.completedTrips.length / 2)} full ikot)`
-            : ""}
         </Text>
       </View>
 

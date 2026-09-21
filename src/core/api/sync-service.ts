@@ -98,28 +98,67 @@ export async function syncPendingCashTransactions(): Promise<number> {
       const currentDeviceId = await getConductorDeviceId();
       let synced = 0;
 
-      for (const item of pending) {
-        try {
-          if (item.deviceId && item.deviceId !== currentDeviceId) continue;
-          await post("/mobile/conductor/transactions", {
+      // Filter eligible items for current device
+      const eligibleItems = pending.filter(
+        (item) => !item.deviceId || item.deviceId === currentDeviceId
+      );
+
+      if (eligibleItems.length > 0) {
+        // Chunk into batches of up to 50 items (backend max batch limit)
+        const batchSize = 50;
+        for (let i = 0; i < eligibleItems.length; i += batchSize) {
+          const chunk = eligibleItems.slice(i, i + batchSize);
+          const payloadList = chunk.map((item) => ({
             ...item.payload,
             device_id: item.deviceId ?? currentDeviceId,
             device_type: CONDUCTOR_DEVICE_TYPE,
-            offline_created_at: item.offlineCreatedAt ?? new Date(item.createdAt).toISOString(),
-          });
-          await removePendingCash(item.id);
-          synced += item.localTransactions.length;
-        } catch (cause) {
-          if (cause instanceof NetworkError) {
-            break;
+            offline_created_at:
+              item.offlineCreatedAt ?? new Date(item.createdAt).toISOString(),
+          }));
+
+          try {
+            const batchResult = await post<{
+              synced_count: number;
+              failed_count: number;
+              results: Record<string, { status: string; error?: string }>;
+            }>("/mobile/conductor/transactions/sync", {
+              transactions: payloadList,
+            });
+
+            for (const item of chunk) {
+              const itemResult = batchResult?.results?.[item.id];
+              if (itemResult?.status === "synced") {
+                await removePendingCash(item.id);
+                synced += item.localTransactions.length;
+              } else if (itemResult?.status === "failed") {
+                await updatePendingCash(item.id, {
+                  attempts: (item.attempts ?? 0) + 1,
+                  lastAttemptAt: Date.now(),
+                  lastError: itemResult.error ?? "Synchronization failed.",
+                });
+              } else {
+                // If no specific status returned but batch succeeded
+                await removePendingCash(item.id);
+                synced += item.localTransactions.length;
+              }
+            }
+          } catch (cause) {
+            if (cause instanceof NetworkError) {
+              break;
+            }
+            // Mark attempts for chunk items on general request failure
+            for (const item of chunk) {
+              await updatePendingCash(item.id, {
+                attempts: (item.attempts ?? 0) + 1,
+                lastAttemptAt: Date.now(),
+                lastError:
+                  cause instanceof Error ? cause.message : "Synchronization failed.",
+              });
+            }
           }
-          await updatePendingCash(item.id, {
-            attempts: (item.attempts ?? 0) + 1,
-            lastAttemptAt: Date.now(),
-            lastError: cause instanceof Error ? cause.message : "Synchronization failed.",
-          });
         }
       }
+
       const remaining = await pendingCashCount();
       notifySyncState("idle", remaining);
       return synced;

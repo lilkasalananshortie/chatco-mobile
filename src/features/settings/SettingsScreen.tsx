@@ -10,7 +10,9 @@ import { createSettingsStyles } from "./settings-styles";
 import { ProfileCard } from "./components/ProfileCard";
 import { ActiveAssignmentCard } from "./components/ActiveAssignmentCard";
 import { AppPreferencesCard } from "./components/AppPreferencesCard";
+import { BluetoothPrinterCard } from "./components/BluetoothPrinterCard";
 import { AccountSessionSection } from "./components/AccountSessionSection";
+import { thermalPrinter, type PrinterStatus } from "../../core/utils/thermal-printer";
 
 const SCAN_SOUND_KEY = "conductor_scan_sound";
 
@@ -47,6 +49,76 @@ export function SettingsScreen({
       setHistory(r);
     });
   }, [shift.shiftId]);
+
+  const [printerStatus, setPrinterStatus] = useState<PrinterStatus>(thermalPrinter.getStatus());
+  const [printerName, setPrinterName] = useState<string | null>(thermalPrinter.getPairedDeviceName());
+  const [autoPrint, setAutoPrint] = useState(thermalPrinter.isAutoPrintEnabled());
+  const [isConnectingPrinter, setIsConnectingPrinter] = useState(false);
+  const [isTestingPrinter, setIsTestingPrinter] = useState(false);
+
+  useEffect(() => {
+    return thermalPrinter.subscribe((status, name) => {
+      setPrinterStatus(status);
+      setPrinterName(name);
+      setAutoPrint(thermalPrinter.isAutoPrintEnabled());
+    });
+  }, []);
+
+  const toggleAutoPrint = async () => {
+    const next = !autoPrint;
+    setAutoPrint(next);
+    await thermalPrinter.setAutoPrintEnabled(next);
+  };
+
+  const handleConnectPrinter = async () => {
+    setIsConnectingPrinter(true);
+    try {
+      const res = await thermalPrinter.connect();
+      if (res.success) {
+        Alert.alert(
+          "Printer Connected",
+          `Successfully connected to ${res.deviceName || "Thermal Printer"}.`
+        );
+      } else if (res.error) {
+        Alert.alert("Connection Note", res.error);
+      }
+    } catch (err: any) {
+      Alert.alert("Bluetooth Error", err?.message || "Could not connect to printer.");
+    } finally {
+      setIsConnectingPrinter(false);
+    }
+  };
+
+  const handleDisconnectPrinter = () => {
+    thermalPrinter.disconnect();
+    Alert.alert("Printer Disconnected", "Thermal printer disconnected.");
+  };
+
+  const handleTestPrint = async () => {
+    setIsTestingPrinter(true);
+    try {
+      const res = await thermalPrinter.printTestSlip(
+        shift?.unitNumber,
+        profile?.name || shift?.conductorName || user.name
+      );
+      if (res.success) {
+        Alert.alert("Test Slip Printed", "Check your thermal printer for the diagnostic ticket.");
+      } else {
+        Alert.alert(
+          "Print Error",
+          res.error || "Please ensure RawBT or a Bluetooth printer is ready.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Connect Now", onPress: () => void handleConnectPrinter() },
+          ]
+        );
+      }
+    } catch (err: any) {
+      Alert.alert("Print Error", err?.message || "Failed to print test slip.");
+    } finally {
+      setIsTestingPrinter(false);
+    }
+  };
 
   const toggleSound = async () => {
     const next = !scanSound;
@@ -164,6 +236,22 @@ export function SettingsScreen({
         setLofi={setLofi}
         scanSound={scanSound}
         onToggleScanSound={() => void toggleSound()}
+      />
+
+      {/* Bluetooth Belt Printer */}
+      <BluetoothPrinterCard
+        styles={styles}
+        colors={colors}
+        isLofi={isLofi}
+        printerStatus={printerStatus}
+        printerName={printerName}
+        isConnectingPrinter={isConnectingPrinter}
+        onConnectPrinter={() => void handleConnectPrinter()}
+        onDisconnectPrinter={handleDisconnectPrinter}
+        autoPrint={autoPrint}
+        onToggleAutoPrint={() => void toggleAutoPrint()}
+        isTestingPrinter={isTestingPrinter}
+        onTestPrint={() => void handleTestPrint()}
       />
 
       {/* Account & Session */}

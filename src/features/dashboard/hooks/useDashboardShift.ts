@@ -3,6 +3,7 @@ import { AppState } from "react-native";
 import { api } from "../../../core/api/chatco-api";
 import type { Announcement, Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../../core/domain/types";
 import { appHaptics } from "../../../core/utils/haptics";
+import { audioCues } from "../../../core/utils/audio-cues";
 
 export interface UseDashboardShiftProps {
   shift: Shift;
@@ -72,7 +73,10 @@ export function useDashboardShift({
       if (shift.isProvisional) {
         await api.reconcileProvisionalShift().catch(() => null);
       }
-      await api.syncPendingCashTransactions();
+      const synced = await api.syncPendingCashTransactions();
+      if (synced > 0) {
+        audioCues.playSyncSound();
+      }
       await refreshOperationalData();
     } catch {}
   }, [isOnline, refreshOperationalData, shift.isProvisional, syncState]);
@@ -133,6 +137,7 @@ export function useDashboardShift({
 
   const updateCapacity = async (next: Capacity) => {
     if (!canOperate) return;
+    audioCues.playCapacitySound();
     const previous = capacity;
     setCapacity(next);
     setError("");
@@ -154,6 +159,7 @@ export function useDashboardShift({
     setIsOnBreak(next);
     try {
       const updated = await api.breakStatus(next);
+      audioCues.playDutySound();
       setIsOnBreak(Boolean(updated.isOnBreak));
       onShiftUpdated?.(updated);
       return true;
@@ -172,6 +178,7 @@ export function useDashboardShift({
     if (!canOperate) return;
     try {
       if (action === "accept") {
+        audioCues.playHailSound();
         await api.acceptHail(hailId);
       } else {
         await api.rejectHail(hailId);

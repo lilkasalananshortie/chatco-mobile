@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Capacity, Shift } from "../../../core/domain/types";
+import type { TripCycleState, TripStats } from "../../../core/utils/trip-cycle-tracker";
 
 export interface DashboardHeaderCardProps {
   shift: Shift;
@@ -18,6 +19,9 @@ export interface DashboardHeaderCardProps {
   totals: { total: number; cash: number; gcash: number; voucher?: number };
   transactionTotals: { voucher: number };
   pendingOfflineCount: number;
+  tripCycleState?: TripCycleState | null;
+  currentTripStats?: TripStats;
+  onOpenTripLogbook?: () => void;
 }
 
 export function DashboardHeaderCard({
@@ -35,6 +39,9 @@ export function DashboardHeaderCard({
   totals,
   transactionTotals,
   pendingOfflineCount,
+  tripCycleState,
+  currentTripStats,
+  onOpenTripLogbook,
 }: DashboardHeaderCardProps) {
   return (
     <View style={dashStyles.cardWrapper}>
@@ -174,6 +181,79 @@ export function DashboardHeaderCard({
           </View>
         </View>
       </View>
+
+      {/* Trip Cycle Counter & Turnaround HUD Bar */}
+      {tripCycleState ? (
+        <Pressable
+          onPress={onOpenTripLogbook}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: isLofi ? colors.surface2 : "rgba(30, 41, 59, 0.7)",
+            borderWidth: 1,
+            borderColor: isLofi ? colors.border : "rgba(148, 163, 184, 0.2)",
+            borderRadius: 10,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            marginTop: 10,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                backgroundColor: isLofi ? colors.surface : "rgba(15, 23, 42, 0.8)",
+                borderWidth: 1,
+                borderColor: isLofi ? colors.border : "rgba(56, 189, 248, 0.3)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="repeat" size={18} color={isLofi ? colors.primaryLight : "#38BDF8"} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>
+                  Trip #{tripCycleState.activeTrip.tripNumber}
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: isLofi ? colors.surface : "rgba(56, 189, 248, 0.15)",
+                    paddingHorizontal: 5,
+                    paddingVertical: 1,
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: "800",
+                      color: isLofi ? colors.primaryLight : "#38BDF8",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    {tripCycleState.activeTrip.direction === "SOUTHBOUND" ? "SB (to Meyc)" : "NB (to Clmp)"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
+                {currentTripStats ? `${currentTripStats.paxCount} pax · ₱${currentTripStats.revenue.toFixed(0)} (${currentTripStats.durationMinutes}m elapsed)` : "Ready for passengers"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 11, fontWeight: "800", color: isLofi ? colors.primaryLight : "#38BDF8", textTransform: "uppercase", letterSpacing: 0.4 }}>
+              Logbook
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.muted} />
+          </View>
+        </Pressable>
+      ) : null}
 
       {pendingOfflineCount > 0 ? (
         <View style={dashStyles.syncPendingBox}>

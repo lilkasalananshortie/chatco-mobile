@@ -5,6 +5,12 @@ import { api } from "../../../core/api/chatco-api";
 import type { Shift } from "../../../core/domain/types";
 import { ROUTE_POINTS } from "../route-data";
 import { LOCATION_TASK_NAME } from "../location-task";
+import {
+  CORRIDOR_DEVIATION_THRESHOLD_METERS,
+  evaluateSpeedWarning,
+  getDistanceToCorridorMeters,
+} from "../../../core/utils/corridor-guard";
+import { audioCues } from "../../../core/utils/audio-cues";
 
 export interface UseDashboardGpsProps {
   shift: Shift;
@@ -20,6 +26,10 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
   );
   const [routeSource, setRouteSource] = useState<"backend" | "fallback">("fallback");
   const [gpsError, setGpsError] = useState("");
+  const [currentSpeedKmh, setCurrentSpeedKmh] = useState(0);
+  const [isOverspeeding, setIsOverspeeding] = useState(false);
+  const [isNearSpeedLimit, setIsNearSpeedLimit] = useState(false);
+  const [corridorDeviationMeters, setCorridorDeviationMeters] = useState(0);
 
   // Route geometry fetch
   useEffect(() => {
@@ -76,6 +86,22 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
               current.startsWith("Live location is unavailable") ? "" : current
             );
 
+            // Speed evaluation (50 km/h limit)
+            const speedEval = evaluateSpeedWarning(location.coords.speed);
+            setCurrentSpeedKmh(speedEval.speedKmh);
+            setIsOverspeeding(speedEval.isOverspeed);
+            setIsNearSpeedLimit(speedEval.isNearLimit);
+
+            // Corridor deviation evaluation (>300m threshold)
+            const distOff = getDistanceToCorridorMeters(
+              location.coords.latitude,
+              location.coords.longitude
+            );
+            setCorridorDeviationMeters(distOff);
+            if (distOff > CORRIDOR_DEVIATION_THRESHOLD_METERS) {
+              audioCues.playWarningSound();
+            }
+
             void api
               .location(
                 location.coords.latitude,
@@ -129,5 +155,9 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
     routeCoordinates,
     routeSource,
     gpsError,
+    currentSpeedKmh,
+    isOverspeeding,
+    isNearSpeedLimit,
+    corridorDeviationMeters,
   };
 }

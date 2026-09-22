@@ -2,6 +2,7 @@
   "expo": {
     "name": "ChatCo Conductor",
     "slug": "chatco-mobile",
+    "scheme": "chatco-conductor",
     "version": "1.0.4",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",

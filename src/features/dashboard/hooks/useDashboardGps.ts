@@ -60,7 +60,7 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
 
   // GPS watch position
   useEffect(() => {
-    if (!mapEnabled || !canOperate) {
+    if (!canOperate) {
       if (Platform.OS !== "web") {
         void Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME)
           .then((started) =>
@@ -146,7 +146,7 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
         void Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => undefined);
       }
     };
-  }, [canOperate, mapEnabled]);
+  }, [canOperate]);
 
   return {
     position,

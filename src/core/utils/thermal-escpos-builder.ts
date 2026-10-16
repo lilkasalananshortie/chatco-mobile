@@ -235,7 +235,16 @@ export function buildGoojprtReceiptBytes(
 
   // 5. COMMUTER BREAKDOWN
   const isGroup = txns.length > 1 || (options.totalPassengers ?? 1) > 1;
-  if (isGroup && options.passengerBreakdown && options.passengerBreakdown.length > 0) {
+  if (txns.length > 1) {
+    const breakdown = new Map<string, { quantity: number; subtotal: number }>();
+    for (const transaction of txns) {
+      const role = transaction.passengerRole ?? "REGULAR";
+      const line = breakdown.get(role) ?? { quantity: 0, subtotal: 0 };
+      line.quantity++; line.subtotal += transaction.finalAmount; breakdown.set(role, line);
+    }
+    for (const [role, line] of breakdown) appendRow(`${role} x${line.quantity}`, `P${line.subtotal.toFixed(2)}`);
+    appendRow("Passengers:", String(txns.length));
+  } else if (isGroup && options.passengerBreakdown && options.passengerBreakdown.length > 0) {
     for (const b of options.passengerBreakdown) {
       if (b.quantity > 0) {
         appendRow(`${b.passengerType} x${b.quantity}`, `P${b.subtotal.toFixed(2)}`);
@@ -270,17 +279,27 @@ export function buildGoojprtReceiptBytes(
   }
 
   // 7. QR CODE / VERIFICATION
-  const qrToken = firstTxn?.receiptQrToken || firstTxn?.qrToken || firstTxn?.transactionId;
-  if (qrToken) {
+  const qrToken = firstTxn?.receiptQrToken;
+  const showQr = settings?.showQrCode !== false;
+  const showCode = settings?.showManualCode !== false;
+  if (qrToken && (showQr || showCode)) {
     appendDivider("-");
-    appendText(centerText("SCAN TO CLAIM PASSENGER REWARD"), true);
-    parts.push(buildEscPosQrCode(qrToken));
-    appendText(centerText(qrToken.slice(0, 32)), true);
+    if (showQr) {
+      appendText(centerText("SCAN IN REWARDS TO CLAIM RIDE"), true);
+      parts.push(buildEscPosQrCode(qrToken));
+    }
+    if (showCode) {
+      appendText(centerText("REWARD CLAIM CODE"), true);
+      for (let offset = 0; offset < qrToken.length; offset += GOOJPRT_LINE_WIDTH) {
+        appendText(centerText(qrToken.slice(offset, offset + GOOJPRT_LINE_WIDTH)), true);
+      }
+    }
   }
 
   // 8. FOOTER & FEED
   appendDivider("-");
   appendText(centerText(footerNote), true);
+  appendText(centerText("Visit chatco.online"), true);
   appendText(centerText("Goojprt 58mm Belt Receipt"), true);
   parts.push(CMD.FEED_5); // Feed 5 lines past tear bar
 

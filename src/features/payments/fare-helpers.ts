@@ -3,10 +3,10 @@ import { ROUTE_POINTS } from "../dashboard/route-data";
 
 export const DEFAULT_FARE_CONFIG: FareConfig = {
   baseBarangayCount: 4,
-  baseFareRegular: 15,
-  baseFareDiscounted: 12,
+  baseFareRegular: 17,
+  baseFareDiscounted: 13.6,
   succeedingFareRegular: 2.25,
-  succeedingFareDiscounted: 1.75,
+  succeedingFareDiscounted: 1.8,
   totalPoints: 34,
 };
 
@@ -19,6 +19,7 @@ export function getCommuterTypeLabel(type: CommuterType): string {
     case "STUDENT":
       return "Student";
     case "SENIOR_CITIZEN":
+    case "SENIOR":
       return "Senior Citizen";
     case "PWD":
       return "PWD";

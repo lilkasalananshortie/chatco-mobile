@@ -134,7 +134,7 @@ export function PaymentConfirmationStep({
           <View style={styles.confirmDividerTotal}>
             <Text style={styles.confirmTotalLabel}>Total</Text>
             <Text style={styles.confirmTotalValue}>
-              {formatCurrency(isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0)}
+              {selectedMethod === "Voucher" ? "Calculated when applied" : formatCurrency(isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0)}
             </Text>
           </View>
         </View>
@@ -179,8 +179,7 @@ export function PaymentConfirmationStep({
               style={styles.voucherTextInput}
             />
             <Text style={styles.voucherInputSubtext}>
-              Enter the code shown by the commuter's app. The ride will be recorded as a free
-              ride (₱0).
+               Enter the code shown by the commuter. The backend calculates the discount. Collect any remaining fare in cash.
             </Text>
           </View>
         ) : null}
@@ -217,7 +216,7 @@ export function PaymentConfirmationStep({
                     isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0
                   )}`
                 : selectedMethod === "Voucher"
-                ? "Apply Voucher (Free Ride)"
+                ? "Apply Voucher"
                 : `Pay ${formatCurrency(
                     isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0
                   )}`}

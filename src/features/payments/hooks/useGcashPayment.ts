@@ -55,8 +55,11 @@ export function useGcashPayment({
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expiredAtRef = useRef<number | null>(null);
   const checkedPendingRef = useRef(false);
+  const pollGeneration = useRef(0);
+  const initiatingRef = useRef(false);
 
   const stopPolling = useCallback(() => {
+    pollGeneration.current++;
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
@@ -71,19 +74,35 @@ export function useGcashPayment({
   const pollGcashStatus = useCallback(
     (transactionId: string, expiresAt?: string, expectedAmount?: number) => {
       stopPolling();
+      const generation = pollGeneration.current;
+      let polling = false;
       const LATE_SETTLEMENT_GRACE_MS = 60 * 1000;
 
       pollIntervalRef.current = setInterval(async () => {
+        if (polling || pollGeneration.current !== generation) return;
+        polling = true;
         try {
-          const rawStatus = await api.paymentStatus(transactionId);
-          const status = rawStatus.toUpperCase();
+          const details = await api.paymentStatusDetails(transactionId);
+          if (pollGeneration.current !== generation) return;
+          const status = details.status.toUpperCase();
           setGcashStatus(status.toLowerCase());
+          const rows = details.receipts ?? [];
+          const amount = rows.length ? rows.reduce((sum, row) => sum + row.finalAmount, 0) : details.finalAmount;
+          if (rows.length) setReceiptTransactions(rows);
+          setGcashInitiation((previous) => previous?.transactionId === transactionId ? {
+            ...previous, amount: amount ?? previous.amount, payerName: details.payerName ?? previous.payerName,
+            receipts: rows.length ? rows : previous.receipts,
+          } : previous);
+
 
           if (status === "PAID") {
             stopPolling();
             onSaved();
             appHaptics.success();
-            triggerSuccessAlert(expectedAmount ?? 0, "GCash");
+            if (details.receipts && details.receipts.length > 0) {
+              setReceiptTransactions(details.receipts);
+            }
+            triggerSuccessAlert(details.finalAmount ?? expectedAmount ?? 0, details.finalAmount === 0 ? "Voucher" : "GCash");
             setStep("success");
             return;
           }
@@ -111,6 +130,8 @@ export function useGcashPayment({
           }
         } catch {
           // Network hiccup — keep polling
+        } finally {
+          polling = false;
         }
       }, 3000);
 
@@ -129,7 +150,7 @@ export function useGcashPayment({
         Math.max(10_000, msUntilExpiry + LATE_SETTLEMENT_GRACE_MS + 30_000),
       );
     },
-    [stopPolling, onSaved, triggerSuccessAlert, setStep],
+    [stopPolling, onSaved, triggerSuccessAlert, setStep, setReceiptTransactions],
   );
 
   // Countdown timer for QR code
@@ -155,11 +176,12 @@ export function useGcashPayment({
     }
     if (checkedPendingRef.current) return;
     checkedPendingRef.current = true;
+    const generation = pollGeneration.current;
 
     void (async () => {
       try {
         const pending = await api.pendingGcash();
-        if (!pending) return;
+        if (!pending || pollGeneration.current !== generation) return;
 
         setSelectedMethod("GCash");
         setGcashInitiation(pending);
@@ -182,12 +204,15 @@ export function useGcashPayment({
   }, [stopPolling]);
 
   const handleInitiateGcash = async () => {
+    if (initiatingRef.current) return;
     if (!isOnline) {
       setGcashError("GCash is unavailable while offline. Use cash and it will sync when you reconnect.");
       return;
     }
     if (!pickupPoint || !dropoffPoint) return;
 
+    initiatingRef.current = true;
+    const generation = pollGeneration.current;
     setIsInitiatingGcash(true);
     setGcashError(null);
     setGcashStatus(null);
@@ -198,10 +223,15 @@ export function useGcashPayment({
       const barangaysTraveled = getBarangaysTraversed(pickupPoint, dropoffPoint);
       const amount = isGroupMode ? groupTotalFare : regularFare;
 
+      const serverFrom = pickupPoint.serverName || (pickupLandmark && pickupPoint.landmarks.includes(pickupLandmark) && !pickupLandmark.toLowerCase().includes("junction") ? `${pickupPoint.name} · ${pickupLandmark}` : pickupPoint.name);
+      const serverTo = dropoffPoint.serverName || (dropoffLandmark && dropoffPoint.landmarks.includes(dropoffLandmark) ? `${dropoffPoint.name} · ${dropoffLandmark}` : dropoffPoint.name);
+      const pickupStopId = pickupPoint.serverId || pickupPoint.id;
+      const dropoffStopId = dropoffPoint.serverId || dropoffPoint.id;
+
       const initiation = await api.initiateGcash({
         amount,
-        from: selectedPointName(pickupPoint, pickupLandmark),
-        to: selectedPointName(dropoffPoint, dropoffLandmark),
+        from: serverFrom,
+        to: serverTo,
         baseFare: regularFare,
         distance: barangaysTraveled,
         discountAmount: isGroupMode
@@ -210,20 +240,23 @@ export function useGcashPayment({
         groupPassengers: isGroupMode
           ? groupPassengers.map((p) => ({ type: p.type, quantity: p.quantity }))
           : undefined,
-        pickupStopId: pickupPoint.id,
-        dropoffStopId: dropoffPoint.id,
+        pickupStopId,
+        dropoffStopId,
       });
 
+      if (pollGeneration.current !== generation) return;
       setGcashInitiation(initiation);
       setReceiptTransactions(initiation.receipts ?? []);
       setStep("qr_code");
       pollGcashStatus(initiation.transactionId, initiation.expiresAt, initiation.amount);
     } catch (err) {
+      if (pollGeneration.current !== generation) return;
       setGcashError(
         err instanceof Error ? err.message : "Failed to start GCash payment. Please try again.",
       );
       setStep("failed");
     } finally {
+      initiatingRef.current = false;
       setIsInitiatingGcash(false);
     }
   };
@@ -254,6 +287,7 @@ export function useGcashPayment({
       setGcashError(err instanceof Error ? err.message : "Simulation failed.");
     }
   };
+
 
   const resetGcash = () => {
     setGcashInitiation(null);

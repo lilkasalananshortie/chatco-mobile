@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Location from "expo-location";
 import { api } from "../../../core/api/chatco-api";
@@ -75,16 +75,31 @@ export function usePaymentFlow({
   const [receiptTransactions, setReceiptTransactions] = useState<Transaction[]>([]);
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings | null>(null);
   const [showReceiptDetails, setShowReceiptDetails] = useState(false);
+  const [fareReady, setFareReady] = useState(false);
+  const [fareNotice, setFareNotice] = useState("");
+  const submitting = useRef(false);
+  const paymentKey = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!submitting.current) paymentKey.current = undefined;
+  }, [pickupPoint, dropoffPoint, pickupLandmark, dropoffLandmark, commuterType, isGroupMode, groupCounts, voucherCode, selectedMethod]);
 
   // Load fare matrix & receipt settings
   useEffect(() => {
     if (!visible) return;
+    let cancelled = false;
+    setFareReady(false);
+    setFareNotice("Loading published fares…");
 
     void api
-      .fareMatrix()
+      .fareMatrix(shift.routeId)
       .then((matrix) => {
+        if (cancelled) return;
         setPointAreas(matrix.points);
         setFareConfig(matrix.config);
+        setFareReady(true);
+        setFareNotice(matrix.isCached ? `Offline: using published fares saved ${new Date(matrix.loadedAt!).toLocaleString("en-PH")}. Final amounts are validated when cash syncs.` : "");
+        setPickupPoint((current) => current ? matrix.points.find((point) => point.id === current.id) ?? null : current);
+        setDropoffPoint((current) => current ? matrix.points.find((point) => point.id === current.id) ?? null : current);
 
         if (!pickupPoint && matrix.points.length > 0) {
           void (async () => {
@@ -98,7 +113,7 @@ export function usePaymentFlow({
                   });
                 }
               }
-              if (loc?.coords) {
+              if (loc?.coords && !cancelled) {
                 const nearest = findNearestPoint(loc.coords.latitude, loc.coords.longitude, matrix.points);
                 if (nearest) {
                   setPickupPoint(nearest);
@@ -113,14 +128,17 @@ export function usePaymentFlow({
         }
       })
       .catch((err) => {
+        if (cancelled) return;
+        setFareNotice(err instanceof Error ? err.message : "Unable to load published fares.");
         gcash.setGcashError(err instanceof Error ? err.message : "Unable to load fare matrix.");
       });
 
     void api
       .receiptSettings()
-      .then(setReceiptSettings)
+      .then((settings) => { if (!cancelled) setReceiptSettings(settings); })
       .catch(() => undefined);
-  }, [visible]);
+    return () => { cancelled = true; };
+  }, [visible, shift.routeId, isOnline]);
 
   const triggerSuccessAlert = useCallback((_amount: number, _method: string) => {
     // Silent success - no modal alert popup ("sana wala na tanungan")
@@ -164,7 +182,7 @@ export function usePaymentFlow({
 
   // Fare calculations
   const fareInfo: FareInfo | null = useMemo(() => {
-    if (!pickupPoint || !dropoffPoint) return null;
+    if (!fareReady || !pickupPoint || !dropoffPoint) return null;
 
     const isDiscounted = commuterType !== "REGULAR";
     const barangaysTraveled = getBarangaysTraversed(pickupPoint, dropoffPoint);
@@ -184,7 +202,7 @@ export function usePaymentFlow({
       succeedingCount,
       baseBarangayCount: fareConfig.baseBarangayCount,
     };
-  }, [pickupPoint, dropoffPoint, commuterType, fareConfig]);
+  }, [fareReady, pickupPoint, dropoffPoint, commuterType, fareConfig]);
 
   // Group passengers calculations
   const enteredGroupPassengers = useMemo(() => {
@@ -292,6 +310,8 @@ export function usePaymentFlow({
   });
 
   const handleClose = () => {
+    if (submitting.current) return;
+    paymentKey.current = undefined;
     gcash.stopPolling();
     setStep("method");
     setSelectedMethod(null);
@@ -316,21 +336,29 @@ export function usePaymentFlow({
 
   // Cash payment
   const handlePayWithCash = async () => {
+    if (submitting.current) return;
     if (!fareInfo || !pickupPoint || !dropoffPoint) return;
 
+    submitting.current = true;
+    paymentKey.current ??= `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setStep("processing");
-    await new Promise((r) => setTimeout(r, 800));
 
     try {
+      const serverFrom = pickupPoint.serverName || (pickupLandmark && pickupPoint.landmarks.includes(pickupLandmark) && !pickupLandmark.toLowerCase().includes("junction") ? `${pickupPoint.name} · ${pickupLandmark}` : pickupPoint.name);
+      const serverTo = dropoffPoint.serverName || (dropoffLandmark && dropoffPoint.landmarks.includes(dropoffLandmark) ? `${dropoffPoint.name} · ${dropoffLandmark}` : dropoffPoint.name);
+      const pickupStopId = pickupPoint.serverId || pickupPoint.id;
+      const dropoffStopId = dropoffPoint.serverId || dropoffPoint.id;
+
       let txns: Transaction[];
       if (isGroupMode) {
         const result = await api.recordGroupCash({
-          from: selectedPointName(pickupPoint, pickupLandmark),
-          to: selectedPointName(dropoffPoint, dropoffLandmark),
+          idempotencyKey: paymentKey.current,
+          from: serverFrom,
+          to: serverTo,
           regularFare: fareInfo.regularFare,
           discountedFare: fareInfo.discountedFare,
-          pickupStopId: pickupPoint.id,
-          dropoffStopId: dropoffPoint.id,
+          pickupStopId,
+          dropoffStopId,
           passengers: groupPassengers.map((p) => ({
             passenger_type: p.type,
             quantity: p.quantity,
@@ -344,15 +372,16 @@ export function usePaymentFlow({
         setCashReceiptToken(first?.receiptQrToken ?? null);
       } else {
         const transaction = await api.recordCash({
+          idempotencyKey: paymentKey.current,
           amount: fareInfo.finalFare,
-          from: selectedPointName(pickupPoint, pickupLandmark),
-          to: selectedPointName(dropoffPoint, dropoffLandmark),
+          from: serverFrom,
+          to: serverTo,
           baseFare: fareInfo.regularFare,
           distance: fareInfo.barangaysTraveled,
           discountAmount: fareInfo.discountAmount,
           passengerRole: commuterType,
-          pickupStopId: pickupPoint.id,
-          dropoffStopId: dropoffPoint.id,
+          pickupStopId,
+          dropoffStopId,
           shiftId: shift.shiftId,
           unitNumber: shift.unitNumber,
         });
@@ -372,11 +401,14 @@ export function usePaymentFlow({
       appHaptics.error();
       gcash.setGcashError(err instanceof Error ? err.message : "Unable to record cash payment.");
       setStep("failed");
+    } finally {
+      submitting.current = false;
     }
   };
 
   // Voucher payment
   const handlePayWithVoucher = async () => {
+    if (submitting.current) return;
     if (!isOnline) {
       gcash.setGcashError("Voucher validation requires an internet connection. Use cash while offline.");
       return;
@@ -388,20 +420,28 @@ export function usePaymentFlow({
       return;
     }
 
+    submitting.current = true;
+    paymentKey.current ??= `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setStep("processing");
 
     try {
+      const serverFrom = pickupPoint.serverName || (pickupLandmark && pickupPoint.landmarks.includes(pickupLandmark) && !pickupLandmark.toLowerCase().includes("junction") ? `${pickupPoint.name} · ${pickupLandmark}` : pickupPoint.name);
+      const serverTo = dropoffPoint.serverName || (dropoffLandmark && dropoffPoint.landmarks.includes(dropoffLandmark) ? `${dropoffPoint.name} · ${dropoffLandmark}` : dropoffPoint.name);
+      const pickupStopId = pickupPoint.serverId || pickupPoint.id;
+      const dropoffStopId = dropoffPoint.serverId || dropoffPoint.id;
+
       const transaction = await api.recordCash({
+        idempotencyKey: paymentKey.current,
         amount: 0,
-        from: selectedPointName(pickupPoint, pickupLandmark),
-        to: selectedPointName(dropoffPoint, dropoffLandmark),
+        from: serverFrom,
+        to: serverTo,
         baseFare: fareInfo.regularFare,
         distance: fareInfo.barangaysTraveled,
         discountAmount: fareInfo.discountAmount,
         passengerRole: commuterType,
         voucherCode: voucherCode.trim(),
-        pickupStopId: pickupPoint.id,
-        dropoffStopId: dropoffPoint.id,
+        pickupStopId,
+        dropoffStopId,
         shiftId: shift.shiftId,
         unitNumber: shift.unitNumber,
       });
@@ -419,10 +459,13 @@ export function usePaymentFlow({
       appHaptics.error();
       gcash.setGcashError(err instanceof Error ? err.message : "Voucher validation failed.");
       setStep("failed");
+    } finally {
+      submitting.current = false;
     }
   };
 
   const handleConfirmPayment = () => {
+    if (!fareReady) return;
     if (selectedMethod === "GCash") {
       gcash.handleInitiateGcash();
     } else if (selectedMethod === "Voucher") {
@@ -484,6 +527,8 @@ export function usePaymentFlow({
     dropoffBadgeBg,
     dropoffBadgeText,
     fareInfo,
+    fareReady,
+    fareNotice,
     groupPassengers,
     groupEnteredCount,
     groupPassengerCount,

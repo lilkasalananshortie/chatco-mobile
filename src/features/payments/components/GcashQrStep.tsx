@@ -154,6 +154,8 @@ export function GcashQrStep({
           <Text style={styles.btnSecondaryText}>Back</Text>
         </Pressable>
       </View>
+
+      <Text style={styles.qrSubtitle}>The commuter applies their own voucher after scanning. Any remaining balance and verified passenger category are updated from ChatCo.</Text>
     </View>
   );
 }

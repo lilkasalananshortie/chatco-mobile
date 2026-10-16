@@ -73,8 +73,11 @@ export function TransactionReceipt({
   passengerBreakdown = [],
 }: TransactionReceiptProps) {
   const width = settings.paperWidth === "80" ? 300 : 230;
+  const showQr = settings.showQrCode !== false;
+  const showCode = settings.showManualCode !== false;
 
   const formatType = (type: string) => {
+    if (type === "PWD") return "PWD";
     if (type === "SENIOR" || type === "SENIOR_CITIZEN") return "Senior Citizen";
     return type.charAt(0) + type.slice(1).toLowerCase();
   };
@@ -175,14 +178,17 @@ export function TransactionReceipt({
 
       <Row label="Paid via" value={paymentMethod} />
 
-      {receiptQrToken ? (
+      {receiptQrToken && (showQr || showCode) ? (
         <>
           <Divider />
-          <View style={receiptStyles.qrContainer}>
+          {showQr && <View style={receiptStyles.qrContainer}>
             <QRCode value={receiptQrToken} size={112} />
-          </View>
+          </View>}
+          {showCode && <Text style={receiptStyles.tokenText}>
+            CLAIM CODE: {receiptQrToken}
+          </Text>}
           <Text style={receiptStyles.qrHint}>
-            Scan in Rewards to claim this cash ride.
+            {showQr && showCode ? "Scan in Rewards or enter the code to claim this cash ride." : showQr ? "Scan in Rewards to claim this cash ride." : "Enter the code in Rewards to claim this cash ride."}
           </Text>
         </>
       ) : null}
@@ -193,6 +199,9 @@ export function TransactionReceipt({
         <Text style={receiptStyles.footerNote}>{settings.footerNote}</Text>
       ) : null}
 
+      <Text style={receiptStyles.officialNotice}>
+        Visit ChatCo at chatco.online
+      </Text>
       <Text style={receiptStyles.officialNotice}>
         This serves as your official receipt.
       </Text>
@@ -298,6 +307,15 @@ const receiptStyles = StyleSheet.create({
     padding: 6,
     alignSelf: "center",
     marginVertical: 6,
+  },
+  tokenText: {
+    fontFamily: monoFont,
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#000000",
+    textAlign: "center",
+    letterSpacing: 2,
+    marginVertical: 4,
   },
   qrHint: {
     fontFamily: monoFont,

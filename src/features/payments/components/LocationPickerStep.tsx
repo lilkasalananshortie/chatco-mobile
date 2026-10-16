@@ -1,4 +1,4 @@
-﻿import { Modal, Pressable, SafeAreaView, Text, View } from "react-native";
+import { Modal, Pressable, SafeAreaView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
 import type { FarePoint } from "../../../core/domain/types";
@@ -9,6 +9,7 @@ import { LocationSelectorCards } from "./LocationSelectorCards";
 
 export interface LocationPickerStepProps {
   visible: boolean;
+  fareNotice?: string;
   styles: any;
   selectedMethod: SelectedPaymentMethod | null;
   pickupPoint: FarePoint | null;
@@ -30,6 +31,9 @@ export interface LocationPickerStepProps {
   filteredPoints: FarePoint[];
   fareInfo: FareInfo | null;
   isGroupMode: boolean;
+  setIsGroupMode?: (group: boolean) => void;
+  commuterType?: any;
+  setCommuterType?: (type: any) => void;
   isSameBarangay: boolean;
   pickupDotColor: string;
   dropoffDotColor: string;
@@ -46,6 +50,7 @@ export interface LocationPickerStepProps {
 
 export function LocationPickerStep({
   visible,
+  fareNotice,
   styles,
   selectedMethod,
   pickupPoint,
@@ -67,6 +72,9 @@ export function LocationPickerStep({
   filteredPoints,
   fareInfo,
   isGroupMode,
+  setIsGroupMode,
+  commuterType,
+  setCommuterType,
   isSameBarangay,
   pickupDotColor,
   dropoffDotColor,
@@ -123,6 +131,7 @@ export function LocationPickerStep({
           </View>
         </View>
 
+        {fareNotice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.text, paddingHorizontal: 16, paddingVertical: 10 }}>{fareNotice}</Text> : null}
         {/* Location Selector Cards Header Section */}
         <LocationSelectorCards
           styles={styles}
@@ -178,6 +187,9 @@ export function LocationPickerStep({
           pickupDotColor={pickupDotColor}
           dropoffDotColor={dropoffDotColor}
           isGroupMode={isGroupMode}
+          setIsGroupMode={setIsGroupMode}
+          commuterType={commuterType}
+          setCommuterType={setCommuterType}
           fareInfo={fareInfo}
           setStep={setStep}
         />

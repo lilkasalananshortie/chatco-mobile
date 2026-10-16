@@ -123,9 +123,9 @@ export function MethodSelectionStep({
             <Ionicons name="ticket-outline" size={24} color={isLofi ? "#6D28D9" : "#A78BFA"} />
           </View>
           <View style={styles.methodTextBox}>
-            <Text style={[styles.methodTitle, { color: isLofi ? "#6D28D9" : "#A78BFA" }]}>Voucher / Free Ride</Text>
+              <Text style={[styles.methodTitle, { color: isLofi ? "#6D28D9" : "#A78BFA" }]}>Voucher</Text>
             <Text style={styles.methodDescription}>
-              Commuter shows their reward voucher code — enter it to apply a free ride
+                Enter a free-ride or discount voucher. Collect any remaining fare in cash.
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.muted} />

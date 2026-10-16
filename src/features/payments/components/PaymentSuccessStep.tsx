@@ -7,6 +7,7 @@ import { thermalPrinter, type PrinterStatus } from "../../../core/utils/thermal-
 import type { FareInfo, GroupPassengerRow, SelectedPaymentMethod } from "../payment-types";
 import { formatCurrency, getCommuterTypeLabel, selectedPointName } from "../fare-helpers";
 import { TransactionReceipt } from "../TransactionReceipt";
+import { receiptSummary } from "../receipt-summary";
 
 export interface PaymentSuccessStepProps {
   styles: any;
@@ -65,8 +66,10 @@ export function PaymentSuccessStep({
   handleClose,
 }: PaymentSuccessStepProps) {
   const { colors, isLofi } = useAppTheme();
+  const summary = receiptSummary(receiptTransactions, isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0, selectedMethod ?? "Cash");
 
   return (
+    // Amounts and passenger roles below come from the final server receipt rows.
     <View style={[styles.modalCard, { maxHeight: "90%" }]}>
       <ScrollView contentContainerStyle={{ padding: 20, alignItems: "center" }}>
         <View style={styles.successCheckCircle}>
@@ -75,8 +78,10 @@ export function PaymentSuccessStep({
 
         <Text style={styles.successTitle}>Payment Successful!</Text>
         <Text style={styles.successSubtitle}>
-          {selectedMethod === "GCash"
-            ? "Fare has been charged via GCash"
+          {selectedMethod === "Voucher" && summary.amount > 0
+            ? `Voucher applied. Collect ₱${summary.amount.toFixed(2)} remaining fare in cash.`
+            : summary.amount === 0 && summary.hasVoucher ? "The voucher covered the fare. No cash is due."
+            : selectedMethod === "GCash" ? "Payment confirmed by ChatCo."
             : "Cash payment has been recorded"}
         </Text>
 
@@ -85,10 +90,7 @@ export function PaymentSuccessStep({
           <View style={styles.confirmRow}>
             <Text style={styles.confirmRowLabel}>Amount Paid</Text>
             <Text style={[styles.confirmRowValue, { fontWeight: "700", color: colors.text }]}>
-              {formatCurrency(
-                receiptTransactions.reduce((s, t) => s + t.finalAmount, 0) ||
-                  (isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0)
-              )}
+                {formatCurrency(summary.amount)}
             </Text>
           </View>
           <View style={styles.confirmRow}>
@@ -125,8 +127,8 @@ export function PaymentSuccessStep({
             <Text style={styles.confirmRowLabel}>Commuter Type</Text>
             <Text style={styles.confirmRowValue}>
               {isGroupMode
-                ? `${groupPassengerCount} group passengers`
-                : getCommuterTypeLabel(commuterType)}
+                ? `${summary.passengerCount} group passengers`
+                : getCommuterTypeLabel((receiptTransactions[0]?.passengerRole ?? commuterType) as CommuterType)}
             </Text>
           </View>
           <View style={styles.confirmRow}>
@@ -137,7 +139,7 @@ export function PaymentSuccessStep({
                 { color: selectedMethod === "GCash" ? (isLofi ? colors.primary : "#60A5FA") : (isLofi ? colors.success : "#34D399") },
               ]}
             >
-              {selectedMethod}
+              {summary.method}
             </Text>
           </View>
           {gcashInitiation && selectedMethod === "GCash" ? (
@@ -145,6 +147,14 @@ export function PaymentSuccessStep({
               <Text style={styles.confirmRowLabel}>Ref ID</Text>
               <Text style={[styles.confirmRowValue, { fontFamily: Platform.OS === "ios" ? "Courier" : "monospace", fontSize: 11, color: colors.text }]}>
                 {gcashInitiation.transactionId}
+              </Text>
+            </View>
+          ) : null}
+          {selectedMethod === "Cash" && receiptSettings?.showManualCode !== false && (receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken) ? (
+            <View style={[styles.confirmRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.border }]}>
+              <Text style={[styles.confirmRowLabel, { fontWeight: "700", color: isLofi ? colors.primary : "#38BDF8" }]}>Reward Claim Code</Text>
+              <Text style={[styles.confirmRowValue, { fontFamily: Platform.OS === "ios" ? "Courier" : "monospace", fontWeight: "700", fontSize: 14, letterSpacing: 1.5, color: isLofi ? colors.primary : "#38BDF8" }]}>
+                {receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken}
               </Text>
             </View>
           ) : null}
@@ -205,17 +215,14 @@ export function PaymentSuccessStep({
               passengerName={
                 selectedMethod === "Cash" ? "Passenger" : receiptTransactions[0]?.passengerName
               }
-              from={receiptTransactions[0]?.from || selectedPointName(pickupPoint!, pickupLandmark)}
-              to={receiptTransactions[0]?.to || selectedPointName(dropoffPoint!, dropoffLandmark)}
+              from={receiptTransactions[0]?.from || (pickupPoint ? selectedPointName(pickupPoint, pickupLandmark) : gcashInitiation?.from ?? "")}
+              to={receiptTransactions[0]?.to || (dropoffPoint ? selectedPointName(dropoffPoint, dropoffLandmark) : gcashInitiation?.to ?? "")}
               baseFare={receiptTransactions[0]?.baseFare ?? fareInfo?.regularFare ?? 0}
-              discountAmount={
-                receiptTransactions[0]?.discountAmount ?? fareInfo?.discountAmount ?? 0
-              }
+              discountAmount={receiptTransactions.length ? summary.discount : fareInfo?.discountAmount ?? 0}
               finalFare={
-                receiptTransactions.reduce((s, t) => s + t.finalAmount, 0) ||
-                (isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0)
+                summary.amount
               }
-              paymentMethod={selectedMethod ?? "Cash"}
+              paymentMethod={summary.method}
               receiptQrToken={
                 selectedMethod === "Cash"
                   ? receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken
@@ -227,8 +234,9 @@ export function PaymentSuccessStep({
                 null
               }
               driverName={receiptTransactions[0]?.driverName || shift.driverName}
-              totalPassengers={isGroupMode ? groupPassengerCount : 1}
-              grossFare={isGroupMode ? groupGrossFare : fareInfo?.regularFare}
+              totalPassengers={receiptTransactions.length ? summary.passengerCount : isGroupMode ? groupPassengerCount : 1}
+              grossFare={receiptTransactions.length ? summary.gross : isGroupMode ? groupGrossFare : fareInfo?.regularFare}
+              passengerBreakdown={receiptTransactions.length > 1 ? summary.breakdown : []}
             />
           </View>
         ) : null}

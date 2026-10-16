@@ -64,27 +64,8 @@ export function usePaymentPrinter({
     });
   }, []);
 
-  const buildPrintTransactions = (): Transaction[] => {
-    if (receiptTransactions.length > 0) return receiptTransactions;
-    return [
-      {
-        transactionId: gcashInitiation?.transactionId || `TXN-${Date.now()}`,
-        paymentMethod: selectedMethod || "Cash",
-        finalAmount: isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0,
-        from: pickupPoint ? selectedPointName(pickupPoint, pickupLandmark) : "",
-        to: dropoffPoint ? selectedPointName(dropoffPoint, dropoffLandmark) : "",
-        timestamp: Date.now(),
-        unitNumber: shift.unitNumber,
-        conductorName: shift.conductorName,
-        driverName: shift.driverName,
-        baseFare: fareInfo?.regularFare ?? 0,
-        discountAmount: fareInfo?.discountAmount ?? 0,
-        passengerRole: commuterType,
-        receiptQrToken: cashReceiptToken || null,
-        multiplePaymentReference: gcashInitiation?.multiplePaymentReference || null,
-      } as Transaction,
-    ];
-  };
+  // Offline cash also supplies real local receipt rows; never fabricate a paid ticket.
+  const buildPrintTransactions = (): Transaction[] => receiptTransactions;
 
   // Direct auto-print helper: prints immediately without waiting or asking questions
   const autoPrintReceipt = (overrideTxns?: Transaction[]) => {
@@ -98,6 +79,7 @@ export function usePaymentPrinter({
         : buildPrintTransactions();
 
     const firstTxn = txnsToPrint[0];
+    if (!firstTxn) return;
     const txnKey = firstTxn?.transactionId || `txn-${Date.now()}`;
     if (lastAutoPrintedRef.current === txnKey) return;
     lastAutoPrintedRef.current = txnKey;
@@ -160,6 +142,10 @@ export function usePaymentPrinter({
 
   const handlePrint = async () => {
     const txnsToPrint = buildPrintTransactions();
+    if (!txnsToPrint.length) {
+      Alert.alert("Receipt unavailable", "Refresh the transaction before printing. No estimated ticket was printed.");
+      return;
+    }
     const result = await thermalPrinter.printReceipt(txnsToPrint, {
       shift,
       settings: receiptSettings,

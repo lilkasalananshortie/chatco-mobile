@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Modal, View } from "react-native";
+import { Modal, Text, View } from "react-native";
 import type { Shift } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { createPaymentStyles } from "./payment-styles";
@@ -48,6 +48,7 @@ export function PaymentModal({
     return (
       <LocationPickerStep
         visible={visible}
+        fareNotice={flow.fareNotice}
         styles={styles}
         selectedMethod={flow.selectedMethod}
         pickupPoint={flow.pickupPoint}
@@ -69,6 +70,9 @@ export function PaymentModal({
         filteredPoints={flow.filteredPoints}
         fareInfo={flow.fareInfo}
         isGroupMode={flow.isGroupMode}
+        setIsGroupMode={flow.setIsGroupMode}
+        commuterType={flow.commuterType}
+        setCommuterType={flow.setCommuterType}
         isSameBarangay={flow.isSameBarangay}
         pickupDotColor={flow.pickupDotColor}
         dropoffDotColor={flow.dropoffDotColor}
@@ -89,11 +93,13 @@ export function PaymentModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={flow.handleClose}>
       <View style={styles.modalBackdrop}>
+        {flow.fareNotice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.text, backgroundColor: colors.surface, padding: 12, marginBottom: 8 }}>{flow.fareNotice}</Text> : null}
         {flow.step === "method" ? (
           <MethodSelectionStep
             styles={styles}
             isOnline={isOnline}
             onSelectMethod={(method) => {
+              if (!flow.fareReady) return;
               flow.setSelectedMethod(method);
               flow.setStep("select");
             }}

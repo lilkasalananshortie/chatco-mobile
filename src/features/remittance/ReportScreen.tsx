@@ -120,7 +120,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       const pendingForShift = await api.pendingCashCount(shift.shiftId);
       if (pendingForShift > 0) {
         throw new Error(
-          "Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.",
+          "Some cash transactions are still waiting to sync. Reconnect to internet before submitting remittance.",
         );
       }
 
@@ -132,6 +132,25 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       setError(cause instanceof Error ? cause.message : "Unable to submit the remittance.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handlePressRemit = async () => {
+    if (!canOperate) {
+      setError("This shift is active on another device. Complete the handoff before remitting here.");
+      return;
+    }
+    setError("");
+    try {
+      await syncPendingCashTransactions();
+      const pending = await api.pendingCashCount(shift.shiftId);
+      if (pending > 0) {
+        setError("Some cash transactions are still waiting to sync. Reconnect to internet before submitting remittance.");
+        return;
+      }
+      setConfirm(true);
+    } catch {
+      setError("Some cash transactions are still waiting to sync. Reconnect to internet before submitting remittance.");
     }
   };
 
@@ -248,7 +267,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
           <Pressable
             disabled={!canOperate}
             style={[styles.button, !canOperate && { opacity: 0.45 }]}
-            onPress={() => setConfirm(true)}
+            onPress={() => void handlePressRemit()}
           >
             <Text style={styles.buttonText}>Remit to Admin and end shift</Text>
           </Pressable>

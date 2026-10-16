@@ -9,6 +9,7 @@ import type { ConductorProfile, Remittance, Shift, Transaction, User } from "../
 import { createSettingsStyles } from "./settings-styles";
 import { ProfileCard } from "./components/ProfileCard";
 import { ActiveAssignmentCard } from "./components/ActiveAssignmentCard";
+import { ShiftOptionsCard } from "./components/ShiftOptionsCard";
 import { AppPreferencesCard } from "./components/AppPreferencesCard";
 import { BluetoothPrinterCard } from "./components/BluetoothPrinterCard";
 import { AccountSessionSection } from "./components/AccountSessionSection";
@@ -19,10 +20,12 @@ const SCAN_SOUND_KEY = "conductor_scan_sound";
 export function SettingsScreen({
   user,
   shift,
+  onShiftUpdated,
   onLogout,
 }: {
   user: User;
   shift: Shift;
+  onShiftUpdated?: (shift: Shift | null) => void;
   onLogout: () => void;
 }) {
   const { colors, isLofi, setLofi } = useAppTheme();
@@ -227,6 +230,17 @@ export function SettingsScreen({
 
       {/* Active Assignment */}
       <ActiveAssignmentCard styles={styles} shift={shift} colors={colors} isLofi={isLofi} />
+
+      {/* Shift Options / Operating Device Handoff (TC-COND-DEV-124, 127) */}
+      {shift ? (
+        <ShiftOptionsCard
+          styles={styles}
+          shift={shift}
+          colors={colors}
+          isLofi={isLofi}
+          onShiftUpdated={onShiftUpdated}
+        />
+      ) : null}
 
       {/* App Preferences */}
       <AppPreferencesCard

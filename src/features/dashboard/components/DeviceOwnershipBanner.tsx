@@ -60,11 +60,11 @@ export function DeviceOwnershipBanner({
       >
         {recoveredByAdmin
           ? "Admin released the unavailable device"
-          : unclaimed
-          ? "Choose the operating device"
           : ownsShift
           ? "This is the operating device"
-          : "View-only on this device"}
+          : unclaimed
+          ? "Shift Released"
+          : "Shift active on another device"}
       </Text>
       <Text
         style={{
@@ -77,26 +77,26 @@ export function DeviceOwnershipBanner({
         }}
       >
         {recoveredByAdmin
-          ? "Use a different device to claim this shift. The recovered device cannot reclaim it."
-          : unclaimed
-          ? "Claim this shift before collecting fares."
+          ? "An administrator released this device from the shift. Please log in again."
           : ownsShift
           ? "Release only when moving the shift to Web or Mobile."
-          : `The ${shift.operatingDeviceType?.toLowerCase() ?? "other"} device must sync and release the shift first.`}
+          : unclaimed
+          ? "Shift is ready to be claimed by another device."
+          : "Shift active on another device. Choose operating device to take over."}
       </Text>
       {deviceError ? (
         <Text style={{ color: colors.danger, fontSize: 12, marginTop: 6 }}>
           {deviceError}
         </Text>
       ) : null}
-      {unclaimed ? (
+      {!ownsShift && !recoveredByAdmin ? (
         <Pressable
           disabled={deviceBusy}
           style={[styles.button, { marginTop: 10, backgroundColor: colors.primary }]}
           onPress={() => void claimDevice()}
         >
           <Text style={[styles.buttonText, { color: "#fff", fontWeight: "700" }]}>
-            {deviceBusy ? "Claiming…" : "Use this device"}
+            {deviceBusy ? "Claiming…" : "Claim Operating Device"}
           </Text>
         </Pressable>
       ) : ownsShift ? (

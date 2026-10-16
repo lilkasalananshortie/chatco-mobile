@@ -78,18 +78,13 @@ function AppRoot() {
     void api.getDeviceId().then(setDeviceId);
   }, []);
 
-  // Session ownership follows "latest login wins": logging in on a new
-  // device revokes every earlier token on the backend, so this device's
-  // valid session IS the operating session. An older device gets 401 on
-  // its next call and is signed out automatically (sessionEndedHandler).
+  // When another device takes over the shift, transition this device to view-only mode
+  // rather than abruptly terminating the session.
   useEffect(() => setSessionEndedHandler(() => {
-    setUser(null);
-    setShift(null);
     setPayment(false);
-    setScreen("verify");
     Alert.alert(
-      "Signed out",
-      "This conductor account continued on another device. Pending offline cash remains saved on this device.",
+      "Shift active on another device",
+      "Shift active on another device. Choose operating device to take over.",
     );
   }), []);
 
@@ -241,6 +236,7 @@ function AppRoot() {
           <SettingsScreen
             user={user}
             shift={shift}
+            onShiftUpdated={setShift}
             onLogout={() => { setUser(null); setShift(null); setScreen("verify"); }}
           />
         ) : null}
@@ -248,6 +244,13 @@ function AppRoot() {
           current={screen}
           onNavigate={setScreen}
           onPayment={() => {
+            if (!shift || !shift.isActive || Boolean(shift.timeOut)) {
+              Alert.alert(
+                "Shift Ended",
+                "The shift has already ended; no new transactions can be recorded."
+              );
+              return;
+            }
             if (Boolean(shift?.isOnBreak)) {
               Alert.alert("Shift on Break", "Cannot collect payments while on an active break. Resume duty first.");
               return;
@@ -255,12 +258,8 @@ function AppRoot() {
             if (isViewOnlyDevice) {
               Alert.alert(
                 "View-Only Mode",
-                `The ${shift?.operatingDeviceType?.toLowerCase() ?? "other"} device is currently operating this shift. Sync and release the shift on that device before collecting fares here.`
+                "This shift is active on another device. Sync and release that device before collecting fares here."
               );
-              return;
-            }
-            if (!shift) {
-              Alert.alert("No Active Shift", "Start or claim a shift to collect payments.");
               return;
             }
             setPayment(true);

@@ -27,6 +27,7 @@ import { audioCues } from "../../core/utils/audio-cues";
 import { appHaptics } from "../../core/utils/haptics";
 import { TripLogbookModal } from "./TripLogbookModal";
 import { RouteAdvisoryBanners } from "./components/RouteAdvisoryBanners";
+import { IncidentReportModal } from "./components/IncidentReportModal";
 
 export function DashboardScreen({
   shift,
@@ -49,6 +50,7 @@ export function DashboardScreen({
 
   const [history, setHistory] = useState(false);
   const [sos, setSos] = useState(false);
+  const [incidentModalOpen, setIncidentModalOpen] = useState(false);
   const [tripModalOpen, setTripModalOpen] = useState(false);
   const [tripCycleState, setTripCycleState] = useState<TripCycleState | null>(null);
   const tripCycleStateRef = useRef<TripCycleState | null>(null);
@@ -245,11 +247,31 @@ export function DashboardScreen({
 
       {combinedError ? <Text style={styles.error}>{combinedError}</Text> : null}
 
-      {/* Emergency SOS Button */}
-      <Pressable onPress={() => setSos(true)} style={dashStyles.sosTriggerButton}>
-        <Ionicons name="warning-outline" size={18} color={colors.danger} />
-        <Text style={dashStyles.sosTriggerText}>Emergency SOS</Text>
-      </Pressable>
+      {/* Emergency & Incident Action Row */}
+      <View style={{ flexDirection: "row", gap: 10, marginVertical: 8 }}>
+        <Pressable onPress={() => setSos(true)} style={[dashStyles.sosTriggerButton, { flex: 1, marginVertical: 0 }]}>
+          <Ionicons name="warning-outline" size={18} color={colors.danger} />
+          <Text style={dashStyles.sosTriggerText}>Emergency SOS</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setIncidentModalOpen(true)}
+          style={[
+            dashStyles.sosTriggerButton,
+            {
+              flex: 1,
+              marginVertical: 0,
+              backgroundColor: isLofi ? colors.surface : "#1E293B",
+              borderColor: isLofi ? colors.border : "#334155",
+            },
+          ]}
+        >
+          <Ionicons name="construct-outline" size={18} color={isLofi ? colors.warning : "#F59E0B"} />
+          <Text style={[dashStyles.sosTriggerText, { color: isLofi ? colors.text : "#E2E8F0" }]}>
+            Log Incident
+          </Text>
+        </Pressable>
+      </View>
 
       {/* Transaction History Modal */}
       <TransactionHistoryModal
@@ -274,6 +296,14 @@ export function DashboardScreen({
 
       {/* Emergency SOS Modal */}
       <SosConfirmModal isOpen={sos} onClose={() => setSos(false)} />
+
+      {/* Incident Report Modal (Vehicle Breakdown / Accident) */}
+      <IncidentReportModal
+        visible={incidentModalOpen}
+        onClose={() => setIncidentModalOpen(false)}
+        unitNumber={shift.unitNumber}
+        shiftId={shift.shiftId}
+      />
 
       {/* Trip Turnaround Logbook Modal ("Ikot" Tracker) */}
       {tripCycleState ? (

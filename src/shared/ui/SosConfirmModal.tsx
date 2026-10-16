@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Linking, Modal, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { api } from "../../core/api/chatco-api";
@@ -15,6 +15,7 @@ type SosStatus = "confirming" | "locating" | "sending" | "active" | "responded" 
 
 const DEFAULT_LOCATION = { lat: 14.8434, lng: 120.875 };
 const POLL_INTERVAL_MS = 3000;
+let lastSosTimestamp = 0;
 
 export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
   const { colors, isLofi } = useAppTheme();
@@ -79,6 +80,7 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
     setStatus("sending");
     try {
       const alert = await api.sos(lat, lng, "Emergency alert from conductor");
+      lastSosTimestamp = Date.now();
       if (alert.status === "ACKNOWLEDGED" || alert.status === "RESOLVED") {
         setStatus("responded");
         return;
@@ -87,11 +89,26 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
       setStatus("active");
     } catch (cause) {
       setStatus("error");
-      setErrorMessage(cause instanceof Error ? cause.message : "Unable to send the SOS signal. Please try again.");
+      const rawMsg = cause instanceof Error ? cause.message : "";
+      if (
+        rawMsg.includes("429") ||
+        rawMsg.toLowerCase().includes("too many") ||
+        rawMsg.toLowerCase().includes("already active") ||
+        rawMsg.toLowerCase().includes("recently")
+      ) {
+        setErrorMessage("Too many requests. Please slow down. Emergency alert is already active.");
+      } else {
+        setErrorMessage(rawMsg || "Unable to send the SOS signal. Please try again.");
+      }
     }
   }, []);
 
   const handleActivate = useCallback(async () => {
+    if (Date.now() - lastSosTimestamp < 60000) {
+      setStatus("error");
+      setErrorMessage("Too many requests. Please slow down. Emergency alert is already active.");
+      return;
+    }
     setStatus("locating");
     setErrorMessage("");
     try {
@@ -122,6 +139,54 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
   };
 
   const isLocked = status === "locating" || status === "sending" || status === "active";
+
+  const renderSpeedDial = () => (
+    <View style={{ marginTop: 14, width: "100%", gap: 6, paddingTop: 12, borderTopWidth: 1, borderTopColor: isLofi ? colors.border : "rgba(255,255,255,0.1)" }}>
+      <Text style={{ fontSize: 11, fontWeight: "700", color: isLofi ? colors.muted : "#94A3B8", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5 }}>
+        Emergency Speed-Dial Hotlines
+      </Text>
+      <View style={{ flexDirection: "row", gap: 8, justifyContent: "center" }}>
+        <Pressable
+          onPress={() => void Linking.openURL("tel:911")}
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 9,
+            paddingHorizontal: 6,
+            backgroundColor: isLofi ? colors.surface2 : "#1E293B",
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: isLofi ? colors.border : "#334155",
+            gap: 6,
+          }}
+        >
+          <Ionicons name="call" size={15} color="#EF4444" />
+          <Text style={{ fontSize: 12, fontWeight: "700", color: isLofi ? colors.text : "#FFFFFF" }}>PNP 911</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void Linking.openURL("tel:09171234567")}
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 9,
+            paddingHorizontal: 6,
+            backgroundColor: isLofi ? colors.surface2 : "#1E293B",
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: isLofi ? colors.border : "#334155",
+            gap: 6,
+          }}
+        >
+          <Ionicons name="call" size={15} color="#3B82F6" />
+          <Text style={{ fontSize: 12, fontWeight: "700", color: isLofi ? colors.text : "#FFFFFF" }}>Fleet Dispatch</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 
   return (
     <Modal visible={isOpen} transparent animationType="fade" onRequestClose={status === "confirming" ? onClose : undefined}>
@@ -162,6 +227,7 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
                   <Text style={styles.sosButtonText}>Send SOS</Text>
                 </Pressable>
               </View>
+              {renderSpeedDial()}
             </View>
           )}
 
@@ -203,6 +269,7 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
               <Text style={styles.subtextDark}>
                 Please keep the app open. This screen will automatically update once the admin responds.
               </Text>
+              {renderSpeedDial()}
             </View>
           )}
 
@@ -248,6 +315,7 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
                   <Text style={styles.sosButtonText}>Try Again</Text>
                 </Pressable>
               </View>
+              {renderSpeedDial()}
             </View>
           )}
         </View>

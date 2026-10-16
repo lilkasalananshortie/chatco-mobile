@@ -1,4 +1,4 @@
-﻿import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Driver, Unit } from "../../../core/domain/types";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
@@ -17,7 +17,6 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
     const u = item as Unit;
     return (
       <Pressable
-        disabled={!available}
         style={[
           styles.card,
           {
@@ -25,7 +24,7 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
             padding: 14,
             borderColor: available ? colors.border : isLofi ? colors.border : "rgba(255,255,255,0.03)",
             borderRadius: isLofi ? 3 : 18,
-            opacity: available ? 1 : 0.5,
+            opacity: available ? 1 : 0.8,
           },
         ]}
         onPress={() => onSelect(u)}
@@ -125,7 +124,6 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
   const d = item as Driver;
   return (
     <Pressable
-      disabled={!available}
       style={[
         styles.card,
         {
@@ -133,7 +131,7 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
           padding: 14,
           borderColor: available ? colors.border : isLofi ? colors.border : "rgba(255,255,255,0.03)",
           borderRadius: isLofi ? 3 : 18,
-          opacity: available ? 1 : 0.5,
+          opacity: available ? 1 : 0.8,
         },
       ]}
       onPress={() => onSelect(d)}

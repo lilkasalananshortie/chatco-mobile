@@ -110,17 +110,7 @@ export function useDashboardShift({
 
   useEffect(() => {
     setIsOnBreak(Boolean(shift.isOnBreak));
-    const loadAnnouncements = () => void api.announcements().then(setAnnouncements).catch(() => undefined);
-    loadAnnouncements();
-    const announcementTimer = setInterval(loadAnnouncements, 30000);
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") loadAnnouncements();
-    });
-    return () => {
-      clearInterval(announcementTimer);
-      subscription.remove();
-    };
-  }, [refreshKey, shift.shiftId, shift.isOnBreak]);
+  }, [shift.isOnBreak]);
 
   useEffect(() => {
     const load = () => void api.hails().then(setHails).catch(() => undefined);
@@ -214,6 +204,13 @@ export function useDashboardShift({
     setDeviceBusy(true);
     setDeviceError("");
     try {
+      const pending = await api.pendingCashCount(shift.shiftId).catch(() => pendingOfflineCount);
+      const online = await api.checkConnectivity().catch(() => isOnline);
+      if (pending > 0 || !online) {
+        setDeviceError("Offline cash fares are still waiting to sync. Reconnect device to sync before handoff.");
+        return;
+      }
+      await api.syncPendingCashTransactions().catch(() => null);
       const updated = await api.releaseShiftDevice(shift.shiftId);
       onShiftUpdated?.(updated);
     } catch (cause) {

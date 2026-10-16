@@ -7,8 +7,8 @@ import { LiveMap } from "../LiveMap";
 export interface RouteMapSectionProps {
   shift: Shift;
   canOperate: boolean;
-  announcements: Announcement[];
-  onMarkAnnouncementRead: (id: string) => void;
+  announcements?: Announcement[];
+  onMarkAnnouncementRead?: (id: string) => void;
   mapEnabled: boolean;
   setMapEnabled: (enabled: boolean) => void;
   position: { latitude: number; longitude: number } | null;
@@ -35,29 +35,6 @@ export function RouteMapSection({
 
   return (
     <View>
-      {/* Announcements */}
-      {announcements.filter((item) => !item.isRead).slice(0, 3).map((item) => (
-        <View
-          key={item.id}
-          style={[
-            styles.card,
-            {
-              borderColor: isLofi ? colors.warning : "#F59E0B60",
-              backgroundColor: isLofi ? "#FEF3C7" : "#78350F15",
-              marginTop: 14,
-            },
-          ]}
-        >
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.subtitle}>{item.body}</Text>
-          <Pressable
-            style={[styles.button, styles.secondaryButton, { marginTop: 10 }]}
-            onPress={() => onMarkAnnouncementRead(item.id)}
-          >
-            <Text style={[styles.buttonText, styles.secondaryButtonText]}>Mark as read</Text>
-          </Pressable>
-        </View>
-      ))}
 
       {/* Live Route Map Header */}
       <View

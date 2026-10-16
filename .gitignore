@@ -4,3 +4,16 @@ dist/
 .env
 *.log
 *.lnk
+
+# Expo prebuild outputs and machine-specific tooling stay local.
+android/
+ios/
+.vscode/
+.env.*
+*.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+web-build/

@@ -60,6 +60,8 @@ export interface Transaction {
   unitNumber?: string;
   driverName?: string;
   voucherCode?: string;
+  voucherId?: string | null;
+  grossAmount?: number;
   status?: "PENDING" | "PROCESSING" | "PAID" | "FAILED" | "CANCELLED" | "EXPIRED" | "REFUNDED";
   paidAt?: string | null;
   qrToken?: string | null;
@@ -128,6 +130,10 @@ export interface GcashInitiation {
   groupId?: string | null;
   multiplePaymentReference?: string | null;
   receipts?: Transaction[];
+  voucherAvailable?: boolean;
+  voucherCode?: string | null;
+  voucherId?: string | null;
+  payerName?: string | null;
 }
 
 export interface ConductorProfile {
@@ -148,6 +154,8 @@ export interface HailRequest {
 
 export interface FarePoint {
   id?: string;
+  serverId?: string;
+  serverName?: string;
   pointNumber: number;
   code: string;
   name: string;
@@ -169,6 +177,9 @@ export interface FareConfig {
 }
 
 export interface FareMatrix {
+  routeId?: string;
+  isCached?: boolean;
+  loadedAt?: number;
   points: FarePoint[];
   config: FareConfig;
 }
@@ -210,4 +221,6 @@ export interface ReceiptSettings {
   showConductor: boolean;
   showPassenger: boolean;
   showFareBreakdown: boolean;
+  showQrCode?: boolean;
+  showManualCode?: boolean;
 }

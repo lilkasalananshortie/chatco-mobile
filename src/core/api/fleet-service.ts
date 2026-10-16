@@ -27,14 +27,14 @@ export const fleetService = {
     let d: any = null;
     if (routeId) {
       try {
-        d = await request<any>(`/routes/active?route_id=${encodeURIComponent(routeId)}`);
+        d = await request<any>(`/mobile/routes/active?route_id=${encodeURIComponent(routeId)}`);
       } catch {
         d = null;
       }
     }
     if (!d) {
       try {
-        d = await request<any>("/routes/active");
+        d = await request<any>("/mobile/routes/active");
       } catch {
         d = null;
       }
@@ -120,7 +120,7 @@ export const fleetService = {
   },
 
   announcements: async (): Promise<Announcement[]> => {
-    const d = await request<any>("/announcements");
+    const d = await request<any>("/mobile/conductor/announcements");
     const rows = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
     return rows.map((row: any) => ({
       id: String(row.id),
@@ -132,7 +132,7 @@ export const fleetService = {
     }));
   },
 
-  markAnnouncementRead: (id: string) => post(`/announcements/${encodeURIComponent(id)}/read`),
+  markAnnouncementRead: (id: string) => post(`/mobile/conductor/announcements/${encodeURIComponent(id)}/read`),
 
   sosStatus: async (id: string): Promise<SosAlert> => {
     const d = await request<any>(`/mobile/conductor/sos/${encodeURIComponent(id)}`);

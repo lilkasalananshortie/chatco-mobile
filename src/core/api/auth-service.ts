@@ -13,7 +13,7 @@ import {
 export const authService = {
   async login(login: string, password: string): Promise<User> {
     const deviceId = await getConductorDeviceId();
-    const data = await request<any>("/auth/login", {
+    const data = await request<any>("/mobile/auth/login", {
       method: "POST",
       body: JSON.stringify({
         login,
@@ -32,18 +32,18 @@ export const authService = {
 
   async logout(): Promise<void> {
     try {
-      await post("/auth/logout");
+      await post("/mobile/auth/logout");
     } finally {
       await appStorage.removeItem(TOKEN_KEY);
     }
   },
 
   async forgotPassword(email: string) {
-    return post("/auth/forgot-password", { email });
+    return post("/mobile/auth/forgot-password", { email });
   },
 
   async verifyResetCode(email: string, code: string) {
-    return post("/auth/verify-reset-code", { email, code });
+    return post("/mobile/auth/verify-reset-code", { email, code });
   },
 
   async resetPassword(input: {
@@ -52,7 +52,7 @@ export const authService = {
     password: string;
     passwordConfirmation: string;
   }) {
-    return post("/auth/reset-password", {
+    return post("/mobile/auth/reset-password", {
       email: input.email,
       code: input.code,
       password: input.password,
@@ -63,7 +63,7 @@ export const authService = {
   async me(): Promise<User | null> {
     if (!(await appStorage.getItem(TOKEN_KEY))) return null;
     try {
-      const data = await request<any>("/user");
+      const data = await request<any>("/mobile/user");
       const u = data.user ?? data;
       if (u.role !== "CONDUCTOR") return null;
       const user: User = { id: String(u.id), email: u.email, role: u.role, name: u.name ?? u.email };

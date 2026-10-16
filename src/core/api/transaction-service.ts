@@ -8,6 +8,7 @@ import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-i
 import type { ShiftEarnings, Transaction } from "../domain/types";
 import { NetworkError, post, request } from "./api-client";
 import { mapTransaction } from "./api-mappers";
+import { isValidUuid } from "./payment-service";
 
 export const transactionService = {
   pendingCashCount: (shiftId?: string) => pendingCashCount(shiftId),
@@ -107,6 +108,8 @@ export const transactionService = {
     const deviceId = await getConductorDeviceId();
     const offlineCreatedAt = new Date().toISOString();
     const passengerRole = input.passengerRole === "SENIOR" ? "SENIOR_CITIZEN" : input.passengerRole;
+    const pickupStopId = isValidUuid(input.pickupStopId) ? input.pickupStopId : undefined;
+    const dropoffStopId = isValidUuid(input.dropoffStopId) ? input.dropoffStopId : undefined;
     const payload = {
       shift_id: input.shiftId,
       payment_method: input.voucherCode ? "VOUCHER" : "CASH",
@@ -117,8 +120,8 @@ export const transactionService = {
       distance: input.distance,
       discount_amount: input.discountAmount,
       passenger_role: passengerRole,
-      pickup_stop_id: input.pickupStopId,
-      dropoff_stop_id: input.dropoffStopId,
+      pickup_stop_id: pickupStopId,
+      dropoff_stop_id: dropoffStopId,
       idempotency_key: idempotencyKey,
       voucher_code: input.voucherCode || undefined,
       device_id: deviceId,
@@ -177,6 +180,8 @@ export const transactionService = {
     const idempotencyKey = input.idempotencyKey ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const deviceId = await getConductorDeviceId();
     const offlineCreatedAt = new Date().toISOString();
+    const pickupStopId = isValidUuid(input.pickupStopId) ? input.pickupStopId : undefined;
+    const dropoffStopId = isValidUuid(input.dropoffStopId) ? input.dropoffStopId : undefined;
     const totalAmount = input.passengers.reduce(
       (sum, passenger) =>
         sum + passenger.quantity * (passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare),
@@ -188,8 +193,8 @@ export const transactionService = {
       final_amount: Number(totalAmount.toFixed(2)),
       pickup_name: input.from,
       dropoff_name: input.to,
-      pickup_stop_id: input.pickupStopId,
-      dropoff_stop_id: input.dropoffStopId,
+      pickup_stop_id: pickupStopId,
+      dropoff_stop_id: dropoffStopId,
       idempotency_key: idempotencyKey,
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,

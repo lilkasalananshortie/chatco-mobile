@@ -1,4 +1,4 @@
-﻿/**
+/**
  * chatco-api.ts
  *
  * Facade API client for the ChatCo Conductor mobile app.
@@ -91,6 +91,7 @@ export const api = {
   // Payments & Settings
   initiateGcash: paymentService.initiateGcash,
   paymentStatus: paymentService.paymentStatus,
+  paymentStatusDetails: paymentService.paymentStatusDetails,
   pendingGcash: paymentService.pendingGcash,
   cancelPayment: paymentService.cancelPayment,
   simulatePayment: paymentService.simulatePayment,

@@ -70,7 +70,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   }
   const payload = (await response.json().catch(() => null)) as Envelope<T> | null;
   if (!response.ok) {
-    if (response.status === 401 && path !== "/auth/login") {
+    if (response.status === 401 && path !== "/mobile/auth/login") {
       await appStorage.removeItem(TOKEN_KEY);
       if (!sessionEndedNotified) {
         sessionEndedNotified = true;
@@ -78,7 +78,10 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       }
     }
     const message = payload?.message ?? `Request failed (${response.status}).`;
-    throw new Error(`${message} [HTTP ${response.status}]`);
+    const err = new Error(message);
+    (err as any).status = response.status;
+    (err as any).response = { status: response.status, data: payload };
+    throw err;
   }
   return payload?.data as T;
 }

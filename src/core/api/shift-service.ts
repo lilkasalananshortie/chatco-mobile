@@ -102,7 +102,7 @@ export const shiftService = {
 
   checkConnectivity: async (): Promise<boolean> => {
     try {
-      await request<any>("/system-status");
+      await request<any>("/mobile/system-status");
       return true;
     } catch (cause) {
       return !(cause instanceof NetworkError);

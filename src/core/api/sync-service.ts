@@ -10,6 +10,7 @@ import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-i
 import type { Shift } from "../domain/types";
 import { NetworkError, post, request, PROVISIONAL_SHIFT_KEY } from "./api-client";
 import { mapShift } from "./api-mappers";
+import { cashSyncOutcome } from "./cash-sync-result";
 
 export type SyncState = "idle" | "syncing" | "error";
 let currentSyncState: SyncState = "idle";
@@ -120,13 +121,14 @@ export async function syncPendingCashTransactions(): Promise<number> {
             const batchResult = await post<{
               synced_count: number;
               failed_count: number;
-              results: Record<string, { status: string; error?: string }>;
+              items?: Array<{ idempotency_key: string; status: string; error?: string }>;
+              results?: Record<string, { status: string; error?: string }>;
             }>("/mobile/conductor/transactions/sync", {
               transactions: payloadList,
             });
 
             for (const item of chunk) {
-              const itemResult = batchResult?.results?.[item.id];
+              const itemResult = cashSyncOutcome(batchResult, item.idempotencyKey, item.id);
               if (itemResult?.status === "synced") {
                 await removePendingCash(item.id);
                 synced += item.localTransactions.length;
@@ -137,9 +139,12 @@ export async function syncPendingCashTransactions(): Promise<number> {
                   lastError: itemResult.error ?? "Synchronization failed.",
                 });
               } else {
-                // If no specific status returned but batch succeeded
-                await removePendingCash(item.id);
-                synced += item.localTransactions.length;
+                // HTTP 200 is not an acknowledgement of this individual ticket.
+                await updatePendingCash(item.id, {
+                  attempts: (item.attempts ?? 0) + 1,
+                  lastAttemptAt: Date.now(),
+                  lastError: "The server did not confirm this ticket. It remains queued for retry.",
+                });
               }
             }
           } catch (cause) {

@@ -6,13 +6,17 @@ export const mapUnit = (v: any): Unit => ({
   plateNumber: v.plate_number,
   route: v.route?.name ?? "—",
   routeId: v.route_id ?? undefined,
-  status: "available",
+  status: v.status === "MAINTENANCE"
+    ? "maintenance"
+    : (v.active_shift_id || v.active_shift)
+    ? "in-use"
+    : "available",
 });
 
 export const mapDriver = (d: any): Driver => ({
   id: String(d.id),
   name: [d.first_name, d.last_name].filter(Boolean).join(" ") || "Unknown Driver",
-  status: "available",
+  status: (d.active_shift_id || d.active_shift) ? "on-shift" : "available",
 });
 
 export const mapShift = (s: any): Shift => ({
@@ -51,10 +55,12 @@ export const mapTransaction = (t: any): Transaction => ({
   unitNumber: t.unit_number ?? undefined,
   driverName: t.driver_name ?? undefined,
   voucherCode: t.voucher_code ?? undefined,
+  voucherId: t.voucher_id ?? null,
+  grossAmount: t.gross_amount == null ? undefined : Number(t.gross_amount),
   status: t.status ?? undefined,
   paidAt: t.paid_at ?? null,
   qrToken: t.qr_token ?? null,
-  receiptQrToken: t.receipt_qr_token ?? t.qr_token ?? null,
+  receiptQrToken: t.payment_method === "CASH" && t.reward_eligible !== false && !t.voucher_id ? t.receipt_qr_token ?? t.qr_token ?? null : null,
   groupId: t.group_id ?? null,
   multiplePaymentReference:
     t.payment_group?.reference_number ?? t.multiple_payment_reference ?? null,

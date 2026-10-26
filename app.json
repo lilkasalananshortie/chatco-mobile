@@ -3,9 +3,9 @@
     "name": "ChatCo Conductor",
     "slug": "chatco-mobile",
     "scheme": "chatco-conductor",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "plugins": [
       [
         "expo-location",
@@ -19,7 +19,7 @@
     ],
     "android": {
       "package": "com.chatco.conductor",
-      "versionCode": 9,
+      "versionCode": 10,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",

@@ -38,4 +38,18 @@ Existing history is not rewritten or backdated.
 - Native Android sources can be regenerated using Expo prebuild; EAS configuration already
   excludes generated native projects from its upload.
 
+## 2026-10-26 — Android testing release 1.0.10 (build 10)
+
+Publish accumulated work as separate API/payment, operational UI, and release
+commits with their actual publication date. Includes session/password setup,
+strict offline-cash storage, payment status handling, photo/ratings/announcement
+parity, shift-scoped GPS, location disclosure and diagnostics, legal/support
+access, and the refreshed conductor login (no walkthrough).
+
+Validation before publication: 135 Jest tests, TypeScript and Android bundle
+export passed. Native APK build/physical-device results are reported separately;
+these checks do not certify every production flow. Use the existing EAS preview
+profile against https://api.chatco.online. Backend mobile endpoints must be
+deployed first. No live payment mode or production backend changes are included.
+
 Use `git log --date=iso --format="%h %ad %s"` for the exact retained commit chronology.

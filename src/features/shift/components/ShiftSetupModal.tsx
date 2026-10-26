@@ -77,16 +77,6 @@ export function ShiftSetupModal({
             {unit?.unitNumber} ({unit?.plateNumber})
           </Text>
         </View>
-        <View style={{ height: 1, backgroundColor: colors.border }} />
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ color: colors.muted, fontSize: 13 }}>Route</Text>
-          <Text
-            style={{ color: colors.text, fontSize: 13, fontWeight: "700", textAlign: "right", maxWidth: 180 }}
-            numberOfLines={1}
-          >
-            {unit?.route}
-          </Text>
-        </View>
       </View>
 
       <View

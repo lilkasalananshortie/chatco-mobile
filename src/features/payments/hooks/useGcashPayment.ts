@@ -57,6 +57,7 @@ export function useGcashPayment({
   const checkedPendingRef = useRef(false);
   const pollGeneration = useRef(0);
   const initiatingRef = useRef(false);
+  const latestStatus = useRef<string | null>(null);
 
   const stopPolling = useCallback(() => {
     pollGeneration.current++;
@@ -85,6 +86,7 @@ export function useGcashPayment({
           const details = await api.paymentStatusDetails(transactionId);
           if (pollGeneration.current !== generation) return;
           const status = details.status.toUpperCase();
+          latestStatus.current = status.toLowerCase();
           setGcashStatus(status.toLowerCase());
           const rows = details.receipts ?? [];
           const amount = rows.length ? rows.reduce((sum, row) => sum + row.finalAmount, 0) : details.finalAmount;
@@ -92,6 +94,7 @@ export function useGcashPayment({
           setGcashInitiation((previous) => previous?.transactionId === transactionId ? {
             ...previous, amount: amount ?? previous.amount, payerName: details.payerName ?? previous.payerName,
             receipts: rows.length ? rows : previous.receipts,
+            status: status.toLowerCase(), confirmationDelayed: Boolean(details.confirmationDelayed),
           } : previous);
 
 
@@ -140,6 +143,8 @@ export function useGcashPayment({
         : 10 * 60 * 1000;
       pollTimeoutRef.current = setTimeout(
         () => {
+          // The claim QR deadline cannot expire an already-authorized payment.
+          if (latestStatus.current === "processing") return;
           stopPolling();
           setGcashError(
             "This QR code has expired. If the commuter already paid on PayMongo, the late webhook may still settle the transaction — check your transaction history in a minute.",
@@ -187,7 +192,8 @@ export function useGcashPayment({
         setGcashInitiation(pending);
         setIsGroupMode(Boolean(pending.groupId));
         setReceiptTransactions(pending.receipts ?? []);
-        setGcashStatus(null);
+        latestStatus.current = pending.status ?? null;
+        setGcashStatus(pending.status ?? null);
         setGcashError(null);
         setStep("qr_code");
         pollGcashStatus(pending.transactionId, pending.expiresAt, pending.amount);
@@ -246,6 +252,8 @@ export function useGcashPayment({
 
       if (pollGeneration.current !== generation) return;
       setGcashInitiation(initiation);
+      latestStatus.current = initiation.status ?? null;
+      setGcashStatus(initiation.status ?? null);
       setReceiptTransactions(initiation.receipts ?? []);
       setStep("qr_code");
       pollGcashStatus(initiation.transactionId, initiation.expiresAt, initiation.amount);

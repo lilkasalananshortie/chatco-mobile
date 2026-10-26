@@ -94,7 +94,7 @@ export function GcashQrStep({
             ]}
           >
             {gcashStatus === "processing"
-              ? "Payment processing…"
+              ? gcashInitiation.confirmationDelayed ? "Confirmation delayed — still checking payment" : "Payment processing…"
               : gcashStatus === "paid"
               ? "Payment successful!"
               : gcashStatus === "expired"
@@ -106,7 +106,7 @@ export function GcashQrStep({
         </View>
 
         {/* Countdown */}
-        {qrSecondsLeft !== null ? (
+        {qrSecondsLeft !== null && gcashStatus !== "processing" ? (
           <Text
             style={[
               styles.qrCountdownText,
@@ -136,12 +136,12 @@ export function GcashQrStep({
       {/* Cancel & Back Buttons */}
       <View style={styles.actionButtonsRow}>
         <Pressable
-          disabled={isCancellingGcash}
+          disabled={isCancellingGcash || gcashStatus === "processing"}
           onPress={handleCancelGcash}
           style={[styles.btnCancelGcash, isCancellingGcash ? { opacity: 0.5 } : null]}
         >
           <Text style={styles.btnCancelGcashText}>
-            {isCancellingGcash ? "Cancelling…" : "Cancel Payment"}
+            {gcashStatus === "processing" ? "Awaiting confirmation" : isCancellingGcash ? "Cancelling…" : "Cancel Payment"}
           </Text>
         </Pressable>
         <Pressable

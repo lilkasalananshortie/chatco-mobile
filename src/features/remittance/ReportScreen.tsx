@@ -11,6 +11,7 @@ import { RemittanceSuccessModal } from "./components/RemittanceSuccessModal";
 import { RemittanceHistoryModal } from "./components/RemittanceHistoryModal";
 import { RemittanceReportSlipModal } from "./components/RemittanceReportSlipModal";
 import { RemittanceCollectionsCard } from "./components/RemittanceCollectionsCard";
+import { transactionSummary } from "../../core/domain/transaction-summary";
 
 export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
   shift: Shift;
@@ -31,6 +32,8 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
   const [historyError, setHistoryError] = useState("");
   const [filter, setFilter] = useState<"ALL" | "WEEK" | "MONTH">("ALL");
   const [page, setPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPages, setHistoryPages] = useState(1);
   const loadInFlight = useRef<Promise<void> | null>(null);
 
   const load = useCallback(async () => {
@@ -54,15 +57,17 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
     return request;
   }, [shift.shiftId]);
 
-  const loadHistory = async () => {
+  useEffect(() => {
+    if (!historyOpen) return;
+    let active = true;
+    setHistory([]);
     setHistoryError("");
-    try {
-      setHistory(await api.remittances());
-    } catch {
-      setHistory([]);
-      setHistoryError("Remittance history is temporarily unavailable because the server returned an error.");
-    }
-  };
+    void api.remittancesPage(page, filter).then(result => {
+      if (!active) return;
+      setHistory(result.items); setHistoryTotal(result.total); setHistoryPages(result.lastPage);
+    }).catch(() => { if (active) setHistoryError("Remittance history is unavailable. Reconnect and reopen or change the page to retry."); });
+    return () => { active = false; };
+  }, [historyOpen, page, filter]);
 
   useEffect(() => {
     void load();
@@ -76,13 +81,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
     };
   }, [load, refreshKey]);
 
-  const totals = useMemo(() => transactions.reduce((sum, transaction) => {
-    if (transaction.paymentMethod === "Cash") sum.cash += transaction.finalAmount;
-    if (transaction.paymentMethod === "GCash") sum.gcash += transaction.finalAmount;
-    if (transaction.paymentMethod === "Voucher") sum.voucher += transaction.finalAmount;
-    sum.all += transaction.finalAmount;
-    return sum;
-  }, { cash: 0, gcash: 0, voucher: 0, all: 0 }), [transactions]);
+  const totals = useMemo(() => { const summary = transactionSummary(transactions); return { ...summary, all: summary.total }; }, [transactions]);
   const accountableTotals = earnings
     ? {
         ...totals,
@@ -92,18 +91,9 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       }
     : totals;
 
-  const filtered = useMemo(() => history.filter(item => {
-    if (filter === "ALL") return true;
-    const rawDate = item.remitted_at ?? item.date;
-    if (!rawDate) return false;
-    const value = new Date(rawDate).getTime();
-    if (!Number.isFinite(value)) return false;
-    const age = Date.now() - value;
-    return age <= (filter === "WEEK" ? 7 : 31) * 24 * 60 * 60 * 1000;
-  }), [filter, history]);
-  const pageSize = 5;
-  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visibleHistory = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const pageSize = 15;
+  const pages = historyPages;
+  const visibleHistory = history;
 
   const submit = async () => {
     if (!canOperate) {
@@ -288,7 +278,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       )}
 
       {/* Auxiliary Actions */}
-      <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => { setHistoryOpen(true); void loadHistory(); }}>
+      <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => { setPage(1); setHistoryOpen(true); }}>
         <Text style={[styles.buttonText, styles.secondaryButtonText]}>Remittance history</Text>
       </Pressable>
       <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => void shareReport()}>
@@ -330,7 +320,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
         page={page}
         setPage={setPage}
         totalPages={pages}
-        totalFiltered={filtered.length}
+        totalFiltered={historyTotal}
         pageSize={pageSize}
         visibleHistory={visibleHistory}
         onSelect={setSelected}

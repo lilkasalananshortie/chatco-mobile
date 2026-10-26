@@ -7,7 +7,9 @@ import { appStorage } from "./src/core/storage/app-storage";
 import { ThemeProvider, useAppTheme } from "./src/core/theme/ThemeProvider";
 import { BottomNav, Loading } from "./src/shared/ui";
 import { DashboardScreen } from "./src/features/dashboard/DashboardScreen";
+import { ShiftGpsProvider } from "./src/features/dashboard/ShiftGpsProvider";
 import { LoginScreen } from "./src/features/auth/LoginScreen";
+import { PasswordScreen } from "./src/features/auth/PasswordScreen";
 import { MetricsScreen } from "./src/features/metrics/MetricsScreen";
 import { PaymentModal } from "./src/features/payments/PaymentModal";
 import { ReportScreen } from "./src/features/remittance/ReportScreen";
@@ -78,13 +80,15 @@ function AppRoot() {
     void api.getDeviceId().then(setDeviceId);
   }, []);
 
-  // When another device takes over the shift, transition this device to view-only mode
-  // rather than abruptly terminating the session.
+  // A 401 ends authentication; a 403/device ownership change remains view-only.
   useEffect(() => setSessionEndedHandler(() => {
     setPayment(false);
+    setUser(null);
+    setShift(null);
+    setScreen("verify");
     Alert.alert(
-      "Shift active on another device",
-      "Shift active on another device. Choose operating device to take over.",
+      "Session ended",
+      "Please sign in again. Pending offline cash remains saved on this device.",
     );
   }), []);
 
@@ -92,7 +96,7 @@ function AppRoot() {
     try {
       const currentUser = await api.me();
       setUser(currentUser);
-      if (currentUser) {
+      if (currentUser && !currentUser.must_change_password) {
         const active = await api.activeShift().catch(() => null);
         setShift(active);
         setScreen(active ? "home" : "verify");
@@ -107,6 +111,7 @@ function AppRoot() {
   }, []);
   const handleLogin = useCallback(async (currentUser: User) => {
     setUser(currentUser);
+    if (currentUser.must_change_password) return;
     const active = await api.activeShift().catch(() => null);
     setShift(active);
     setScreen(active ? "home" : "verify");
@@ -116,7 +121,7 @@ function AppRoot() {
   // the conductor to the verification screen. Ownership is enforced by the
   // login policy, not here — a 401 on this poll signs the device out.
   useEffect(() => {
-    if (!user) return;
+    if (!user || user.must_change_password) return;
     let active = true;
     const revalidate = async () => {
       try {
@@ -154,7 +159,7 @@ function AppRoot() {
   }, [shift?.isProvisional, user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || user.must_change_password) return;
     let active = true;
     let running = false;
     const flush = async () => {
@@ -195,15 +200,20 @@ function AppRoot() {
   const ownsShift = Boolean(shift?.operatingDeviceId && deviceId && shift.operatingDeviceId === deviceId);
   const unclaimed = Boolean(shift && !shift.operatingDeviceId);
   const isOperatingDevice = ownsShift || unclaimed;
-  const canOperate = Boolean(shift && isOperatingDevice);
+  const canOperate = Boolean(shift?.isActive && !shift.timeOut && isOperatingDevice);
   const isViewOnlyDevice = Boolean(shift?.operatingDeviceId && !ownsShift);
   const isPaymentDisabled = Boolean(shift?.isOnBreak) || isViewOnlyDevice || Boolean(!shift);
 
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
+  if (user.must_change_password) return <PasswordScreen setup onBack={() => { setUser(null); setShift(null); setScreen("verify"); }} />;
+  if (!shift && screen === "metrics") return <MetricsScreen onBack={() => setScreen("verify")} />;
+  if (!shift && screen === "settings") return <View style={{ flex: 1, backgroundColor: colors.background }}><Pressable accessibilityRole="button" onPress={() => setScreen("verify")} style={{ padding: 20 }}><Text style={{ color: colors.primaryLight }}>Back to verification</Text></Pressable><SettingsScreen user={user} shift={null} onLogout={() => { setUser(null); setScreen("verify"); }} /></View>;
   if (!shift || screen === "verify") {
     return (
       <VerificationScreen
+        onViewMetrics={() => setScreen("metrics")}
+        onViewSettings={() => setScreen("settings")}
         onStarted={s => { setShift(s); setScreen("home"); }}
         onLogout={() => { setUser(null); setShift(null); setScreen("verify"); }}
       />
@@ -211,6 +221,7 @@ function AppRoot() {
   }
 
   return (
+    <ShiftGpsProvider userId={user.id} shift={shift} canOperate={canOperate} refreshKey={refreshKey}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <StatusBar style={isLofi ? "dark" : "light"} />
         {screen === "home" && shift ? (
@@ -279,5 +290,6 @@ function AppRoot() {
           />
         ) : null}
       </View>
+    </ShiftGpsProvider>
   );
 }

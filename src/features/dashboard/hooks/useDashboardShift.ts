@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
+import { transactionSummary } from "../../../core/domain/transaction-summary";
 import { api } from "../../../core/api/chatco-api";
 import type { Announcement, Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../../core/domain/types";
 import { appHaptics } from "../../../core/utils/haptics";
@@ -36,9 +37,33 @@ export function useDashboardShift({
   const [deviceBusy, setDeviceBusy] = useState(false);
   const [deviceError, setDeviceError] = useState("");
   const [error, setError] = useState("");
+  const [announcementError, setAnnouncementError] = useState("");
 
   const operationalRefreshInFlight = useRef<Promise<void> | null>(null);
   const breakBusy = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    let running = false;
+    setAnnouncements([]);
+    const load = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const notices = await api.announcements();
+        if (active) { setAnnouncements(notices); setAnnouncementError(""); }
+      } catch {
+        // Retain the last successful list during a temporary outage.
+        if (active) setAnnouncementError("Announcements are temporarily unavailable. Retrying automatically.");
+      } finally { running = false; }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 30000);
+    const listener = AppState.addEventListener("change", state => {
+      if (state === "active") void load();
+    });
+    return () => { active = false; clearInterval(timer); listener.remove(); };
+  }, [shift.shiftId, refreshKey]);
 
   useEffect(() => {
     void api.getDeviceId().then(setDeviceId);
@@ -222,16 +247,7 @@ export function useDashboardShift({
 
   const transactionTotals = useMemo(
     () =>
-      transactions.reduce(
-        (sum, transaction) => {
-          sum.total += transaction.finalAmount;
-          if (transaction.paymentMethod === "Cash") sum.cash += transaction.finalAmount;
-          else if (transaction.paymentMethod === "Voucher") sum.voucher += transaction.finalAmount;
-          else sum.gcash += transaction.finalAmount;
-          return sum;
-        },
-        { total: 0, cash: 0, gcash: 0, voucher: 0 }
-      ),
+      transactionSummary(transactions),
     [transactions]
   );
 
@@ -259,7 +275,7 @@ export function useDashboardShift({
     deviceId,
     deviceBusy,
     deviceError,
-    error,
+    error: error || announcementError,
     setError,
     updateCapacity,
     updateBreak,

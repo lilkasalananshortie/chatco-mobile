@@ -1,10 +1,11 @@
-import React from "react";
-import { Pressable, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Image, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Capacity, Shift } from "../../../core/domain/types";
 import type { TripCycleState, TripStats } from "../../../core/utils/trip-cycle-tracker";
 
 export interface DashboardHeaderCardProps {
+  profilePictureUrl?: string | null;
   shift: Shift;
   dashStyles: any;
   colors: any;
@@ -25,6 +26,7 @@ export interface DashboardHeaderCardProps {
 }
 
 export function DashboardHeaderCard({
+  profilePictureUrl,
   shift,
   dashStyles,
   colors,
@@ -43,6 +45,7 @@ export function DashboardHeaderCard({
   currentTripStats,
   onOpenTripLogbook,
 }: DashboardHeaderCardProps) {
+  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
   return (
     <View style={dashStyles.cardWrapper}>
       {/* Top Unit & Conductor Row */}
@@ -59,9 +62,9 @@ export function DashboardHeaderCard({
             isOnBreak ? dashStyles.avatarOnBreak : dashStyles.avatarOnDuty,
           ]}
         >
-          <Text style={dashStyles.avatarInitial}>
+          {profilePictureUrl && failedPhoto !== profilePictureUrl ? <Image source={{ uri: profilePictureUrl }} accessibilityLabel="Your profile photo" onError={() => setFailedPhoto(profilePictureUrl)} style={{ width: "100%", height: "100%", borderRadius: 999 }} /> : <Text style={dashStyles.avatarInitial}>
             {(shift.conductorName || "C")[0]?.toUpperCase()}
-          </Text>
+          </Text>}
         </View>
       </View>
 

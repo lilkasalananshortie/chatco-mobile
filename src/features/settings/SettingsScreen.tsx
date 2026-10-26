@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
 import { appStorage } from "../../core/storage/app-storage";
@@ -14,6 +14,9 @@ import { AppPreferencesCard } from "./components/AppPreferencesCard";
 import { BluetoothPrinterCard } from "./components/BluetoothPrinterCard";
 import { AccountSessionSection } from "./components/AccountSessionSection";
 import { thermalPrinter, type PrinterStatus } from "../../core/utils/thermal-printer";
+import { pickProfilePhoto } from "./profile-photo";
+import { transactionSummary } from "../../core/domain/transaction-summary";
+import { LegalSupportCard } from "../../shared/legal/LegalSupportCard";
 
 const SCAN_SOUND_KEY = "conductor_scan_sound";
 
@@ -24,7 +27,7 @@ export function SettingsScreen({
   onLogout,
 }: {
   user: User;
-  shift: Shift;
+  shift?: Shift | null;
   onShiftUpdated?: (shift: Shift | null) => void;
   onLogout: () => void;
 }) {
@@ -32,6 +35,22 @@ export function SettingsScreen({
   const styles = useMemo(() => createSettingsStyles(colors, isLofi), [colors, isLofi]);
 
   const [profile, setProfile] = useState<ConductorProfile | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const photoPending = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const changePhoto = async () => {
+    if (photoPending.current) return;
+    photoPending.current = true; setPhotoBusy(true); setPhotoError("");
+    try {
+      const photo = await pickProfilePhoto();
+      if (!photo || !mounted.current) return;
+      const url = await api.uploadProfilePhoto(photo, user.id);
+      if (mounted.current) setProfile(previous => previous ? { ...previous, profilePictureUrl: url } : previous);
+    } catch (error) { if (mounted.current) setPhotoError(error instanceof Error ? error.message : "Upload failed. Please retry."); }
+    finally { photoPending.current = false; if (mounted.current) setPhotoBusy(false); }
+  };
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [history, setHistory] = useState<Remittance[]>([]);
   const [scanSound, setScanSound] = useState(true);
@@ -40,18 +59,21 @@ export function SettingsScreen({
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
+    let active = true;
     void Promise.all([
       api.profile().catch(() => null),
-      api.transactions(shift.shiftId).catch(() => [] as Transaction[]),
+      shift ? api.transactions(shift.shiftId).catch(() => [] as Transaction[]) : Promise.resolve([] as Transaction[]),
       appStorage.getItem(SCAN_SOUND_KEY),
       api.remittances().catch(() => [] as Remittance[]),
     ]).then(([p, t, sound, r]) => {
+      if (!active) return;
       if (p) setProfile(p);
       setTransactions(t);
       setScanSound(sound !== "off");
       setHistory(r);
     });
-  }, [shift.shiftId]);
+    return () => { active = false; };
+  }, [shift?.shiftId, user.id]);
 
   const [printerStatus, setPrinterStatus] = useState<PrinterStatus>(thermalPrinter.getStatus());
   const [printerName, setPrinterName] = useState<string | null>(thermalPrinter.getPairedDeviceName());
@@ -139,10 +161,7 @@ export function SettingsScreen({
     });
     if (hasPendingRemit) return true;
 
-    const totalCollections = transactions.reduce(
-      (sum, txn) => sum + (Number(txn.finalAmount) || 0),
-      0
-    );
+    const totalCollections = transactionSummary(transactions).total;
     const hasSubmitted = history.some((record) => {
       if (String(record.shift_id) !== String(shift.shiftId)) return false;
       const st = String(record.remittance_status ?? record.status ?? "").toUpperCase();
@@ -226,7 +245,7 @@ export function SettingsScreen({
       </View>
 
       {/* Profile Section */}
-      <ProfileCard styles={styles} user={user} shift={shift} profile={profile} />
+      <ProfileCard styles={styles} user={user} shift={shift} profile={profile} photoBusy={photoBusy} photoError={photoError} onChangePhoto={() => void changePhoto()} />
 
       {/* Active Assignment */}
       <ActiveAssignmentCard styles={styles} shift={shift} colors={colors} isLofi={isLofi} />
@@ -267,6 +286,8 @@ export function SettingsScreen({
         isTestingPrinter={isTestingPrinter}
         onTestPrint={() => void handleTestPrint()}
       />
+
+      <LegalSupportCard />
 
       {/* Account & Session */}
       <AccountSessionSection

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Alert, AppState, Linking, Pressable, Text, View } from "react-native";
+import { api } from "../../core/api/chatco-api";
 import { useKeepAwake } from "expo-keep-awake";
 import { Ionicons } from "@expo/vector-icons";
 import type { Shift } from "../../core/domain/types";
@@ -9,7 +10,7 @@ import { SosConfirmModal } from "../../shared/ui/SosConfirmModal";
 import { TransactionHistoryModal } from "./TransactionHistoryModal";
 import { createDashStyles } from "./dashboard-styles";
 import { useDashboardShift } from "./hooks/useDashboardShift";
-import { useDashboardGps } from "./hooks/useDashboardGps";
+import { useShiftGps } from "./ShiftGpsProvider";
 import { DeviceOwnershipBanner } from "./components/DeviceOwnershipBanner";
 import { DashboardHeaderCard } from "./components/DashboardHeaderCard";
 import { RouteMapSection } from "./components/RouteMapSection";
@@ -49,6 +50,21 @@ export function DashboardScreen({
   const dashStyles = useMemo(() => createDashStyles(colors, isLofi), [colors, isLofi]);
 
   const [history, setHistory] = useState(false);
+  const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true, running = false;
+    const load = async () => {
+      if (running || AppState.currentState !== "active") return;
+      running = true;
+      try { const profile = await api.profile(); if (active) setProfilePictureUrl(profile.profilePictureUrl ?? null); }
+      catch { /* Keep the last confirmed avatar during a network outage. */ }
+      finally { running = false; }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 30000);
+    const listener = AppState.addEventListener("change", state => { if (state === "active") void load(); });
+    return () => { active = false; clearInterval(timer); listener.remove(); };
+  }, [shift.shiftId]);
   const [sos, setSos] = useState(false);
   const [incidentModalOpen, setIncidentModalOpen] = useState(false);
   const [tripModalOpen, setTripModalOpen] = useState(false);
@@ -64,11 +80,7 @@ export function DashboardScreen({
     onShiftEnded,
   });
 
-  const gpsData = useDashboardGps({
-    shift,
-    canOperate,
-    refreshKey,
-  });
+  const gpsData = useShiftGps();
 
   useEffect(() => {
     tripCycleStateRef.current = tripCycleState;
@@ -171,17 +183,27 @@ export function DashboardScreen({
               textTransform: "uppercase",
             }}
           >
-            Live Sync Active
+            Internet connected
           </Text>
         </View>
       ) : (
         <View style={dashStyles.offlineBanner}>
           <Ionicons name="cloud-offline-outline" size={16} color={isLofi ? colors.warning : "#FBBF24"} />
           <Text style={dashStyles.offlineBannerText}>
-            You are offline. Cash transactions and GPS positions will queue locally and upload when reconnected.
+            You are offline. Cash transactions are saved on this device for synchronization. Vehicle location may not reach Admin or commuters until you reconnect.
           </Text>
         </View>
       )}
+
+      <View style={{ padding: 16, marginVertical: 12, gap: 8, borderRadius: 14, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }}>
+        <Text accessibilityRole="header" style={{ color: colors.text, fontWeight: "700" }}>Vehicle location</Text>
+        <Text style={{ color: colors.muted }}>{gpsData.permissionStatus === "inactive" ? "Tracking paused or awaiting location acknowledgement." : gpsData.lastUploadAt ? `Last foreground upload accepted: ${new Date(gpsData.lastUploadAt).toLocaleTimeString()}` : "No successful foreground upload confirmed for this tracking session yet."}</Text>
+        {gpsData.backgroundWarning ? <Text style={{ color: colors.warning }}>{gpsData.backgroundWarning}</Text> : null}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
+          <Pressable accessibilityRole="button" onPress={gpsData.retryTracking} style={{ minHeight: 48, justifyContent: "center" }}><Text style={{ color: colors.primaryLight }}>Retry tracking</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings().catch(() => Alert.alert("Open device Settings", "Open ChatCo's permissions in device Settings to manage location access."))} style={{ minHeight: 48, justifyContent: "center" }}><Text style={{ color: colors.primaryLight }}>Device permissions</Text></Pressable>
+        </View>
+      </View>
 
       {/* Device Ownership / Multi-Device Handoff Banner */}
       <DeviceOwnershipBanner
@@ -208,6 +230,7 @@ export function DashboardScreen({
 
       {/* Conductor Mobile Dashboard Header Card */}
       <DashboardHeaderCard
+        profilePictureUrl={profilePictureUrl}
         shift={shift}
         dashStyles={dashStyles}
         colors={colors}

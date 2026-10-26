@@ -57,9 +57,6 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
               <Text style={{ color: available ? colors.text : colors.muted, fontSize: 14, fontWeight: "800" }}>
                 {u.unitNumber}
               </Text>
-              <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "500", marginTop: 2 }} numberOfLines={1}>
-                {u.route}
-              </Text>
               <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "500", marginTop: 2 }}>
                 {u.plateNumber}
               </Text>

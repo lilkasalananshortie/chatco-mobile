@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../core/api/chatco-api";
@@ -30,34 +30,41 @@ function StarRating({ score, size = 16 }: { score: number; size?: number }) {
   );
 }
 
-export function MetricsScreen({ shift }: { shift?: Shift | null }) {
+export function MetricsScreen({ shift, onBack }: { shift?: Shift | null; onBack?: () => void }) {
   const { colors, isLofi, styles } = useAppTheme();
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [scope, setScope] = useState<"all_time" | "shift">("all_time");
+  const [summary, setSummary] = useState<Awaited<ReturnType<typeof api.ratingsSummary>> | null>(null);
+  const requestVersion = useRef(0);
 
-  const loadRatings = async (shiftId: string) => {
+  const loadRatings = async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError("");
     try {
-      const data = await api.ratings(shiftId);
-      setRatings(data);
+      if (scope === "all_time") {
+        const data = await api.ratingsSummary();
+        if (version === requestVersion.current) { setSummary(data); setRatings([]); }
+      } else if (shift?.shiftId) {
+        const data = await api.ratings(shift.shiftId);
+        if (version === requestVersion.current) { setSummary(null); setRatings(data); }
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to load ratings.");
+      if (version === requestVersion.current) setError(e instanceof Error ? e.message : "Unable to load ratings.");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (shift?.shiftId) {
-      void loadRatings(shift.shiftId);
-    } else {
-      setLoading(false);
-    }
-  }, [shift?.shiftId]);
+    void loadRatings();
+    return () => { requestVersion.current++; };
+  }, [shift?.shiftId, scope]);
 
   const metrics = useMemo(() => {
+    if (scope === "all_time" && summary) return summary;
     const average = (items: Rating[]) =>
       items.length ? Math.round((items.reduce((s, r) => s + r.score, 0) / items.length) * 10) / 10 : 0;
     const conductor = ratings.filter((r) => r.targetRole === "CONDUCTOR");
@@ -69,6 +76,7 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
     const satisfaction = ratings.length ? Math.round((satisfied / ratings.length) * 100) : 0;
 
     return {
+      total: ratings.length,
       satisfaction,
       average: average(ratings),
       conductorAverage: average(conductor),
@@ -77,14 +85,20 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
       driverCount: driver.length,
       distribution,
     };
-  }, [ratings]);
+  }, [ratings, scope, summary]);
 
   const satisfactionColor = getGaugeColor(metrics.satisfaction);
   const maxDistributionCount = Math.max(...metrics.distribution, 1);
 
   return (
     <ScreenShell>
-      <Header title="Performance Metrics" subtitle="Shift ratings overview" />
+      <Header title="Performance Metrics" subtitle={scope === "all_time" ? "All-time ratings overview" : "Current shift ratings"} />
+      {onBack && <Pressable accessibilityRole="button" onPress={onBack} style={styles.secondaryButton}><Text style={styles.subtitle}>Back to verification</Text></Pressable>}
+      <View style={{ flexDirection: "row", gap: 12, marginVertical: 12 }}>
+        <Pressable accessibilityRole="button" accessibilityState={{ selected: scope === "all_time" }} onPress={() => setScope("all_time")}><Text style={{ color: scope === "all_time" ? colors.primaryLight : colors.muted }}>All time</Text></Pressable>
+        {shift && <Pressable accessibilityRole="button" accessibilityState={{ selected: scope === "shift" }} onPress={() => setScope("shift")}><Text style={{ color: scope === "shift" ? colors.primaryLight : colors.muted }}>Current shift</Text></Pressable>}
+        <Pressable accessibilityRole="button" accessibilityLabel="Refresh ratings" disabled={loading} onPress={() => void loadRatings()} style={{ marginLeft: "auto" }}><Text style={{ color: colors.primaryLight }}>{loading ? "Loading…" : "Refresh"}</Text></Pressable>
+      </View>
 
       {loading ? (
         <View style={{ paddingVertical: 48, alignItems: "center", justifyContent: "center" }}>
@@ -94,16 +108,14 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
       ) : error ? (
         <View style={[styles.card, { borderColor: isLofi ? colors.danger : "rgba(239, 68, 68, 0.3)", backgroundColor: isLofi ? "#FEE2E2" : "rgba(239, 68, 68, 0.08)", alignItems: "center", paddingVertical: 24 }]}>
           <Text style={[styles.error, { marginTop: 0 }]}>{error}</Text>
-          {shift?.shiftId ? (
             <Pressable
               style={[styles.button, styles.secondaryButton, { marginTop: 14 }]}
-              onPress={() => void loadRatings(shift.shiftId)}
+              onPress={() => void loadRatings()}
             >
               <Text style={[styles.buttonText, styles.secondaryButtonText]}>Retry</Text>
             </Pressable>
-          ) : null}
         </View>
-      ) : !shift ? (
+      ) : scope === "shift" && !shift ? (
         /* No active shift state */
         <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24 }}>
           <View style={{ width: 72, height: 72, borderRadius: isLofi ? 4 : 36, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
@@ -114,13 +126,13 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
             Start a shift from the dashboard to view your performance metrics.
           </Text>
         </View>
-      ) : ratings.length === 0 ? (
+      ) : metrics.total === 0 ? (
         /* Empty state: Shift active but no ratings submitted yet */
         <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24 }}>
           <View style={{ width: 72, height: 72, borderRadius: isLofi ? 4 : 36, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
             <Ionicons name="star-outline" size={36} color={colors.muted} />
           </View>
-          <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 6 }]}>No ratings yet for this shift</Text>
+          <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 6 }]}>{scope === "all_time" ? "No ratings yet" : "No ratings yet for this shift"}</Text>
           <Text style={[styles.subtitle, { textAlign: "center", maxWidth: 280 }]}>
             Ratings from commuters will appear here once they submit feedback.
           </Text>
@@ -146,7 +158,7 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
               <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: isLofi ? 3 : 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: "center", borderWidth: isLofi ? 1.5 : 1, borderColor: colors.border }}>
                 <Text style={{ fontSize: 18 }}>👥</Text>
                 <Text style={{ color: colors.text, fontSize: 18, fontWeight: "800", marginTop: 4 }}>
-                  {ratings.length}
+                  {metrics.total}
                 </Text>
                 <Text style={[styles.label, { fontSize: 9, marginTop: 2 }]}>Total Ratings</Text>
               </View>
@@ -176,7 +188,7 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
             <View style={[styles.card, { flex: 1, padding: 14 }]}>
               <Text style={[styles.cardTitle, { fontSize: 13 }]}>Driver's Performance</Text>
               <Text style={[styles.subtitle, { fontSize: 11, marginTop: 2 }]} numberOfLines={1}>
-                {shift.driverName || "Assigned Driver"}
+                {scope === "all_time" ? "Drivers across your shifts" : shift?.driverName || "Assigned Driver"}
               </Text>
               <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
                 <View>
@@ -200,7 +212,7 @@ export function MetricsScreen({ shift }: { shift?: Shift | null }) {
             <View style={{ gap: 10 }}>
               {[5, 4, 3, 2, 1].map((star) => {
                 const count = metrics.distribution[star - 1] ?? 0;
-                const pct = ratings.length ? Math.round((count / ratings.length) * 100) : 0;
+                const pct = metrics.total ? Math.round((count / metrics.total) * 100) : 0;
                 const barWidth = (count / maxDistributionCount) * 100;
 
                 return (

@@ -11,9 +11,13 @@ import { OfflineDepotNotice } from "./components/OfflineDepotNotice";
 export function VerificationScreen({
   onStarted,
   onLogout,
+  onViewMetrics,
+  onViewSettings,
 }: {
   onStarted: (shift: Shift) => void;
   onLogout?: () => void;
+  onViewMetrics?: () => void;
+  onViewSettings?: () => void;
 }) {
   const { colors, styles, isLofi } = useAppTheme();
   const [units, setUnits] = useState<Unit[]>([]);
@@ -375,15 +379,6 @@ export function VerificationScreen({
             </Text>
           </View>
 
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Assigned Route</Text>
-            <Text
-              style={{ color: colors.text, fontSize: 12, fontWeight: "700", textAlign: "right", maxWidth: 180 }}
-              numberOfLines={1}
-            >
-              {unit?.route || "McArthur Highway — Calumpit to Meycauayan"}
-            </Text>
-          </View>
         </View>
 
         {/* 4. Confirm Shift Setup Button */}
@@ -407,6 +402,8 @@ export function VerificationScreen({
             {busy ? "Starting Shift…" : "Confirm Shift Setup"}
           </Text>
         </Pressable>
+        {onViewMetrics && <Pressable accessibilityRole="button" onPress={onViewMetrics} style={styles.secondaryButton}><Text style={styles.subtitle}>View all-time performance</Text></Pressable>}
+        {onViewSettings && <Pressable accessibilityRole="button" onPress={onViewSettings} style={styles.secondaryButton}><Text style={styles.subtitle}>Account settings and photo</Text></Pressable>}
       </ScrollView>
     </ScreenShell>
   );

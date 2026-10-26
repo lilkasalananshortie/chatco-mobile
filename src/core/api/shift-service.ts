@@ -57,6 +57,7 @@ export const shiftService = {
         name: d.name ?? "Conductor",
         username: d.username ?? "—",
         phoneNumber: d.phone_number ?? d.contact_number ?? undefined,
+        profilePictureUrl: d.profile_picture_url ?? null,
       };
       await appStorage.setItem(CACHED_PROFILE_KEY, JSON.stringify(prof)).catch(() => null);
       return prof;
@@ -71,6 +72,18 @@ export const shiftService = {
       }
       throw cause;
     }
+  },
+
+  uploadProfilePhoto: async (photo: FormData, ownerId?: string): Promise<string> => {
+    const result = await post<{ profile_picture_url: string }>("/mobile/conductor/profile/photo", photo);
+    if (!result.profile_picture_url) throw new Error("The server did not confirm the saved photo.");
+    // Do not let a failed cache write disguise a successful server upload.
+    try {
+      const raw = await appStorage.getItem(CACHED_PROFILE_KEY);
+      const cached = raw ? JSON.parse(raw) : null;
+      if (ownerId && cached?.id === ownerId) await appStorage.setItem(CACHED_PROFILE_KEY, JSON.stringify({ ...cached, profilePictureUrl: result.profile_picture_url }));
+    } catch { /* Re-fetch the authoritative profile on next visit. */ }
+    return result.profile_picture_url;
   },
 
   activeShift: async (): Promise<Shift | null> => {

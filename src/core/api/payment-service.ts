@@ -40,9 +40,11 @@ export const paymentService = {
     });
     return {
       transactionId: String(d.transaction_id),
+      status: String(d.status ?? "PENDING").toLowerCase(),
+      confirmationDelayed: Boolean(d.confirmation_delayed),
       qrToken: d.qr_token,
       checkoutUrl: d.checkout_url ?? null,
-      amount: Number(d.amount) || input.amount,
+      amount: d.amount == null ? input.amount : Number(d.amount),
       expiresAt: d.expires_at,
       from: d.pickup_name ?? null,
       to: d.dropoff_name ?? null,
@@ -59,6 +61,7 @@ export const paymentService = {
 
   paymentStatusDetails: async (id: string): Promise<{
     status: string;
+    confirmationDelayed?: boolean;
     paidAt?: string | null;
     payerName?: string | null;
     payerId?: string | null;
@@ -75,6 +78,7 @@ export const paymentService = {
     const d = await request<any>(`/mobile/payments/${encodeURIComponent(id)}/status`);
     return {
       status: String(d.status ?? "PENDING").toUpperCase(),
+      confirmationDelayed: Boolean(d.confirmation_delayed),
       paidAt: d.paid_at ?? null,
       payerName: d.payer_name ?? null,
       payerId: d.payer_id ?? null,
@@ -95,6 +99,8 @@ export const paymentService = {
     if (!d) return null;
     return {
       transactionId: String(d.transaction_id),
+      status: String(d.status ?? "PENDING").toLowerCase(),
+      confirmationDelayed: Boolean(d.confirmation_delayed),
       qrToken: d.qr_token,
       checkoutUrl: d.checkout_url ?? null,
       amount: Number(d.amount) || 0,

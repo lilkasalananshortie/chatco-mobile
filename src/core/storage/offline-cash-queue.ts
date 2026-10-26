@@ -54,7 +54,7 @@ function serialized<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 async function readQueue(): Promise<PendingCashItem[]> {
-  const raw = await appStorage.getItem(KEY);
+  const raw = await appStorage.getItem(KEY, { strict: true });
   if (!raw) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -68,8 +68,8 @@ async function readQueue(): Promise<PendingCashItem[]> {
     try {
       // Keep one recoverable snapshot rather than creating a new backup on
       // every poll while the original value remains unreadable.
-      if (!(await appStorage.getItem(LATEST_CORRUPT_KEY))) {
-        await appStorage.setItem(LATEST_CORRUPT_KEY, raw);
+      if (!(await appStorage.getItem(LATEST_CORRUPT_KEY, { strict: true }))) {
+        await appStorage.setItem(LATEST_CORRUPT_KEY, raw, { strict: true });
       }
     } catch {
       // The original queue error is still the important failure; storage
@@ -98,22 +98,22 @@ export async function getPendingCash(): Promise<PendingCashItem[]> {
 export async function enqueuePendingCash(item: PendingCashItem): Promise<void> {
   await serialized(async () => {
     const current = (await readQueue()).filter(entry => entry.id !== item.id);
-    await appStorage.setItem(KEY, JSON.stringify([...current, item]));
+    await appStorage.setItem(KEY, JSON.stringify([...current, item]), { strict: true });
   });
 }
 
 export async function removePendingCash(id: string): Promise<void> {
   await serialized(async () => {
     const remaining = (await readQueue()).filter(entry => entry.id !== id);
-    if (remaining.length) await appStorage.setItem(KEY, JSON.stringify(remaining));
-    else await appStorage.removeItem(KEY);
+    if (remaining.length) await appStorage.setItem(KEY, JSON.stringify(remaining), { strict: true });
+    else await appStorage.removeItem(KEY, { strict: true });
   });
 }
 
 export async function updatePendingCash(id: string, update: Partial<PendingCashItem>): Promise<void> {
   await serialized(async () => {
     const next = (await readQueue()).map(item => item.id === id ? { ...item, ...update } : item);
-    await appStorage.setItem(KEY, JSON.stringify(next));
+    await appStorage.setItem(KEY, JSON.stringify(next), { strict: true });
   });
 }
 
@@ -139,11 +139,11 @@ export async function getNextOfflineTicketSequence(shiftId: string, count = 1): 
   const safeShiftId = shiftId || "default";
   const key = `${SEQ_KEY_PREFIX}${safeShiftId}`;
   return serialized(async () => {
-    const raw = await appStorage.getItem(key);
+    const raw = await appStorage.getItem(key, { strict: true });
     const current = raw ? parseInt(raw, 10) || 0 : 0;
     const start = current + 1;
     const next = current + Math.max(1, count);
-    await appStorage.setItem(key, String(next));
+    await appStorage.setItem(key, String(next), { strict: true });
     return start;
   });
 }
@@ -158,13 +158,13 @@ export async function reassignPendingShiftId(oldShiftId: string, newShiftId: str
     // 1. Migrate sequence key
     const oldSeqKey = `${SEQ_KEY_PREFIX}${oldShiftId}`;
     const newSeqKey = `${SEQ_KEY_PREFIX}${newShiftId}`;
-    const seq = await appStorage.getItem(oldSeqKey);
+    const seq = await appStorage.getItem(oldSeqKey, { strict: true });
     if (seq) {
-      const existingNewSeq = await appStorage.getItem(newSeqKey);
+      const existingNewSeq = await appStorage.getItem(newSeqKey, { strict: true });
       if (!existingNewSeq) {
-        await appStorage.setItem(newSeqKey, seq);
+        await appStorage.setItem(newSeqKey, seq, { strict: true });
       }
-      await appStorage.removeItem(oldSeqKey).catch(() => null);
+      await appStorage.removeItem(oldSeqKey, { strict: true });
     }
 
     // 2. Re-point pending queue items
@@ -186,7 +186,7 @@ export async function reassignPendingShiftId(oldShiftId: string, newShiftId: str
     });
 
     if (updatedCount > 0) {
-      await appStorage.setItem(KEY, JSON.stringify(next));
+      await appStorage.setItem(KEY, JSON.stringify(next), { strict: true });
     }
     return updatedCount;
   });

@@ -72,14 +72,14 @@ function distanceToSegment(
  * Calculates the shortest distance in meters from the vehicle's position to
  * any point on the authorized franchise corridor.
  */
-export function getDistanceToCorridorMeters(lat: number, lng: number): number {
-  if (ROUTE_POINTS.length < 2) return 0;
+export function getDistanceToCorridorMeters(lat: number, lng: number, points: ReadonlyArray<readonly [number, number]> = ROUTE_POINTS): number {
+  if (points.length < 2) return 0;
 
   let minDistance = Infinity;
 
-  for (let i = 0; i < ROUTE_POINTS.length - 1; i++) {
-    const ptA = ROUTE_POINTS[i];
-    const ptB = ROUTE_POINTS[i + 1];
+  for (let i = 0; i < points.length - 1; i++) {
+    const ptA = points[i];
+    const ptB = points[i + 1];
     if (!ptA || !ptB) continue;
 
     const [aLat, aLng] = ptA;
@@ -100,7 +100,7 @@ const OVERSPEED_VOICE_COOLDOWN_MS = 20000; // 20 seconds
 /**
  * Evaluates current GPS speed and triggers warning cues if exceeding the 50 km/h limit.
  */
-export function evaluateSpeedWarning(speedMps: number | null | undefined): {
+export function evaluateSpeedWarning(speedMps: number | null | undefined, limit = SPEED_LIMIT_KMH): {
   speedKmh: number;
   isOverspeed: boolean;
   isNearLimit: boolean;
@@ -111,8 +111,9 @@ export function evaluateSpeedWarning(speedMps: number | null | undefined): {
 
   // W3C Geolocation speed is m/s -> convert to km/h
   const speedKmh = Math.round(speedMps * 3.6);
-  const isOverspeed = speedKmh > SPEED_LIMIT_KMH;
-  const isNearLimit = !isOverspeed && speedKmh >= SPEED_WARNING_THRESHOLD_KMH;
+  const effectiveLimit = Number.isFinite(limit) && limit > 0 ? limit : SPEED_LIMIT_KMH;
+  const isOverspeed = speedKmh > effectiveLimit;
+  const isNearLimit = !isOverspeed && speedKmh >= effectiveLimit * 0.9;
 
   if (isOverspeed) {
     // Haptic feedback alert & audio cue

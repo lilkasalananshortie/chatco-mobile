@@ -6,6 +6,7 @@ export interface User {
   email: string;
   role: string;
   name: string;
+  must_change_password?: boolean;
 }
 
 export interface Unit {
@@ -120,6 +121,8 @@ export interface Remittance {
 }
 
 export interface GcashInitiation {
+  status?: string;
+  confirmationDelayed?: boolean;
   transactionId: string;
   qrToken: string;
   checkoutUrl: string | null;
@@ -141,6 +144,7 @@ export interface ConductorProfile {
   name: string;
   username: string;
   phoneNumber?: string;
+  profilePictureUrl?: string | null;
 }
 
 export interface HailRequest {

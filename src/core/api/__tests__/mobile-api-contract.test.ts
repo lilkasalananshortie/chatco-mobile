@@ -58,3 +58,14 @@ test("paginated payload remains intact for mobile response mappers", async () =>
   } as Response);
   expect(await client.request("/mobile/commuter/payments?page=2")).toEqual(page);
 });
+
+test("late 401 from an older token cannot clear a newly authenticated session", async () => {
+  let finish!: (response: Response) => void;
+  (appStorage.getItem as jest.Mock).mockResolvedValueOnce("old-token").mockResolvedValue("new-token");
+  jest.spyOn(globalThis, "fetch").mockReturnValue(new Promise(done => { finish = done; }));
+  const pending = client.request("/mobile/user");
+  await Promise.resolve();
+  finish({ ok: false, status: 401, json: async () => ({ message: "Unauthenticated" }) } as Response);
+  await expect(pending).rejects.toThrow("Unauthenticated");
+  expect(appStorage.removeItem).not.toHaveBeenCalled();
+});

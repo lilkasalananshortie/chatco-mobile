@@ -8,10 +8,12 @@ import type {
   Shift,
   SosAlert,
 } from "../domain/types";
-import { NetworkError, post, request } from "./api-client";
+import { post, request } from "./api-client";
 import { mapShift } from "./api-mappers";
+import { normalizeRatings, normalizeRatingSummary } from "./rating-mapper";
 
 export const fleetService = {
+  safetySettings: () => request<{ speed_limit_kmh: number }>("/mobile/conductor/safety-settings"),
   breakStatus: async (isOnBreak: boolean) => {
     const deviceId = await getConductorDeviceId();
     return mapShift(
@@ -140,23 +142,17 @@ export const fleetService = {
   },
 
   ratings: async (shiftId: string): Promise<Rating[]> =>
-    (await request<any[]>(`/mobile/conductor/ratings?shift_id=${encodeURIComponent(shiftId)}`)).map(r => ({
-      ratingId: String(r.ratingId ?? r.rating_id ?? r.id),
-      commuterId: String(r.commuterId ?? r.commuter_id ?? ""),
-      commuterName: r.commuterName ?? r.commuter_name ?? "Commuter",
-      shiftId: String(r.shiftId ?? r.shift_id ?? shiftId),
-      targetRole: r.targetRole ?? r.target_role,
-      targetId: String(r.targetId ?? r.target_id ?? ""),
-      score: Number(r.score) || 0,
-      comment: r.comment ?? "",
-      createdAt: r.createdAt ?? r.created_at ?? new Date().toISOString(),
-    })),
+    normalizeRatings(await request<any[]>(`/mobile/conductor/ratings?shift_id=${encodeURIComponent(shiftId)}`), shiftId),
 
-  remittances: async (): Promise<Remittance[]> => {
+  ratingsSummary: async () => normalizeRatingSummary(await request<Parameters<typeof normalizeRatingSummary>[0]>("/mobile/conductor/ratings?scope=all_time")),
+
+  remittances: async (): Promise<Remittance[]> => (await fleetService.remittancesPage(1, "ALL", 100)).items,
+
+  remittancesPage: async (page = 1, filter = "ALL", perPage = 15): Promise<{ items: Remittance[]; page: number; lastPage: number; total: number }> => {
     try {
-      const d = await request<any>("/mobile/conductor/remittances?per_page=100");
+      const d = await request<any>(`/mobile/conductor/remittances?per_page=${perPage}&page=${page}&filter=${encodeURIComponent(filter)}`);
       const rows = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
-      return rows.map((r: any) => ({
+      const items = rows.map((r: any) => ({
         id: String(r.id ?? r.remittance_id ?? r.shift_id ?? ""),
         shift_id: String(r.shift_id ?? ""),
         date: r.date ?? r.created_at ?? "",
@@ -184,8 +180,8 @@ export const fleetService = {
         is_overdue: Boolean(r.is_overdue),
         reminder_count: Number(r.reminder_count) || 0,
       }));
+      return { items, page: Number(d.current_page ?? page), lastPage: Number(d.last_page ?? 1), total: Number(d.total ?? rows.length) };
     } catch (cause) {
-      if (cause instanceof NetworkError) return [];
       throw cause;
     }
   },

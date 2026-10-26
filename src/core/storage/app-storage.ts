@@ -8,8 +8,9 @@
  * - Native (session token only): expo-secure-store (iOS Keychain / Android Keystore)
  * - Native (all other keys): @react-native-async-storage/async-storage
  *
- * All operations include a 4-second timeout to prevent the app from hanging
- * on storage failures. Reads fall back to null; writes throw on failure.
+ * Ordinary operations use a 4-second timeout. Financial reads reject failures;
+ * financial mutations await actual completion so late native writes cannot
+ * overtake a newer queued mutation. No timeout is treated as a saved cash fare.
  *
  * SECURE_KEYS contains only "chatco_session" — the Sanctum bearer token.
  * All other keys (queue, settings, cache) use AsyncStorage.
@@ -48,9 +49,20 @@ function webStorageAvailable() {
 }
 
 export const appStorage = {
-  async getItem(key: string): Promise<string | null> {
+  async getItem(key: string, options?: { strict?: boolean }): Promise<string | null> {
     if (webStorageAvailable()) {
       return window.localStorage.getItem(key);
+    }
+    if (options?.strict) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          secureStorageAvailable(key) ? SecureStore.getItemAsync(key) : AsyncStorage.getItem(key),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Saved cash could not be read. Please retry; no transactions were replaced.")), STORAGE_TIMEOUT_MS);
+          }),
+        ]);
+      } finally { if (timer) clearTimeout(timer); }
     }
     if (secureStorageAvailable(key)) {
       return withStorageTimeout(SecureStore.getItemAsync(key), null);
@@ -58,9 +70,16 @@ export const appStorage = {
     return withStorageTimeout(AsyncStorage.getItem(key), null);
   },
 
-  async setItem(key: string, value: string): Promise<void> {
+  async setItem(key: string, value: string, options?: { strict?: boolean }): Promise<void> {
     if (webStorageAvailable()) {
       window.localStorage.setItem(key, value);
+      return;
+    }
+    if (options?.strict) {
+      // Await actual persistence: a timed-out write may still finish later and
+      // must not overtake a newer financial queue mutation.
+      if (secureStorageAvailable(key)) await SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
+      else await AsyncStorage.setItem(key, value);
       return;
     }
     if (secureStorageAvailable(key)) {
@@ -78,9 +97,14 @@ export const appStorage = {
     if (!saved) throw new Error("Session storage is unavailable. Please restart the app and try again.");
   },
 
-  async removeItem(key: string): Promise<void> {
+  async removeItem(key: string, options?: { strict?: boolean }): Promise<void> {
     if (webStorageAvailable()) {
       window.localStorage.removeItem(key);
+      return;
+    }
+    if (options?.strict) {
+      if (secureStorageAvailable(key)) await SecureStore.deleteItemAsync(key);
+      else await AsyncStorage.removeItem(key);
       return;
     }
     if (secureStorageAvailable(key)) {

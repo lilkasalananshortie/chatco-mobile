@@ -61,12 +61,14 @@ export const api = {
   forgotPassword: authService.forgotPassword,
   verifyResetCode: authService.verifyResetCode,
   resetPassword: authService.resetPassword,
+  setNewPassword: authService.setNewPassword,
   me: authService.me,
 
   // Shift & Fleet Resources
   units: shiftService.units,
   drivers: shiftService.drivers,
   profile: shiftService.profile,
+  uploadProfilePhoto: shiftService.uploadProfilePhoto,
   activeShift: shiftService.activeShift,
   checkConnectivity: shiftService.checkConnectivity,
   startShift: shiftService.startShift,
@@ -111,6 +113,8 @@ export const api = {
   announcements: fleetService.announcements,
   markAnnouncementRead: fleetService.markAnnouncementRead,
   ratings: fleetService.ratings,
+  ratingsSummary: fleetService.ratingsSummary,
   remittances: fleetService.remittances,
+  remittancesPage: fleetService.remittancesPage,
   remit: fleetService.remit,
 };

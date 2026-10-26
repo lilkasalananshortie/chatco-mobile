@@ -70,7 +70,8 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   }
   const payload = (await response.json().catch(() => null)) as Envelope<T> | null;
   if (!response.ok) {
-    if (response.status === 401 && path !== "/mobile/auth/login") {
+    if (response.status === 401 && path !== "/mobile/auth/login"
+      && token && await appStorage.getItem(TOKEN_KEY) === token) {
       await appStorage.removeItem(TOKEN_KEY);
       if (!sessionEndedNotified) {
         sessionEndedNotified = true;

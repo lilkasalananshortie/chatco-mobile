@@ -11,6 +11,7 @@ export interface UseGcashPaymentProps {
   setStep: (step: Step) => void;
   isOnline: boolean;
   onSaved: () => void;
+  onPaymentCancelled?: () => void;
   triggerSuccessAlert: (amount: number, method: string) => void;
   pickupPoint: FarePoint | null;
   pickupLandmark: string | null;
@@ -31,6 +32,7 @@ export function useGcashPayment({
   setStep,
   isOnline,
   onSaved,
+  onPaymentCancelled,
   triggerSuccessAlert,
   pickupPoint,
   pickupLandmark,
@@ -278,8 +280,12 @@ export function useGcashPayment({
       stopPolling();
       setGcashInitiation(null);
       setGcashStatus(null);
+      setGcashError(null);
+      setQrSecondsLeft(null);
+      setReceiptTransactions([]);
       setStep("method");
       setSelectedMethod(null);
+      onPaymentCancelled?.();
     } catch (error) {
       setGcashError(error instanceof Error ? error.message : "Unable to cancel payment.");
     } finally {

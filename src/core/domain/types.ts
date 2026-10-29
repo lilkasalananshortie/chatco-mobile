@@ -104,6 +104,7 @@ export interface Remittance {
   status?: string;
   remitted_at?: string;
   unit_number?: string;
+  route?: string;
   conductor_name?: string;
   driver_name?: string;
   total_passengers?: number | string;
@@ -202,6 +203,8 @@ export interface Announcement {
   isRead: boolean;
   createdAt?: string;
   priority?: string;
+  type?: string;
+  referenceId?: string | null;
 }
 
 export interface RouteGeometry {

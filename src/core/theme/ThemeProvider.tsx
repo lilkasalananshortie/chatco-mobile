@@ -28,14 +28,14 @@ const standardColors = {
 };
 
 const lofiColors = {
-  background: "#EAF3FF",
+  background: "#F7F8FA",
   surface: "#FFFFFF",
-  surface2: "#DDEBFA",
+  surface2: "#F1F5F9",
   primary: "#1A5FB4",
   primaryLight: "#245F9E",
   text: "#09213A",
   muted: "#526B84",
-  border: "#6E9DCC",
+  border: "#D7E0EB",
   success: "#16705A",
   warning: "#765C10",
   danger: "#B4233C",
@@ -43,7 +43,7 @@ const lofiColors = {
 };
 
 function makeStyles(colors: typeof standardColors, isLofi: boolean) {
-  const radius = isLofi ? 3 : 18;
+  const radius = 14;
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     content: {
@@ -56,15 +56,15 @@ function makeStyles(colors: typeof standardColors, isLofi: boolean) {
     },
     title: {
       color: colors.text,
-      fontSize: isLofi ? 23 : 27,
+      fontSize: 27,
       lineHeight: 33,
-      fontWeight: isLofi ? "700" : "900",
-      letterSpacing: isLofi ? 0 : -0.6,
+      fontWeight: "700",
+      letterSpacing: -0.6,
     },
     subtitle: { color: colors.muted, fontSize: 13, marginTop: 6, lineHeight: 20 },
     card: {
       backgroundColor: colors.surface,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: 1,
       borderColor: colors.border,
       borderRadius: radius,
       padding: 17,
@@ -85,14 +85,14 @@ function makeStyles(colors: typeof standardColors, isLofi: boolean) {
       fontSize: 10,
       fontWeight: "800",
       textTransform: "uppercase",
-      letterSpacing: isLofi ? 0.5 : 1.2,
+      letterSpacing: 1.2,
     },
     input: {
       backgroundColor: colors.surface2,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: 1,
       borderColor: colors.border,
       color: colors.text,
-      borderRadius: isLofi ? 2 : 13,
+      borderRadius: 12,
       paddingHorizontal: 14,
       paddingVertical: 13,
       marginTop: 8,
@@ -101,7 +101,7 @@ function makeStyles(colors: typeof standardColors, isLofi: boolean) {
     button: {
       minHeight: 48,
       backgroundColor: colors.primary,
-      borderRadius: isLofi ? 2 : 14,
+      borderRadius: 14,
       paddingVertical: 14,
       paddingHorizontal: 18,
       alignItems: "center",
@@ -136,12 +136,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     void appStorage.getItem(MODE_KEY)
-      .then(value => setIsLofiState(value === "lofi"))
+      // Read the previous appearance key without changing existing users' choice.
+      .then(value => setIsLofiState(value === "lofi" || value === "light"))
+      .catch(() => setIsLofiState(false))
       .finally(() => setReady(true));
   }, []);
   const setLofi = useCallback(async (value: boolean) => {
+    await appStorage.setItem(MODE_KEY, value ? "lofi" : "dark");
     setIsLofiState(value);
-    await appStorage.setItem(MODE_KEY, value ? "lofi" : "standard");
   }, []);
   const colors = isLofi ? lofiColors : standardColors;
   const value = useMemo(() => ({

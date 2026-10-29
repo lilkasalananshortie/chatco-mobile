@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
-import * as Location from "expo-location";
 import { api } from "../../../core/api/chatco-api";
 import type {
   CommuterType,
@@ -19,7 +18,6 @@ import type {
 } from "../payment-types";
 import {
   DEFAULT_FARE_CONFIG,
-  findNearestPoint,
   formatCurrency,
   getBarangaysTraversed,
   getFareBetween,
@@ -53,7 +51,6 @@ export function usePaymentFlow({
   const [pointAreas, setPointAreas] = useState<FarePoint[]>([]);
   const [fareConfig, setFareConfig] = useState<FareConfig>(DEFAULT_FARE_CONFIG);
   const [pickupPoint, setPickupPoint] = useState<FarePoint | null>(null);
-  const [isAutoPickup, setIsAutoPickup] = useState(false);
   const [dropoffPoint, setDropoffPoint] = useState<FarePoint | null>(null);
   const [pickupLandmark, setPickupLandmark] = useState<string | null>(null);
   const [dropoffLandmark, setDropoffLandmark] = useState<string | null>(null);
@@ -101,31 +98,6 @@ export function usePaymentFlow({
         setPickupPoint((current) => current ? matrix.points.find((point) => point.id === current.id) ?? null : current);
         setDropoffPoint((current) => current ? matrix.points.find((point) => point.id === current.id) ?? null : current);
 
-        if (!pickupPoint && matrix.points.length > 0) {
-          void (async () => {
-            try {
-              let loc = await Location.getLastKnownPositionAsync();
-              if (!loc) {
-                const { status } = await Location.getForegroundPermissionsAsync();
-                if (status === "granted") {
-                  loc = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
-                  });
-                }
-              }
-              if (loc?.coords && !cancelled) {
-                const nearest = findNearestPoint(loc.coords.latitude, loc.coords.longitude, matrix.points);
-                if (nearest) {
-                  setPickupPoint(nearest);
-                  setIsAutoPickup(true);
-                  setSelectingField("dropoff");
-                }
-              }
-            } catch {
-              // Location unavailable — normal manual selection
-            }
-          })();
-        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -238,7 +210,6 @@ export function usePaymentFlow({
   const clearPickup = () => {
     setPickupPoint(null);
     setPickupLandmark(null);
-    setIsAutoPickup(false);
     setSelectingField("pickup");
     if (expandedBarangay === pickupPoint?.pointNumber) {
       setExpandedBarangay(null);
@@ -262,8 +233,20 @@ export function usePaymentFlow({
       setPickupLandmark(dropoffLandmark);
       setDropoffPoint(tmpPoint);
       setDropoffLandmark(tmpLandmark);
-      setIsAutoPickup(false);
     }
+  };
+
+  const resetRideSelection = () => {
+    setPickupPoint(null);
+    setDropoffPoint(null);
+    setPickupLandmark(null);
+    setDropoffLandmark(null);
+    setCommuterType("REGULAR");
+    setIsGroupMode(false);
+    setGroupCounts({ REGULAR: 0, SENIOR_CITIZEN: 0, STUDENT: 0, PWD: 0 });
+    setSearchQuery("");
+    setSelectingField("pickup");
+    setExpandedBarangay(null);
   };
 
   // GCash specialized hook
@@ -273,6 +256,13 @@ export function usePaymentFlow({
     setStep,
     isOnline,
     onSaved,
+    onPaymentCancelled: () => {
+      resetRideSelection();
+      Alert.alert(
+        "Payment cancelled",
+        "The GCash payment was cancelled. The commuter was not charged.",
+      );
+    },
     triggerSuccessAlert,
     pickupPoint,
     pickupLandmark,
@@ -315,17 +305,7 @@ export function usePaymentFlow({
     gcash.stopPolling();
     setStep("method");
     setSelectedMethod(null);
-    setPickupPoint(null);
-    setIsAutoPickup(false);
-    setDropoffPoint(null);
-    setPickupLandmark(null);
-    setDropoffLandmark(null);
-    setCommuterType("REGULAR");
-    setIsGroupMode(false);
-    setGroupCounts({ REGULAR: 0, SENIOR_CITIZEN: 0, STUDENT: 0, PWD: 0 });
-    setSearchQuery("");
-    setSelectingField("pickup");
-    setExpandedBarangay(null);
+    resetRideSelection();
     gcash.resetGcash();
     setVoucherCode("");
     setCashReceiptToken(null);
@@ -484,8 +464,6 @@ export function usePaymentFlow({
     fareConfig,
     pickupPoint,
     setPickupPoint,
-    isAutoPickup,
-    setIsAutoPickup,
     dropoffPoint,
     setDropoffPoint,
     pickupLandmark,

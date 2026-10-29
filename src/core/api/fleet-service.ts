@@ -121,8 +121,9 @@ export const fleetService = {
     return { id: String(d.id), status: d.status };
   },
 
-  announcements: async (): Promise<Announcement[]> => {
-    const d = await request<any>("/mobile/conductor/announcements");
+  announcements: async (remindersOnly = false): Promise<Announcement[]> => {
+    const query = remindersOnly ? "?unread_only=1&notifications_only=1&types=REMITTANCE_REMINDER&per_page=10" : "";
+    const d = await request<any>(`/mobile/conductor/announcements${query}`);
     const rows = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
     return rows.map((row: any) => ({
       id: String(row.id),
@@ -131,6 +132,8 @@ export const fleetService = {
       isRead: Boolean(row.is_read ?? row.isRead),
       createdAt: row.created_at ?? row.createdAt,
       priority: row.priority,
+      type: row.type,
+      referenceId: row.reference_id ?? null,
     }));
   },
 
@@ -165,6 +168,7 @@ export const fleetService = {
         status: r.remittance_status,
         remitted_at: r.remitted_at ?? null,
         unit_number: r.unit_number ?? r.shift?.unit_number ?? "",
+        route: r.vehicle?.route?.name ?? r.shift?.route?.name ?? "",
         conductor_name: r.conductor_name ?? r.shift?.conductor_name ?? "",
         driver_name: r.driver_name ?? r.shift?.driver_name ?? "",
         total_passengers: Number(r.total_passengers) || 0,

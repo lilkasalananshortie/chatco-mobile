@@ -1,10 +1,11 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../core/theme/ThemeProvider";
+import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { SelectedPaymentMethod } from "../payment-types";
 
 export interface MethodSelectionStepProps {
   styles: any;
+  fullBottomSheet?: boolean;
   isOnline: boolean;
   onSelectMethod: (method: SelectedPaymentMethod) => void;
   onClose: () => void;
@@ -12,14 +13,15 @@ export interface MethodSelectionStepProps {
 
 export function MethodSelectionStep({
   styles,
+  fullBottomSheet = false,
   isOnline,
   onSelectMethod,
   onClose,
 }: MethodSelectionStepProps) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi } = usePaymentTheme();
 
   return (
-    <View style={styles.modalCard}>
+    <View style={[styles.modalCard, fullBottomSheet ? { maxWidth: "100%", borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : null]}>
       <View style={styles.modalHeader}>
         <View>
           <Text style={styles.modalTitle}>Collect Payment</Text>
@@ -30,12 +32,16 @@ export function MethodSelectionStep({
         </Pressable>
       </View>
 
-      <View style={styles.modalBody}>
+      <ScrollView
+        style={{ flex: 1, minHeight: 0 }}
+        contentContainerStyle={styles.modalBody}
+        keyboardShouldPersistTaps="handled"
+      >
         {!isOnline ? (
           <View style={styles.offlineNotice}>
             <Text style={styles.offlineNoticeText}>
               Offline mode: cash fares are saved on this device and queued for synchronization.
-              GCash and vouchers are disabled.
+              GCash is unavailable.
             </Text>
           </View>
         ) : null}
@@ -49,15 +55,15 @@ export function MethodSelectionStep({
             style={[
               styles.methodIconBox,
               {
-                backgroundColor: isLofi ? colors.surface2 : "rgba(16, 185, 129, 0.15)",
-                borderColor: isLofi ? colors.success : "rgba(16, 185, 129, 0.2)",
+                backgroundColor: isLofi ? "#F0F7FF" : "rgba(98, 160, 234, 0.1)",
+                borderColor: isLofi ? "#DAEEFF" : "rgba(98, 160, 234, 0.2)",
               },
             ]}
           >
-            <Ionicons name="cash-outline" size={24} color={isLofi ? colors.success : "#34D399"} />
+            <Ionicons name="cash-outline" size={24} color={isLofi ? "#1A5FB4" : "#62A0EA"} />
           </View>
           <View style={styles.methodTextBox}>
-            <Text style={[styles.methodTitle, { color: isLofi ? colors.success : "#34D399" }]}>Cash Payment</Text>
+            <Text style={[styles.methodTitle, { color: colors.text }]}>Cash Payment</Text>
             <Text style={styles.methodDescription}>
               Collect physical cash from the commuter and record the transaction
             </Text>
@@ -81,15 +87,15 @@ export function MethodSelectionStep({
             style={[
               styles.methodIconBox,
               {
-                backgroundColor: isLofi ? colors.surface2 : "rgba(59, 130, 246, 0.15)",
-                borderColor: isLofi ? colors.primary : "rgba(59, 130, 246, 0.2)",
+                backgroundColor: isLofi ? "#F0F7FF" : "rgba(98, 160, 234, 0.1)",
+                borderColor: isLofi ? "#DAEEFF" : "rgba(98, 160, 234, 0.2)",
               },
             ]}
           >
-            <Ionicons name="phone-portrait-outline" size={24} color={isLofi ? colors.primary : "#60A5FA"} />
+            <Ionicons name="phone-portrait-outline" size={24} color={isLofi ? "#1A5FB4" : "#62A0EA"} />
           </View>
           <View style={styles.methodTextBox}>
-            <Text style={[styles.methodTitle, { color: isLofi ? colors.primary : "#60A5FA" }]}>GCash Payment</Text>
+            <Text style={[styles.methodTitle, { color: colors.text }]}>GCash Payment</Text>
             <Text style={styles.methodDescription}>
               {isOnline
                 ? "Digital payment via GCash — commuter scans QR to pay from their account"
@@ -99,42 +105,10 @@ export function MethodSelectionStep({
           <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>
 
-        {/* Voucher Option */}
-        <Pressable
-          disabled={!isOnline}
-          onPress={() => {
-            if (!isOnline) return;
-            onSelectMethod("Voucher");
-          }}
-          style={[
-            styles.methodOptionCard,
-            !isOnline ? { opacity: 0.5 } : null,
-          ]}
-        >
-          <View
-            style={[
-              styles.methodIconBox,
-              {
-                backgroundColor: isLofi ? colors.surface2 : "rgba(139, 92, 246, 0.15)",
-                borderColor: isLofi ? "#6D28D9" : "rgba(139, 92, 246, 0.2)",
-              },
-            ]}
-          >
-            <Ionicons name="ticket-outline" size={24} color={isLofi ? "#6D28D9" : "#A78BFA"} />
-          </View>
-          <View style={styles.methodTextBox}>
-              <Text style={[styles.methodTitle, { color: isLofi ? "#6D28D9" : "#A78BFA" }]}>Voucher</Text>
-            <Text style={styles.methodDescription}>
-                Enter a free-ride or discount voucher. Collect any remaining fare in cash.
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
-
         <Text style={styles.footerNoteText}>
           Both methods will be recorded in the shift transaction log for end-of-day remittance.
         </Text>
-      </View>
+      </ScrollView>
     </View>
   );
 }

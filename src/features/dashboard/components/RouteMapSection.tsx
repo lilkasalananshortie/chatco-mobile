@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
+import { Pressable, View } from "react-native";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
 import type { Announcement, HailRequest, Shift } from "../../../core/domain/types";
 import { LiveMap } from "../LiveMap";

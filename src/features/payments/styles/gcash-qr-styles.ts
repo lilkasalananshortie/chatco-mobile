@@ -85,20 +85,6 @@ export function createGcashQrStyles(colors: ReturnType<typeof useAppTheme>["colo
       fontSize: 10,
       color: isLofi ? colors.danger : "#FCA5A5",
     },
-    devSimulateButton: {
-      marginTop: 10,
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: isLofi ? 4 : 8,
-      borderWidth: isLofi ? 1.5 : 1,
-      borderColor: isLofi ? colors.warning : "rgba(245, 158, 11, 0.25)",
-      backgroundColor: isLofi ? colors.surface2 : "rgba(245, 158, 11, 0.1)",
-    },
-    devSimulateButtonText: {
-      fontSize: 10,
-      fontWeight: "600",
-      color: isLofi ? colors.warning : "#FBBF24",
-    },
     btnCancelGcash: {
       flex: 1,
       borderWidth: isLofi ? 1.5 : 1,

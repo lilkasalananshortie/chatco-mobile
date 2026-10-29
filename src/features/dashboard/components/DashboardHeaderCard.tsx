@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { useState } from "react";
+import { Image, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Text } from "../../../shared/ui/BrandText";
+import { ConductorIcon } from "../../../shared/ui/ConductorIcon";
 import type { Capacity, Shift } from "../../../core/domain/types";
-import type { TripCycleState, TripStats } from "../../../core/utils/trip-cycle-tracker";
 
 export interface DashboardHeaderCardProps {
   profilePictureUrl?: string | null;
@@ -17,255 +18,75 @@ export interface DashboardHeaderCardProps {
   capacity: Capacity;
   onUpdateCapacity: (cap: Capacity) => void;
   onOpenHistory: () => void;
+  onOpenActions?: () => void;
   totals: { total: number; cash: number; gcash: number; voucher?: number };
-  transactionTotals: { voucher: number };
   pendingOfflineCount: number;
-  tripCycleState?: TripCycleState | null;
-  currentTripStats?: TripStats;
-  onOpenTripLogbook?: () => void;
 }
 
-export function DashboardHeaderCard({
-  profilePictureUrl,
-  shift,
-  dashStyles,
-  colors,
-  isLofi,
-  canOperate,
-  isOnBreak,
-  breakPending,
-  onOpenBreakConfirm,
-  capacity,
-  onUpdateCapacity,
-  onOpenHistory,
-  totals,
-  transactionTotals,
-  pendingOfflineCount,
-  tripCycleState,
-  currentTripStats,
-  onOpenTripLogbook,
-}: DashboardHeaderCardProps) {
+const peso = (amount: number) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+
+/** Native translation of conductor/dashboard/mobile-dashboard-card.tsx. */
+export function DashboardHeaderCard({ profilePictureUrl, shift, dashStyles: s, isLofi, canOperate, isOnBreak, breakPending, onOpenBreakConfirm, capacity, onUpdateCapacity, onOpenHistory, onOpenActions, totals, pendingOfflineCount }: DashboardHeaderCardProps) {
   const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
-  return (
-    <View style={dashStyles.cardWrapper}>
-      {/* Top Unit & Conductor Row */}
-      <View style={dashStyles.topRow}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={dashStyles.unitTitle}>Unit: {shift.unitNumber}</Text>
-          <Text style={dashStyles.routeSubtitle} numberOfLines={1}>
-            {shift.route || "Regular Route"} · Driver: {shift.driverName}
-          </Text>
-        </View>
-        <View
-          style={[
-            dashStyles.avatarCircle,
-            isOnBreak ? dashStyles.avatarOnBreak : dashStyles.avatarOnDuty,
-          ]}
-        >
-          {profilePictureUrl && failedPhoto !== profilePictureUrl ? <Image source={{ uri: profilePictureUrl }} accessibilityLabel="Your profile photo" onError={() => setFailedPhoto(profilePictureUrl)} style={{ width: "100%", height: "100%", borderRadius: 999 }} /> : <Text style={dashStyles.avatarInitial}>
-            {(shift.conductorName || "C")[0]?.toUpperCase()}
-          </Text>}
-        </View>
+  const [expanded, setExpanded] = useState(true);
+  const text = isLofi ? "#111827" : "#FFFFFF";
+  const muted = isLofi ? "#6B7280" : "rgba(255,255,255,0.4)";
+  const status = isOnBreak ? "On Break" : capacity === "AVAILABLE" ? "Available" : capacity === "STANDING" ? "Standing" : "Full";
+
+  return <View style={s.cardWrapper}>
+    <View style={s.topRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={s.unitTitle}>Unit: {shift.unitNumber}</Text>
+        <Text numberOfLines={1} style={s.routeSubtitle}>{shift.route}</Text>
       </View>
-
-      {/* Full-width Take a Break / Resume Duty Button */}
-      <Pressable
-        disabled={!canOperate || breakPending}
-        onPress={onOpenBreakConfirm}
-        style={[
-          dashStyles.breakButton,
-          isOnBreak ? dashStyles.breakButtonOnBreak : dashStyles.breakButtonOnDuty,
-          (!canOperate || breakPending) && { opacity: 0.6 },
-        ]}
-      >
-        <Text
-          style={[
-            dashStyles.breakButtonText,
-            isOnBreak ? dashStyles.breakButtonTextOnBreak : dashStyles.breakButtonTextOnDuty,
-          ]}
-        >
-          {breakPending ? "Updating..." : isOnBreak ? "Resume Duty" : "Take a Break"}
-        </Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${shift.conductorName}, ${isOnBreak ? "on break" : "on duty"}. Open conductor actions`} onPress={onOpenActions} hitSlop={6} style={[s.avatarCircle, { backgroundColor: isOnBreak ? "#0EA5E9" : "#1A5FB4", borderColor: isOnBreak ? "#7DD3FC" : isLofi ? "#DAEEFF" : "rgba(255,255,255,0.2)" }]}>
+        {profilePictureUrl && failedPhoto !== profilePictureUrl
+          ? <Image source={{ uri: profilePictureUrl }} onError={() => setFailedPhoto(profilePictureUrl)} style={{ width: "100%", height: "100%" }} />
+          : <Ionicons name="person" size={16} color="#FFFFFF" />}
       </Pressable>
-
-      {isOnBreak ? (
-        <Text style={dashStyles.onBreakNotice}>
-          Pickup requests and live operations are paused while on break.
-        </Text>
-      ) : null}
-
-      {/* Status + History Row */}
-      <View style={dashStyles.statusHistoryRow}>
-        {/* Status Box with 3 Chips */}
-        <View style={dashStyles.statusBox}>
-          <View style={dashStyles.statusIndicatorRow}>
-            <View
-              style={[
-                dashStyles.statusDot,
-                {
-                  backgroundColor: isOnBreak
-                    ? "#38BDF8"
-                    : capacity === "AVAILABLE"
-                    ? "#34D399"
-                    : capacity === "STANDING"
-                    ? "#FBBF24"
-                    : "#F87171",
-                },
-              ]}
-            />
-            <Text style={dashStyles.statusHeaderLabel}>Status</Text>
-            <Text style={[dashStyles.statusCurrentValue, isOnBreak && { color: "#38BDF8" }]}>
-              {isOnBreak
-                ? "On Break"
-                : capacity === "AVAILABLE"
-                ? "Available"
-                : capacity === "STANDING"
-                ? "Standing"
-                : "Full"}
-            </Text>
+    </View>
+    {expanded ? <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 12 }}>
+      <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate || breakPending }} disabled={!canOperate || breakPending} onPress={onOpenBreakConfirm} style={[s.breakButton, (!canOperate || breakPending) && { opacity: 0.6 }]}>
+        <ConductorIcon name={isOnBreak ? "play" : "pause"} size={14} color={isLofi ? "#6B7280" : "rgba(255,255,255,0.6)"} strokeWidth={2.25} />
+        <Text style={s.breakButtonText}>{breakPending ? "Updating..." : isOnBreak ? "Resume Duty" : "Take a Break"}</Text>
+      </Pressable>
+      <View style={s.statusHistoryRow}>
+        <View style={s.statusBox}>
+          <View style={s.statusIndicatorRow}>
+            <View style={[s.statusDot, { backgroundColor: isOnBreak ? "#38BDF8" : capacity === "AVAILABLE" ? "#34D399" : capacity === "STANDING" ? "#FBBF24" : "#F87171" }]} />
+            <Text style={s.statusHeaderLabel}>Status</Text>
+            <Text style={[s.statusCurrentValue, isOnBreak && { color: isLofi ? "#0369A1" : "#7DD3FC" }]}>{status}</Text>
           </View>
-          <View style={dashStyles.chipsRow}>
-            {(["AVAILABLE", "STANDING", "FULL"] as Capacity[]).map((val) => {
-              const active = capacity === val && !isOnBreak;
-              return (
-                <Pressable
-                  key={val}
-                  disabled={isOnBreak || !canOperate}
-                  onPress={() => onUpdateCapacity(val)}
-                  style={[
-                    dashStyles.chip,
-                    active && val === "AVAILABLE" && dashStyles.chipAvailable,
-                    active && val === "STANDING" && dashStyles.chipStanding,
-                    active && val === "FULL" && dashStyles.chipFull,
-                    (isOnBreak || !canOperate) && { opacity: 0.4 },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      dashStyles.chipText,
-                      active && val === "AVAILABLE" && { color: colors.success },
-                      active && val === "STANDING" && { color: colors.warning },
-                      active && val === "FULL" && { color: colors.text },
-                    ]}
-                  >
-                    {val === "AVAILABLE" ? "Available" : val === "STANDING" ? "Standing" : "Full"}
-                  </Text>
-                </Pressable>
-              );
+          <View style={s.chipsRow}>
+            {(["AVAILABLE", "STANDING", "FULL"] as Capacity[]).map((value) => {
+              const selected = capacity === value;
+              return <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected, disabled: isOnBreak || !canOperate }} disabled={isOnBreak || !canOperate} onPress={() => onUpdateCapacity(value)} style={[s.chip, selected && s.chipSelected, (isOnBreak || !canOperate) && { opacity: 0.4 }]}>
+                <Text style={[s.chipText, selected && { color: "#FFFFFF" }]}>{value === "AVAILABLE" ? "Available" : value === "STANDING" ? "Standing" : "Full"}</Text>
+              </Pressable>;
             })}
           </View>
         </View>
-
-        {/* History Button */}
-        <Pressable onPress={onOpenHistory} style={dashStyles.historyButton}>
-          <Ionicons name="time-outline" size={16} color={colors.text} />
-          <Text style={dashStyles.historyButtonText}>History</Text>
+        <Pressable accessibilityRole="button" onPress={onOpenHistory} style={s.historyButton}>
+          <ConductorIcon name="history" size={14} color={isLofi ? "#374151" : "rgba(255,255,255,0.7)"} strokeWidth={1.5} />
+          <Text style={s.historyButtonText}>History</Text>
         </Pressable>
       </View>
-
-      {/* Total Collected Card with 3 columns */}
-      <View style={dashStyles.totalCollectedCard}>
-        <View style={dashStyles.totalCollectedTop}>
-          <Text style={dashStyles.totalCollectedLabel}>Total Collected</Text>
-          <Text style={dashStyles.totalCollectedAmount}>{`₱${totals.total.toFixed(2)}`}</Text>
+      <View style={s.totalCollectedCard}>
+        <View style={s.totalCollectedTop}>
+          <Text style={s.totalCollectedLabel}>Total Collected</Text>
+          <Text style={s.totalCollectedAmount}>{peso(totals.total)}</Text>
         </View>
-        <View style={dashStyles.threeCols}>
-          <View style={dashStyles.colCard}>
-            <Text style={dashStyles.colLabelBlue}>GCash</Text>
-            <Text style={dashStyles.colValueBlue}>{`₱${totals.gcash.toFixed(2)}`}</Text>
-          </View>
-          <View style={dashStyles.colCard}>
-            <Text style={dashStyles.colLabelEmerald}>Cash</Text>
-            <Text style={dashStyles.colValueEmerald}>{`₱${totals.cash.toFixed(2)}`}</Text>
-          </View>
-          <View style={dashStyles.colCard}>
-            <Text style={dashStyles.colLabelAmber}>Voucher</Text>
-            <Text style={dashStyles.colValueAmber}>{`₱${(transactionTotals.voucher ?? 0).toFixed(2)}`}</Text>
-          </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {[{ label: "GCash", value: totals.gcash }, { label: "Cash", value: totals.cash }].map(item => <View key={item.label} style={s.colCard}>
+            <Text style={s.colLabel}>{item.label}</Text>
+            <Text style={s.colValue}>{peso(item.value)}</Text>
+          </View>)}
         </View>
       </View>
-
-      {/* Trip Cycle Counter & Turnaround HUD Bar */}
-      {tripCycleState ? (
-        <Pressable
-          onPress={onOpenTripLogbook}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: isLofi ? colors.surface2 : "rgba(30, 41, 59, 0.7)",
-            borderWidth: 1,
-            borderColor: isLofi ? colors.border : "rgba(148, 163, 184, 0.2)",
-            borderRadius: 10,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            marginTop: 10,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            <View
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                backgroundColor: isLofi ? colors.surface : "rgba(15, 23, 42, 0.8)",
-                borderWidth: 1,
-                borderColor: isLofi ? colors.border : "rgba(56, 189, 248, 0.3)",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="repeat" size={18} color={isLofi ? colors.primaryLight : "#38BDF8"} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>
-                  Trip #{tripCycleState.activeTrip.tripNumber}
-                </Text>
-                <View
-                  style={{
-                    backgroundColor: isLofi ? colors.surface : "rgba(56, 189, 248, 0.15)",
-                    paddingHorizontal: 5,
-                    paddingVertical: 1,
-                    borderRadius: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: "800",
-                      color: isLofi ? colors.primaryLight : "#38BDF8",
-                      textTransform: "uppercase",
-                      letterSpacing: 0.3,
-                    }}
-                  >
-                    {tripCycleState.activeTrip.direction === "SOUTHBOUND" ? "SB (to Meyc)" : "NB (to Clmp)"}
-                  </Text>
-                </View>
-              </View>
-              <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
-                {currentTripStats ? `${currentTripStats.paxCount} pax · ₱${currentTripStats.revenue.toFixed(0)} (${currentTripStats.durationMinutes}m elapsed)` : "Ready for passengers"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: "800", color: isLofi ? colors.primaryLight : "#38BDF8", textTransform: "uppercase", letterSpacing: 0.4 }}>
-              Logbook
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.muted} />
-          </View>
-        </Pressable>
-      ) : null}
-
-      {pendingOfflineCount > 0 ? (
-        <View style={dashStyles.syncPendingBox}>
-          <Ionicons name="cloud-upload-outline" size={14} color={isLofi ? "#D97706" : "#FBBF24"} />
-          <Text style={dashStyles.syncPendingText}>
-            {pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
+      {pendingOfflineCount > 0 ? <Text style={{ color: muted, fontSize: 10 }}>{pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync</Text> : null}
+    </View> : null}
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded }} accessibilityLabel={expanded ? "Collapse dashboard card" : "Expand dashboard card"} onPress={() => setExpanded(value => !value)} style={s.collapseButton}>
+      <ConductorIcon name={expanded ? "down" : "up"} size={16} color={isLofi ? "#9CA3AF" : "rgba(255,255,255,0.3)"} strokeWidth={2} />
+    </Pressable>
+  </View>;
 }

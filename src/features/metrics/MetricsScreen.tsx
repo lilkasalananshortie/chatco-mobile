@@ -1,237 +1,189 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../core/api/chatco-api";
+import { Text } from "../../shared/ui/BrandText";
 import { Header, ScreenShell } from "../../shared/ui";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { Rating, Shift } from "../../core/domain/types";
 
-function getGaugeColor(pct: number): string {
-  if (pct >= 90) return "#34D399";
-  if (pct >= 75) return "#62A0EA";
-  if (pct >= 50) return "#FBBF24";
-  return "#F87171";
-}
-
 function StarRating({ score, size = 16 }: { score: number; size?: number }) {
   const { colors, isLofi } = useAppTheme();
-  const rounded = Math.round(score);
   return (
     <View style={{ flexDirection: "row", gap: 2 }}>
       {[1, 2, 3, 4, 5].map((i) => (
-        <Ionicons
-          key={i}
-          name={i <= rounded ? "star" : "star-outline"}
-          size={size}
-          color={i <= rounded ? (isLofi ? colors.warning : "#FBBF24") : (isLofi ? colors.border : "rgba(255,255,255,0.2)")}
-        />
+        <View key={i} style={{ width: size, height: size }}>
+          <Ionicons name="star-outline" size={size} color={isLofi ? colors.border : "rgba(255,255,255,0.2)"} />
+          <View style={{ position: "absolute", left: 0, top: 0, width: `${Math.min(1, Math.max(0, score - i + 1)) * 100}%`, height: size, overflow: "hidden" }}>
+            <Ionicons name="star" size={size} color="#FBBF24" />
+          </View>
+        </View>
       ))}
     </View>
   );
 }
 
-export function MetricsScreen({ shift, onBack }: { shift?: Shift | null; onBack?: () => void }) {
+export function MetricsScreen({ onBack }: { shift?: Shift | null; onBack?: () => void }) {
   const { colors, isLofi, styles } = useAppTheme();
-  const [ratings, setRatings] = useState<Rating[]>([]);
+  const { width } = useWindowDimensions();
+  const wide = width >= 600;
+  const [summary, setSummary] = useState<Awaited<ReturnType<typeof api.ratingsSummary>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [scope, setScope] = useState<"all_time" | "shift">("all_time");
-  const [summary, setSummary] = useState<Awaited<ReturnType<typeof api.ratingsSummary>> | null>(null);
   const requestVersion = useRef(0);
 
-  const loadRatings = async () => {
+  const loadRatings = useCallback(async () => {
     const version = ++requestVersion.current;
     setLoading(true);
     setError("");
     try {
-      if (scope === "all_time") {
-        const data = await api.ratingsSummary();
-        if (version === requestVersion.current) { setSummary(data); setRatings([]); }
-      } else if (shift?.shiftId) {
-        const data = await api.ratings(shift.shiftId);
-        if (version === requestVersion.current) { setSummary(null); setRatings(data); }
-      }
+      const data = await api.ratingsSummary();
+      if (version === requestVersion.current) setSummary(data);
     } catch (e) {
       if (version === requestVersion.current) setError(e instanceof Error ? e.message : "Unable to load ratings.");
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadRatings();
     return () => { requestVersion.current++; };
-  }, [shift?.shiftId, scope]);
-
-  const metrics = useMemo(() => {
-    if (scope === "all_time" && summary) return summary;
-    const average = (items: Rating[]) =>
-      items.length ? Math.round((items.reduce((s, r) => s + r.score, 0) / items.length) * 10) / 10 : 0;
-    const conductor = ratings.filter((r) => r.targetRole === "CONDUCTOR");
-    const driver = ratings.filter((r) => r.targetRole === "DRIVER");
-    const distribution = [1, 2, 3, 4, 5].map(
-      (score) => ratings.filter((r) => r.score === score).length
-    );
-    const satisfied = ratings.filter((r) => r.score >= 4).length;
-    const satisfaction = ratings.length ? Math.round((satisfied / ratings.length) * 100) : 0;
-
-    return {
-      total: ratings.length,
-      satisfaction,
-      average: average(ratings),
-      conductorAverage: average(conductor),
-      driverAverage: average(driver),
-      conductorCount: conductor.length,
-      driverCount: driver.length,
-      distribution,
-    };
-  }, [ratings, scope, summary]);
-
-  const satisfactionColor = getGaugeColor(metrics.satisfaction);
-  const maxDistributionCount = Math.max(...metrics.distribution, 1);
+  }, [loadRatings]);
+  const metricCount = summary?.total ?? 0;
+  const ratings: Rating[] = [];
+  const metrics = {
+    total: metricCount,
+    satisfaction: summary?.satisfaction ?? 0,
+    average: summary?.average ?? 0,
+    conductorAverage: summary?.conductorAverage ?? 0,
+    conductorCount: summary?.conductorCount ?? 0,
+    driverAverage: summary?.driverAverage ?? 0,
+    driverCount: summary?.driverCount ?? 0,
+    distribution: summary?.distribution ?? [0, 0, 0, 0, 0],
+  };
+  const satisfactionColor = isLofi ? colors.primary : "#62A0EA";
+  const cardStyle = {
+    backgroundColor: isLofi ? colors.surface : "rgba(255,255,255,0.03)",
+    borderColor: colors.border,
+    borderWidth: 1,
+  } as const;
 
   return (
     <ScreenShell>
-      <Header title="Performance Metrics" subtitle={scope === "all_time" ? "All-time ratings overview" : "Current shift ratings"} />
+      <Header title="Performance Metrics" subtitle="Commuter ratings across all your shifts" />
       {onBack && <Pressable accessibilityRole="button" onPress={onBack} style={styles.secondaryButton}><Text style={styles.subtitle}>Back to verification</Text></Pressable>}
-      <View style={{ flexDirection: "row", gap: 12, marginVertical: 12 }}>
-        <Pressable accessibilityRole="button" accessibilityState={{ selected: scope === "all_time" }} onPress={() => setScope("all_time")}><Text style={{ color: scope === "all_time" ? colors.primaryLight : colors.muted }}>All time</Text></Pressable>
-        {shift && <Pressable accessibilityRole="button" accessibilityState={{ selected: scope === "shift" }} onPress={() => setScope("shift")}><Text style={{ color: scope === "shift" ? colors.primaryLight : colors.muted }}>Current shift</Text></Pressable>}
-        <Pressable accessibilityRole="button" accessibilityLabel="Refresh ratings" disabled={loading} onPress={() => void loadRatings()} style={{ marginLeft: "auto" }}><Text style={{ color: colors.primaryLight }}>{loading ? "Loading…" : "Refresh"}</Text></Pressable>
-      </View>
+      <Text style={{ color: colors.primaryLight, fontSize: 12, fontWeight: "600", marginTop: -2, marginBottom: 20 }}>All time</Text>
 
       {loading ? (
-        <View style={{ paddingVertical: 48, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={colors.primaryLight} />
-          <Text style={[styles.subtitle, { marginTop: 12 }]}>Loading performance data…</Text>
+        <View accessibilityRole="progressbar" accessibilityLabel="Loading ratings" style={[cardStyle, { borderRadius: 12, overflow: "hidden" }]}>
+          <View style={{ flexDirection: wide ? "row" : "column" }}>
+            <View style={{ flex: 1, padding: 22, gap: 18 }}>
+              {[28, 110, 70, 1, 80, 80].map((item, index) => <View key={index} style={{ width: item === 1 ? "100%" : item, height: item === 1 ? 1 : 14, borderRadius: 6, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.06)" }} />)}
+            </View>
+            <View style={{ flex: 1, padding: 22, gap: 17, borderTopWidth: wide ? 0 : 1, borderLeftWidth: wide ? 1 : 0, borderColor: colors.border }}>
+              {[1, 2, 3, 4, 5].map((row) => <View key={row} style={{ height: 12, borderRadius: 6, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.06)" }} />)}
+            </View>
+          </View>
+          <View style={{ height: 112, borderTopWidth: 1, borderColor: colors.border }} />
         </View>
       ) : error ? (
-        <View style={[styles.card, { borderColor: isLofi ? colors.danger : "rgba(239, 68, 68, 0.3)", backgroundColor: isLofi ? "#FEE2E2" : "rgba(239, 68, 68, 0.08)", alignItems: "center", paddingVertical: 24 }]}>
-          <Text style={[styles.error, { marginTop: 0 }]}>{error}</Text>
-            <Pressable
-              style={[styles.button, styles.secondaryButton, { marginTop: 14 }]}
-              onPress={() => void loadRatings()}
-            >
-              <Text style={[styles.buttonText, styles.secondaryButtonText]}>Retry</Text>
-            </Pressable>
+        <View accessibilityRole="alert" style={[cardStyle, { borderColor: isLofi ? "#FECACA" : "rgba(248,113,113,0.2)", backgroundColor: isLofi ? "#FEF2F2" : "rgba(248,113,113,0.05)", borderRadius: 12, padding: 22 }]}>
+          <Text style={[styles.cardTitle, { fontSize: 14 }]}>Ratings unavailable</Text>
+          <Text style={[styles.subtitle, { marginTop: 8 }]}>{error}</Text>
+          <Pressable accessibilityRole="button" onPress={() => void loadRatings()} style={[styles.button, { alignSelf: "flex-start", paddingHorizontal: 18, minHeight: 44 }]}>
+            <Text style={styles.buttonText}>Try again</Text>
+          </Pressable>
         </View>
-      ) : scope === "shift" && !shift ? (
-        /* No active shift state */
-        <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24 }}>
-          <View style={{ width: 72, height: 72, borderRadius: isLofi ? 4 : 36, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-            <Ionicons name="time-outline" size={36} color={colors.muted} />
-          </View>
-          <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 6 }]}>No active shift</Text>
-          <Text style={[styles.subtitle, { textAlign: "center", maxWidth: 280 }]}>
-            Start a shift from the dashboard to view your performance metrics.
-          </Text>
-        </View>
-      ) : metrics.total === 0 ? (
-        /* Empty state: Shift active but no ratings submitted yet */
-        <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24 }}>
-          <View style={{ width: 72, height: 72, borderRadius: isLofi ? 4 : 36, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-            <Ionicons name="star-outline" size={36} color={colors.muted} />
-          </View>
-          <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 6 }]}>{scope === "all_time" ? "No ratings yet" : "No ratings yet for this shift"}</Text>
-          <Text style={[styles.subtitle, { textAlign: "center", maxWidth: 280 }]}>
-            Ratings from commuters will appear here once they submit feedback.
+      ) : metricCount === 0 ? (
+        <View style={[cardStyle, { borderRadius: 12, alignItems: "center", paddingHorizontal: 24, paddingVertical: 48 }]}>
+          <Ionicons name="star-outline" size={32} color={isLofi ? colors.primary : "rgba(98,160,234,0.7)"} />
+          <Text style={[styles.cardTitle, { fontSize: 16, marginTop: 18 }]}>No ratings yet</Text>
+          <Text style={[styles.subtitle, { textAlign: "center", maxWidth: 300, marginTop: 8 }]}>
+            Your ratings will appear here when commuters submit feedback.
           </Text>
         </View>
       ) : (
         /* Full metrics overview */
-        <>
-          {/* Main Satisfaction block */}
-          <View style={[styles.card, { alignItems: "center", paddingVertical: 24 }]}>
-            <Text style={{ color: satisfactionColor, fontSize: 52, fontWeight: "900", lineHeight: 56 }}>
-              {metrics.satisfaction}%
+        <View style={[cardStyle, { borderRadius: 12, overflow: "hidden" }]}>
+          <View style={{ flexDirection: wide ? "row" : "column" }}>
+          {/* Combined rating and breakdown */}
+          <View style={{ flex: wide ? 0.9 : undefined, minWidth: 0, alignItems: "flex-start", padding: wide ? 24 : 20 }}>
+            <Text style={[styles.subtitle, { fontSize: 14, fontWeight: "500" }]}>Combined rating</Text>
+            <Text style={{ color: colors.text, fontSize: 52, fontWeight: "600", lineHeight: 58 }}>
+              {metrics.average.toFixed(1)}
             </Text>
-            <Text style={[styles.label, { marginTop: 6, letterSpacing: 1.5 }]}>SATISFACTION</Text>
+            <Text style={[styles.subtitle, { fontSize: 14 }]}>/ 5</Text>
+            <View style={{ marginTop: 12 }}><StarRating score={metrics.average} /></View>
+            <Text style={[styles.subtitle, { marginTop: 10 }]}>Driver and conductor scores combined</Text>
 
-            <View style={{ flexDirection: "row", gap: 12, width: "100%", marginTop: 20 }}>
-              <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: isLofi ? 3 : 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: "center", borderWidth: isLofi ? 1.5 : 1, borderColor: colors.border }}>
-                <Text style={{ fontSize: 18 }}>⭐</Text>
-                <Text style={{ color: colors.text, fontSize: 18, fontWeight: "800", marginTop: 4 }}>
-                  {metrics.average.toFixed(1)}
+            <View style={{ flexDirection: "row", gap: 20, width: "100%", marginTop: 22, paddingTop: 16, borderTopWidth: 1, borderColor: colors.border }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontSize: 20, fontWeight: "600", marginTop: 6 }}>
+                  {metrics.total.toLocaleString()}
                 </Text>
-                <Text style={[styles.label, { fontSize: 9, marginTop: 2 }]}>Avg Rating</Text>
+                <Text style={[styles.subtitle, { fontSize: 12, marginTop: 2 }]}>Total ratings</Text>
               </View>
-              <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: isLofi ? 3 : 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: "center", borderWidth: isLofi ? 1.5 : 1, borderColor: colors.border }}>
-                <Text style={{ fontSize: 18 }}>👥</Text>
-                <Text style={{ color: colors.text, fontSize: 18, fontWeight: "800", marginTop: 4 }}>
-                  {metrics.total}
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: satisfactionColor, fontSize: 20, fontWeight: "600", marginTop: 6 }}>
+                  {metrics.satisfaction}%
                 </Text>
-                <Text style={[styles.label, { fontSize: 9, marginTop: 2 }]}>Total Ratings</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Dual Performance cards */}
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <View style={[styles.card, { flex: 1, padding: 14 }]}>
-              <Text style={[styles.cardTitle, { fontSize: 13 }]}>Your Performance</Text>
-              <Text style={[styles.subtitle, { fontSize: 11, marginTop: 2 }]}>Conductor</Text>
-              <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-                <View>
-                  <Text style={{ color: isLofi ? colors.primary : "#62A0EA", fontSize: 32, fontWeight: "900", lineHeight: 34 }}>
-                    {metrics.conductorAverage > 0 ? metrics.conductorAverage.toFixed(1) : "—"}
-                  </Text>
-                  <Text style={[styles.subtitle, { fontSize: 10, marginTop: 4 }]}>
-                    {metrics.conductorCount} {metrics.conductorCount === 1 ? "rating" : "ratings"}
-                  </Text>
-                </View>
-                {metrics.conductorAverage > 0 ? (
-                  <StarRating score={metrics.conductorAverage} size={14} />
-                ) : null}
-              </View>
-            </View>
-
-            <View style={[styles.card, { flex: 1, padding: 14 }]}>
-              <Text style={[styles.cardTitle, { fontSize: 13 }]}>Driver's Performance</Text>
-              <Text style={[styles.subtitle, { fontSize: 11, marginTop: 2 }]} numberOfLines={1}>
-                {scope === "all_time" ? "Drivers across your shifts" : shift?.driverName || "Assigned Driver"}
-              </Text>
-              <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-                <View>
-                  <Text style={{ color: isLofi ? colors.primaryLight : "#A78BFA", fontSize: 32, fontWeight: "900", lineHeight: 34 }}>
-                    {metrics.driverAverage > 0 ? metrics.driverAverage.toFixed(1) : "—"}
-                  </Text>
-                  <Text style={[styles.subtitle, { fontSize: 10, marginTop: 4 }]}>
-                    {metrics.driverCount} {metrics.driverCount === 1 ? "rating" : "ratings"}
-                  </Text>
-                </View>
-                {metrics.driverAverage > 0 ? (
-                  <StarRating score={metrics.driverAverage} size={14} />
-                ) : null}
+                <Text style={[styles.subtitle, { fontSize: 12, marginTop: 2 }]}>Rated 4 or 5 stars</Text>
               </View>
             </View>
           </View>
 
           {/* Rating Distribution */}
-          <View style={styles.card}>
-            <Text style={[styles.label, { marginBottom: 14 }]}>Rating Distribution</Text>
-            <View style={{ gap: 10 }}>
+          <View style={{ flex: wide ? 1.1 : undefined, minWidth: 0, borderTopWidth: wide ? 0 : 1, borderLeftWidth: wide ? 1 : 0, borderColor: colors.border, padding: wide ? 24 : 20 }}>
+            <Text style={[styles.cardTitle, { fontSize: 14 }]}>Rating breakdown</Text>
+            <Text style={[styles.subtitle, { fontSize: 12, marginTop: 4, marginBottom: 20 }]}>All driver and conductor scores</Text>
+            <View style={{ gap: 16 }}>
               {[5, 4, 3, 2, 1].map((star) => {
                 const count = metrics.distribution[star - 1] ?? 0;
                 const pct = metrics.total ? Math.round((count / metrics.total) * 100) : 0;
-                const barWidth = (count / maxDistributionCount) * 100;
+                const barWidth = metrics.total ? (count / metrics.total) * 100 : 0;
 
                 return (
                   <View key={star} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", width: 34, gap: 3 }}>
-                      <Text style={{ color: colors.text, fontSize: 13, fontWeight: "600" }}>{star}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", width: 28, gap: 4 }}>
+                      <Text style={{ color: colors.text, fontSize: 12, fontWeight: "500" }}>{star}</Text>
                       <Ionicons name="star" size={12} color={isLofi ? colors.warning : "#FBBF24"} />
                     </View>
                     <View style={{ flex: 1, height: 8, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.06)", borderRadius: isLofi ? 2 : 999, overflow: "hidden" }}>
                       <View style={{ width: `${barWidth}%`, height: "100%", backgroundColor: colors.primary, borderRadius: isLofi ? 2 : 999 }} />
                     </View>
-                    <View style={{ width: 62, alignItems: "flex-end" }}>
-                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "500" }}>
-                        {count} <Text style={{ color: colors.muted, fontSize: 10 }}>({pct}%)</Text>
-                      </Text>
-                    </View>
+                    <Text style={{ width: 32, textAlign: "right", color: colors.text, fontSize: 12, fontVariant: ["tabular-nums"] }}>{count.toLocaleString()}</Text>
+                    <Text style={{ width: 34, textAlign: "right", color: colors.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{pct}%</Text>
                   </View>
                 );
               })}
+            </View>
+          </View>
+          </View>
+
+          {/* Role-specific scores follow the combined breakdown, like web. */}
+          <View style={{ flexDirection: wide ? "row" : "column", borderTopWidth: 1, borderColor: colors.border }}>
+            <View style={{ flex: 1, minWidth: 0, padding: wide ? 24 : 20, borderBottomWidth: wide ? 0 : 1, borderColor: colors.border }}>
+              <Text style={[styles.cardTitle, { fontSize: 14 }]}>Your rating</Text>
+              <Text style={[styles.subtitle, { fontSize: 12, marginTop: 4 }]}>Your conductor scores across all shifts</Text>
+              <View style={{ marginTop: 16, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+                  <Text style={{ color: isLofi ? colors.primary : "#62A0EA", fontSize: 30, fontWeight: "600" }}>{metrics.conductorCount > 0 ? metrics.conductorAverage.toFixed(1) : "—"}</Text>
+                  <Text style={[styles.subtitle, { fontSize: 12 }]}>/ 5</Text>
+                </View>
+                <Text style={[styles.subtitle, { fontSize: 12 }]}>{metrics.conductorCount.toLocaleString()} {metrics.conductorCount === 1 ? "rating" : "ratings"}</Text>
+              </View>
+            </View>
+            <View style={{ flex: 1, minWidth: 0, padding: wide ? 24 : 20, borderLeftWidth: wide ? 1 : 0, borderColor: colors.border }}>
+              <Text style={[styles.cardTitle, { fontSize: 14 }]}>Driver ratings</Text>
+              <Text style={[styles.subtitle, { fontSize: 12, marginTop: 4 }]}>Driver scores from the shifts you crewed</Text>
+              <View style={{ marginTop: 16, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+                  <Text style={{ color: isLofi ? colors.primary : "#62A0EA", fontSize: 30, fontWeight: "600" }}>{metrics.driverCount > 0 ? metrics.driverAverage.toFixed(1) : "—"}</Text>
+                  <Text style={[styles.subtitle, { fontSize: 12 }]}>/ 5</Text>
+                </View>
+                <Text style={[styles.subtitle, { fontSize: 12 }]}>{metrics.driverCount.toLocaleString()} {metrics.driverCount === 1 ? "rating" : "ratings"}</Text>
+              </View>
             </View>
           </View>
 
@@ -258,7 +210,7 @@ export function MetricsScreen({ shift, onBack }: { shift?: Shift | null; onBack?
                 ))}
             </>
           ) : null}
-        </>
+        </View>
       )}
     </ScreenShell>
   );

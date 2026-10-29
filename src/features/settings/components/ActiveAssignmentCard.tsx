@@ -1,6 +1,7 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Text } from "../../../shared/ui/BrandText";
 import type { Shift } from "../../../core/domain/types";
 
 export interface ActiveAssignmentCardProps {
@@ -28,10 +29,6 @@ export function ActiveAssignmentCard({
           <View style={styles.infoRow}>
             <Text style={styles.rowLabel}>Assigned Driver</Text>
             <Text style={styles.rowValue}>{shift.driverName}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.rowLabel}>Route</Text>
-            <Text style={styles.rowValue}>{shift.route || "Regular Route"}</Text>
           </View>
         </View>
       ) : (

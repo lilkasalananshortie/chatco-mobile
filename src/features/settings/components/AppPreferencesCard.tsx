@@ -1,22 +1,21 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
+import { Pressable, View } from "react-native";
 
 export interface AppPreferencesCardProps {
   styles: any;
-  colors: any;
-  isLofi: boolean;
-  setLofi: (lofi: boolean) => void;
   scanSound: boolean;
   onToggleScanSound: () => void;
+  isLofi: boolean;
+  onToggleLofi: () => void;
 }
 
 export function AppPreferencesCard({
   styles,
-  colors,
-  isLofi,
-  setLofi,
   scanSound,
   onToggleScanSound,
+  isLofi,
+  onToggleLofi,
 }: AppPreferencesCardProps) {
   return (
     <View style={styles.sectionCard}>
@@ -40,20 +39,16 @@ export function AppPreferencesCard({
         </Pressable>
       </View>
 
-      {/* Lo-Fi Mode */}
-      <View style={[styles.infoRow, { paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border }]}>
+      <View style={[styles.infoRow, { marginTop: 8, paddingVertical: 10 }]}>
         <View style={{ flex: 1, paddingRight: 10 }}>
-          <Text style={styles.prefTitle}>Lo-Fi Mode</Text>
-          <Text style={styles.prefSubtitle}>
-            {isLofi
-              ? "Active: High-contrast theme for outdoor daylight & battery"
-              : "Low-distraction visual system for battery & sunlight"}
-          </Text>
+          <Text style={styles.prefTitle}>Lofi mode</Text>
+          <Text style={styles.prefSubtitle}>Use the light color palette across the app</Text>
         </View>
         <Pressable
           accessibilityRole="switch"
+          accessibilityLabel="Lofi mode"
           accessibilityState={{ checked: isLofi }}
-          onPress={() => setLofi(!isLofi)}
+          onPress={onToggleLofi}
           style={[styles.toggleTrack, isLofi ? styles.toggleTrackActive : styles.toggleTrackInactive]}
         >
           <View style={[styles.toggleThumb, isLofi ? styles.toggleThumbActive : styles.toggleThumbInactive]} />

@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Text } from "./BrandText";
+import { ConductorIcon } from "./ConductorIcon";
 import {
   ActivityIndicator,
   Modal,
@@ -6,7 +8,6 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -57,8 +58,8 @@ export function ModalShell({ visible, title, children, onClose }: {
         <SafeAreaView style={[local.sheet, {
           backgroundColor: colors.surface,
           borderColor: colors.border,
-          borderTopLeftRadius: isLofi ? 0 : 26,
-          borderTopRightRadius: isLofi ? 0 : 26,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
         }]}>
           <View style={[local.sheetHeader, { borderColor: colors.border }]}>
             <Text style={[styles.cardTitle, { fontSize: 18 }]}>{title}</Text>
@@ -75,11 +76,11 @@ export function ModalShell({ visible, title, children, onClose }: {
   );
 }
 
-const tabs: { id: Screen; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "home", label: "Home", icon: "home-outline" },
-  { id: "report", label: "Report", icon: "document-text-outline" },
-  { id: "metrics", label: "Metrics", icon: "stats-chart-outline" },
-  { id: "settings", label: "Settings", icon: "settings-outline" },
+const tabs: { id: Screen; label: string; icon: "home" | "file" | "chart" | "settings" }[] = [
+  { id: "home", label: "Home", icon: "home" },
+  { id: "report", label: "Report", icon: "file" },
+  { id: "metrics", label: "Metrics", icon: "chart" },
+  { id: "settings", label: "Settings", icon: "settings" },
 ];
 
 export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = false }: {
@@ -87,7 +88,7 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
 }) {
   const { colors, isLofi } = useAppTheme();
   return (
-    <SafeAreaView style={[local.navSafe, { backgroundColor: colors.surface }]}>
+    <SafeAreaView style={[local.navSafe, { backgroundColor: isLofi ? "rgba(255,255,255,0.9)" : "rgba(11,30,51,0.9)" }]}>
       <View style={[local.nav, { borderColor: colors.border }]}>
         {tabs.slice(0, 2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
         <Pressable
@@ -97,12 +98,12 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
         >
           <View style={[local.payButton, {
             backgroundColor: isPaymentDisabled ? colors.surface2 : colors.primary,
-            borderColor: colors.surface,
-            borderRadius: isLofi ? 2 : 27,
+            borderColor: isLofi ? "#FFFFFF" : "#0B1E33",
+            borderRadius: 30,
           }]}>
-            <Ionicons
-              name="wallet-outline"
-              size={24}
+            <ConductorIcon
+              name="cash"
+              size={20}
               color={isPaymentDisabled ? colors.muted : "#fff"}
             />
           </View>
@@ -117,18 +118,18 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
 }
 
 function NavItem({ label, icon, active, onPress }: {
-  label: string; icon: keyof typeof Ionicons.glyphMap; active: boolean; onPress: () => void;
+  label: string; icon: "home" | "file" | "chart" | "settings"; active: boolean; onPress: () => void;
 }) {
   const { colors, isLofi } = useAppTheme();
   return (
     <Pressable style={local.navItem} onPress={onPress} accessibilityLabel={label}>
       <View style={[local.navIcon, {
         backgroundColor: active ? colors.primary : "transparent",
-        borderRadius: isLofi ? 2 : 12,
+        borderRadius: 18,
       }]}>
-        <Ionicons name={icon} size={19} color={active ? "#fff" : colors.muted} />
+        <ConductorIcon name={icon} size={17} color={active ? "#FFFFFF" : isLofi ? "#9CA3AF" : "rgba(255,255,255,0.4)"} />
       </View>
-      <Text style={[local.navLabel, { color: active ? colors.text : colors.muted }]}>{label}</Text>
+      <Text style={[local.navLabel, { color: active ? isLofi ? "#1A5FB4" : "#FFFFFF" : isLofi ? "#9CA3AF" : "rgba(255,255,255,0.3)" }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -140,10 +141,10 @@ const local = StyleSheet.create({
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 19, borderBottomWidth: 1 },
   close: { fontSize: 20, paddingHorizontal: 8, paddingVertical: 4 },
   navSafe: { position: "absolute", bottom: 0, left: 0, right: 0 },
-  nav: { height: 78, borderTopWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-around" },
-  navItem: { width: 62, alignItems: "center" },
+  nav: { height: 64, paddingHorizontal: 16, paddingVertical: 4, borderTopWidth: 1, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-around" },
+  navItem: { flex: 1, alignItems: "center", paddingVertical: 4 },
   navIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  navLabel: { fontSize: 9, marginTop: 3, fontWeight: "700" },
-  payWrap: { alignItems: "center", marginTop: -28 },
-  payButton: { width: 56, height: 56, borderWidth: 4, alignItems: "center", justifyContent: "center" },
+  navLabel: { fontSize: 10, lineHeight: 10, marginTop: 2, fontWeight: "500" },
+  payWrap: { flex: 1, alignItems: "center", marginTop: -28, marginBottom: 2 },
+  payButton: { width: 60, height: 60, borderWidth: 4, alignItems: "center", justifyContent: "center" },
 });

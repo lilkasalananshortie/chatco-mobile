@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Pressable, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Text } from "../../shared/ui/BrandText";
 import { api } from "../../core/api/chatco-api";
 import { appStorage } from "../../core/storage/app-storage";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
@@ -7,23 +9,20 @@ import { ScreenShell } from "../../shared/ui";
 import { SosConfirmModal } from "../../shared/ui/SosConfirmModal";
 import type { ConductorProfile, Remittance, Shift, Transaction, User } from "../../core/domain/types";
 import { createSettingsStyles } from "./settings-styles";
-import { ProfileCard } from "./components/ProfileCard";
+import { PersonalDetailsCard, ProfileCard } from "./components/ProfileCard";
 import { ActiveAssignmentCard } from "./components/ActiveAssignmentCard";
-import { ShiftOptionsCard } from "./components/ShiftOptionsCard";
 import { AppPreferencesCard } from "./components/AppPreferencesCard";
 import { BluetoothPrinterCard } from "./components/BluetoothPrinterCard";
 import { AccountSessionSection } from "./components/AccountSessionSection";
 import { thermalPrinter, type PrinterStatus } from "../../core/utils/thermal-printer";
 import { pickProfilePhoto } from "./profile-photo";
 import { transactionSummary } from "../../core/domain/transaction-summary";
-import { LegalSupportCard } from "../../shared/legal/LegalSupportCard";
 
 const SCAN_SOUND_KEY = "conductor_scan_sound";
 
 export function SettingsScreen({
   user,
   shift,
-  onShiftUpdated,
   onLogout,
 }: {
   user: User;
@@ -54,26 +53,39 @@ export function SettingsScreen({
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [history, setHistory] = useState<Remittance[]>([]);
   const [scanSound, setScanSound] = useState(true);
+  const [logoutCheckStatus, setLogoutCheckStatus] = useState<"loading" | "ready" | "error">("loading");
   const [showSOS, setShowSOS] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    void Promise.all([
+  const loadSettingsData = useCallback(async () => {
+    setLogoutCheckStatus("loading");
+    const transactionRequest: Promise<{ data: Transaction[]; ok: boolean }> = shift
+      ? api.transactions(shift.shiftId)
+        .then(data => ({ data, ok: true }))
+        .catch(() => ({ data: [] as Transaction[], ok: false }))
+      : Promise.resolve({ data: [] as Transaction[], ok: true });
+    const remittanceRequest: Promise<{ data: Remittance[]; ok: boolean }> = api.remittances()
+      .then(data => ({ data, ok: true }))
+      .catch(() => ({ data: [] as Remittance[], ok: false }));
+
+    const [nextProfile, transactionResult, sound, remittanceResult] = await Promise.all([
       api.profile().catch(() => null),
-      shift ? api.transactions(shift.shiftId).catch(() => [] as Transaction[]) : Promise.resolve([] as Transaction[]),
-      appStorage.getItem(SCAN_SOUND_KEY),
-      api.remittances().catch(() => [] as Remittance[]),
-    ]).then(([p, t, sound, r]) => {
-      if (!active) return;
-      if (p) setProfile(p);
-      setTransactions(t);
-      setScanSound(sound !== "off");
-      setHistory(r);
-    });
-    return () => { active = false; };
-  }, [shift?.shiftId, user.id]);
+      transactionRequest,
+      appStorage.getItem(SCAN_SOUND_KEY).catch(() => null),
+      remittanceRequest,
+    ]);
+    if (!mounted.current) return;
+    if (nextProfile) setProfile(nextProfile);
+    setTransactions(transactionResult.data);
+    setScanSound(sound !== "off");
+    setHistory(remittanceResult.data);
+    setLogoutCheckStatus(transactionResult.ok && remittanceResult.ok ? "ready" : "error");
+  }, [shift?.shiftId]);
+
+  useEffect(() => {
+    void loadSettingsData();
+  }, [loadSettingsData, user.id]);
 
   const [printerStatus, setPrinterStatus] = useState<PrinterStatus>(thermalPrinter.getStatus());
   const [printerName, setPrinterName] = useState<string | null>(thermalPrinter.getPairedDeviceName());
@@ -152,6 +164,7 @@ export function SettingsScreen({
   };
 
   const logoutLocked = useMemo(() => {
+    if (logoutCheckStatus !== "ready") return true;
     if (!shift) return false;
 
     const hasPendingRemit = history.some((record) => {
@@ -176,12 +189,17 @@ export function SettingsScreen({
     if (totalCollections > 0 && !hasSubmitted) return true;
 
     return false;
-  }, [shift, history, transactions]);
+  }, [logoutCheckStatus, shift, history, transactions]);
 
   const confirmLogout = async () => {
+    if (logoutCheckStatus !== "ready") {
+      setShowLogoutConfirm(false);
+      Alert.alert("Unable to verify remittance", "Reconnect and check remittance status before signing out.");
+      return;
+    }
     if (logoutLocked) {
       setShowLogoutConfirm(false);
-      Alert.alert("Remittance Required", "Remit all pending collections before logging out.");
+      Alert.alert("Remittance Required", "Remit all pending collections before signing out.");
       return;
     }
     setLoggingOut(true);
@@ -240,35 +258,44 @@ export function SettingsScreen({
     <ScreenShell>
       {/* Page Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>Manage your app preferences and account</Text>
+        <View style={styles.headerTitleGroup}>
+          <Text style={styles.title}>Settings</Text>
+          <Text style={styles.subtitle}>Manage your app preferences and account</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Toggle Lofi mode"
+          accessibilityState={{ checked: isLofi }}
+          onPress={() => void setLofi(!isLofi)}
+          style={[
+            styles.themeToggle,
+            isLofi ? styles.themeToggleLight : styles.themeToggleDark,
+          ]}
+        >
+          <Ionicons
+            name={isLofi ? "sunny-outline" : "moon-outline"}
+            size={20}
+            color={isLofi ? "#D97706" : "#99C1F1"}
+          />
+        </Pressable>
       </View>
 
       {/* Profile Section */}
       <ProfileCard styles={styles} user={user} shift={shift} profile={profile} photoBusy={photoBusy} photoError={photoError} onChangePhoto={() => void changePhoto()} />
 
+      {/* Personal details, followed by the active assignment as on web. */}
+      <PersonalDetailsCard styles={styles} user={user} shift={shift} profile={profile} />
+
       {/* Active Assignment */}
       <ActiveAssignmentCard styles={styles} shift={shift} colors={colors} isLofi={isLofi} />
-
-      {/* Shift Options / Operating Device Handoff (TC-COND-DEV-124, 127) */}
-      {shift ? (
-        <ShiftOptionsCard
-          styles={styles}
-          shift={shift}
-          colors={colors}
-          isLofi={isLofi}
-          onShiftUpdated={onShiftUpdated}
-        />
-      ) : null}
 
       {/* App Preferences */}
       <AppPreferencesCard
         styles={styles}
-        colors={colors}
-        isLofi={isLofi}
-        setLofi={setLofi}
         scanSound={scanSound}
         onToggleScanSound={() => void toggleSound()}
+        isLofi={isLofi}
+        onToggleLofi={() => void setLofi(!isLofi)}
       />
 
       {/* Bluetooth Belt Printer */}
@@ -287,8 +314,6 @@ export function SettingsScreen({
         onTestPrint={() => void handleTestPrint()}
       />
 
-      <LegalSupportCard />
-
       {/* Account & Session */}
       <AccountSessionSection
         styles={styles}
@@ -297,6 +322,8 @@ export function SettingsScreen({
         onOpenSOS={() => setShowSOS(true)}
         onClearCache={handleClearCache}
         logoutLocked={logoutLocked}
+        logoutCheckStatus={logoutCheckStatus}
+        onRetryLogoutCheck={() => void loadSettingsData()}
         loggingOut={loggingOut}
         showLogoutConfirm={showLogoutConfirm}
         setShowLogoutConfirm={setShowLogoutConfirm}

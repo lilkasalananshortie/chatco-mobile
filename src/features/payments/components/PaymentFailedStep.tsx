@@ -1,6 +1,6 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../core/theme/ThemeProvider";
+import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { SelectedPaymentMethod, Step } from "../payment-types";
 
 export interface PaymentFailedStepProps {
@@ -20,11 +20,11 @@ export function PaymentFailedStep({
   handleClose,
   setStep,
 }: PaymentFailedStepProps) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi } = usePaymentTheme();
 
   return (
-    <View style={styles.modalCard}>
-      <View style={{ padding: 24, alignItems: "center" }}>
+    <View style={[styles.modalCard, { maxWidth: 384, maxHeight: "100%", flexShrink: 1 }]}>
+      <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ padding: 24, alignItems: "center" }}>
         <View style={styles.failedCheckCircle}>
           <Ionicons name="close" size={32} color={isLofi ? colors.danger : "#F87171"} />
         </View>
@@ -52,7 +52,7 @@ export function PaymentFailedStep({
             <Text style={styles.cashActionButtonText}>Try Again</Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }

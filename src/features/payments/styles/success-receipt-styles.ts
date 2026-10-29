@@ -104,23 +104,5 @@ export function createSuccessReceiptStyles(colors: ReturnType<typeof useAppTheme
       lineHeight: 16,
     },
 
-    // Auto-GPS Pickup Badge
-    autoGpsBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: isLofi ? colors.surface2 : "rgba(59, 130, 246, 0.15)",
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: isLofi ? 2 : 6,
-      borderWidth: isLofi ? 1 : 0,
-      borderColor: isLofi ? colors.primary : "transparent",
-      alignSelf: "flex-start",
-    },
-    autoGpsBadgeText: {
-      fontSize: 10,
-      fontWeight: "700",
-      color: isLofi ? colors.primary : "#60A5FA",
-    },
   });
 }

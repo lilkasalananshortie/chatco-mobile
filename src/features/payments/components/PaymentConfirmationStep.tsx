@@ -1,9 +1,10 @@
-import React from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import type { ReactNode } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../core/theme/ThemeProvider";
+import { Pressable, ScrollView, View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
+import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { CommuterType, FarePoint } from "../../../core/domain/types";
-import type { FareInfo, SelectedPaymentMethod, Step } from "../payment-types";
+import type { FareInfo, GroupPassengerRow, SelectedPaymentMethod, Step } from "../payment-types";
 import { formatCurrency, getCommuterTypeLabel } from "../fare-helpers";
 
 export interface PaymentConfirmationStepProps {
@@ -17,211 +18,131 @@ export interface PaymentConfirmationStepProps {
   isGroupMode: boolean;
   groupPassengerCount: number;
   groupTotalFare: number;
+  groupDiscount: number;
+  groupPassengers: GroupPassengerRow[];
   fareInfo: FareInfo | null;
-  voucherCode: string;
-  setVoucherCode: (code: string) => void;
   isInitiatingGcash: boolean;
-  pickupBadgeText: string;
-  dropoffBadgeText: string;
   handleConfirmPayment: () => void;
   setStep: (step: Step) => void;
 }
 
 export function PaymentConfirmationStep({
-  styles,
   selectedMethod,
   pickupPoint,
   pickupLandmark,
-  dropoffPoint,
   dropoffLandmark,
   commuterType,
   isGroupMode,
   groupPassengerCount,
   groupTotalFare,
+  groupDiscount,
+  groupPassengers,
   fareInfo,
-  voucherCode,
-  setVoucherCode,
   isInitiatingGcash,
-  pickupBadgeText,
-  dropoffBadgeText,
   handleConfirmPayment,
   setStep,
 }: PaymentConfirmationStepProps) {
-  const { colors, isLofi } = useAppTheme();
+  const { isLofi } = usePaymentTheme();
+  const text = isLofi ? "#111827" : "#FFFFFF";
+  const muted = isLofi ? "#6B7280" : "rgba(255,255,255,0.6)";
+  const faint = isLofi ? "#6B7280" : "rgba(255,255,255,0.45)";
+  const headingMuted = isLofi ? "#6B7280" : "rgba(255,255,255,0.4)";
+  const border = isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)";
+  const activeCommuterType = selectedMethod === "GCash" ? "REGULAR" : commuterType;
+  const amount = isGroupMode
+    ? groupTotalFare
+    : selectedMethod === "GCash"
+      ? fareInfo?.regularFare ?? 0
+      : fareInfo?.finalFare ?? 0;
+  const groupMix = groupPassengers.map(({ type, quantity }) => `${quantity} ${getCommuterTypeLabel(type)}`).join(" · ");
+  const methodLabel = selectedMethod === "GCash" ? "Charge through GCash" : "Collect in cash";
+  const instructions = selectedMethod === "GCash"
+    ? "The commuter scans a QR and pays from their GCash account. No wallet balance needed."
+    : "Collect the exact amount from the commuter. It's added to your shift log when you confirm.";
+  const actionLabel = isInitiatingGcash
+    ? "Starting…"
+    : selectedMethod === "GCash"
+      ? `Generate QR · ${formatCurrency(amount)}`
+      : `Pay ${formatCurrency(amount)}`;
+  const paymentIcon = selectedMethod === "GCash" ? "phone-portrait-outline" : "cash-outline";
+  const distance = fareInfo?.barangaysTraveled ?? 0;
+  const commuter = isGroupMode
+    ? `${groupPassengerCount} ${groupPassengerCount === 1 ? "passenger" : "passengers"}`
+    : getCommuterTypeLabel(activeCommuterType);
+  const regularFare = (fareInfo?.regularFare ?? 0) * (isGroupMode ? groupPassengerCount : 1);
+  const discount = isGroupMode
+    ? groupDiscount
+    : selectedMethod === "GCash"
+      ? 0
+      : fareInfo?.discountAmount ?? 0;
+  const hasDiscount = isGroupMode
+    ? groupDiscount > 0
+    : selectedMethod !== "GCash" && Boolean(fareInfo?.hasDiscount && discount > 0);
+  const backStep: Step = isGroupMode ? "passengers" : "select";
+  const pickupLabel = pickupLandmark ?? pickupPoint?.name ?? null;
 
-  return (
-    <View style={styles.modalCard}>
-      <View style={styles.modalHeader}>
-        <View>
-          <Text style={styles.modalTitle}>Confirm Payment</Text>
-          <Text style={styles.modalSubtitle}>Review fare breakdown and details</Text>
-        </View>
-        <Pressable
-          onPress={() => setStep(isGroupMode ? "passengers" : "select")}
-          style={styles.iconButton}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="close" size={20} color={colors.muted} />
-        </Pressable>
-      </View>
-
-      <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ padding: 18, gap: 12 }}>
-        <View style={styles.confirmDetailsBox}>
-          <View style={styles.confirmRow}>
-            <Text style={styles.confirmRowLabel}>Route</Text>
-            <Text style={styles.confirmRowValue}>
-              {pickupPoint?.name}
-              {pickupLandmark ? ` · ${pickupLandmark}` : ""} → {dropoffPoint?.name}
-              {dropoffLandmark ? ` · ${dropoffLandmark}` : ""}
-            </Text>
-          </View>
-          {pickupLandmark ? (
-            <View style={styles.confirmRow}>
-              <Text style={styles.confirmRowLabel}>Pickup Landmark</Text>
-              <Text style={[styles.confirmRowValue, { color: pickupBadgeText }]}>
-                {pickupLandmark}
-              </Text>
-            </View>
-          ) : null}
-          {dropoffLandmark ? (
-            <View style={styles.confirmRow}>
-              <Text style={styles.confirmRowLabel}>Drop-off Landmark</Text>
-              <Text style={[styles.confirmRowValue, { color: dropoffBadgeText }]}>
-                {dropoffLandmark}
-              </Text>
-            </View>
-          ) : null}
-          <View style={styles.confirmRow}>
-            <Text style={styles.confirmRowLabel}>Barangays Traveled</Text>
-            <Text style={styles.confirmRowValue}>
-              {fareInfo?.barangaysTraveled ?? 0}
-            </Text>
-          </View>
-          <View style={styles.confirmRow}>
-            <Text style={styles.confirmRowLabel}>Fare Basis</Text>
-            <Text style={[styles.confirmRowValue, { fontSize: 11, color: colors.muted }]}>
-              {(fareInfo?.succeedingCount ?? 0) > 0
-                ? `Base fare covers first ${fareInfo?.baseBarangayCount} + ${fareInfo?.succeedingCount} succeeding`
-                : "Base fare (within first 4 barangays)"}
-            </Text>
-          </View>
-          <View style={styles.confirmRow}>
-            <Text style={styles.confirmRowLabel}>Commuter Type</Text>
-            <Text style={styles.confirmRowValue}>
-              {isGroupMode
-                ? `${groupPassengerCount} group passengers`
-                : selectedMethod === "GCash"
-                ? "Detected after scan"
-                : getCommuterTypeLabel(commuterType)}
-            </Text>
-          </View>
-          {fareInfo?.hasDiscount && !isGroupMode ? (
-            <View style={styles.confirmRow}>
-              <Text style={styles.confirmRowLabel}>Regular Fare</Text>
-              <Text style={[styles.confirmRowValue, { textDecorationLine: "line-through", color: colors.muted }]}>
-                {formatCurrency(fareInfo.regularFare)}
-              </Text>
-            </View>
-          ) : null}
-          {fareInfo?.hasDiscount && (fareInfo.discountAmount ?? 0) > 0 && !isGroupMode ? (
-            <View style={styles.confirmRow}>
-              <Text style={styles.confirmRowLabel}>Discount</Text>
-              <Text style={[styles.confirmRowValue, { color: isLofi ? colors.success : "#34D399" }]}>
-                -{formatCurrency(fareInfo.discountAmount)}
-              </Text>
-            </View>
-          ) : null}
-          <View style={styles.confirmDividerTotal}>
-            <Text style={styles.confirmTotalLabel}>Total</Text>
-            <Text style={styles.confirmTotalValue}>
-              {selectedMethod === "Voucher" ? "Calculated when applied" : formatCurrency(isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Method Notice Card */}
-        {selectedMethod === "GCash" ? (
-          <View style={styles.gcashNoticeBox}>
-            <View style={styles.noticeHeaderRow}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={isLofi ? colors.primary : "#62A0EA"} />
-              <Text style={styles.gcashNoticeTitle}>GCash Secure Payment</Text>
-            </View>
-            <Text style={styles.gcashNoticeText}>
-              Fare will be charged to the commuter's GCash account. No wallet balance needed —
-              pay directly.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.cashNoticeBox}>
-            <View style={styles.noticeHeaderRow}>
-              <Ionicons name="cash-outline" size={16} color={isLofi ? colors.success : "#34D399"} />
-              <Text style={styles.cashNoticeTitle}>Cash Payment</Text>
-            </View>
-            <Text style={styles.cashNoticeText}>
-              Collect the exact fare amount from the commuter in cash. This transaction will be
-              recorded in your shift log.
-            </Text>
-          </View>
-        )}
-
-        {/* Voucher Code Input */}
-        {selectedMethod === "Voucher" ? (
-          <View style={styles.voucherInputBox}>
-            <Text style={styles.voucherInputLabel}>
-              Voucher Code <Text style={{ color: colors.danger }}>*</Text>
-            </Text>
-            <TextInput
-              value={voucherCode}
-              onChangeText={(text) => setVoucherCode(text.toUpperCase().trim())}
-              placeholder="e.g. REWARD-AB12CD34"
-              placeholderTextColor={colors.muted}
-              autoCapitalize="characters"
-              style={styles.voucherTextInput}
-            />
-            <Text style={styles.voucherInputSubtext}>
-               Enter the code shown by the commuter. The backend calculates the discount. Collect any remaining fare in cash.
-            </Text>
+  const row = (label: string, value: ReactNode, extra?: ReactNode, showDivider = true) => (
+    <View key={label} style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 12, borderBottomWidth: showDivider ? 1 : 0, borderBottomColor: border }}>
+      <Text style={{ width: 84, paddingTop: 1, color: faint, fontSize: 12 }}>{label}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ color: text, fontSize: 13, fontWeight: "500" }}>{value}</Text>
+        {extra ? (
+          <View style={{ marginTop: 2 }}>
+            {typeof extra === "string"
+              ? <Text style={{ color: faint, fontSize: 11, lineHeight: 15 }}>{extra}</Text>
+              : extra}
           </View>
         ) : null}
+      </View>
+    </View>
+  );
 
-        {/* Buttons */}
-        <View style={styles.actionButtonsRow}>
-          <Pressable
-            disabled={isInitiatingGcash}
-            onPress={() => setStep(isGroupMode ? "passengers" : "select")}
-            style={styles.btnSecondary}
-          >
-            <Text style={styles.btnSecondaryText}>Back</Text>
-          </Pressable>
-          <Pressable
-            disabled={
-              isInitiatingGcash ||
-              (selectedMethod === "Voucher" && !voucherCode.trim())
-            }
-            onPress={handleConfirmPayment}
-            style={[
-              selectedMethod === "GCash"
-                ? styles.gcashActionButton
-                : selectedMethod === "Voucher"
-                ? styles.voucherActionButton
-                : styles.cashActionButton,
-              { flex: 1 },
-            ]}
-          >
-            <Text style={styles.cashActionButtonText}>
-              {isInitiatingGcash
-                ? "Starting…"
-                : selectedMethod === "GCash"
-                ? `Generate QR · ${formatCurrency(
-                    isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0
-                  )}`
-                : selectedMethod === "Voucher"
-                ? "Apply Voucher"
-                : `Pay ${formatCurrency(
-                    isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0
-                  )}`}
-            </Text>
-          </Pressable>
+  return (
+    <View style={{ width: "100%", maxWidth: 384, maxHeight: "100%", flexShrink: 1, flexDirection: "column", overflow: "hidden", borderRadius: 16, borderWidth: 1, borderColor: border, backgroundColor: isLofi ? "#FFFFFF" : "#071A2E", shadowColor: "#000000", shadowOpacity: isLofi ? 0.1 : 0.35, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 16 }}>
+      <ScrollView style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
+        {/* Keep the web prompt's order: payment method, amount, then instruction. */}
+        <View style={{ padding: 20 }}>
+          <Text style={{ color: headingMuted, fontSize: 10, lineHeight: 15, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" }}>Confirm Payment</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <Ionicons name={paymentIcon} size={16} color={isLofi ? "#6B7280" : "rgba(255,255,255,0.5)"} />
+            <Text style={{ color: muted, fontSize: 12, fontWeight: "600" }}>{methodLabel}</Text>
+          </View>
+          <Text style={{ marginTop: 6, color: text, fontSize: 40, lineHeight: 50, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatCurrency(amount)}</Text>
+          <Text style={{ maxWidth: 280, marginTop: 4, color: muted, fontSize: 13, lineHeight: 21 }}>{instructions}</Text>
+        </View>
+
+        <View style={{ borderTopWidth: 1, borderTopColor: border, paddingHorizontal: 20, paddingVertical: 4 }}>
+          {pickupLabel ? row("Pickup", pickupLabel) : null}
+          {dropoffLandmark ? row("Drop-off", dropoffLandmark) : null}
+          {row("Distance", `${distance} ${distance === 1 ? "barangay" : "barangays"}`, (fareInfo?.succeedingCount ?? 0) > 0
+            ? `Base fare covers first ${fareInfo?.baseBarangayCount} + ${fareInfo?.succeedingCount} succeeding`
+            : "Base fare (within first 4 barangays)")}
+          {row("Commuter", commuter, isGroupMode ? groupMix : undefined)}
+          {row("Fare", <>{formatCurrency(regularFare)}{isGroupMode ? " full fare" : " regular"}</>, <>
+            {isGroupMode ? <Text style={{ color: faint, fontSize: 11, fontWeight: "400" }}>{groupPassengerCount} × {formatCurrency(fareInfo?.regularFare ?? 0)}</Text> : null}
+            {hasDiscount ? <Text style={{ color: faint, fontSize: 11, fontWeight: "400" }}>− {formatCurrency(discount)} {isGroupMode ? "" : `${getCommuterTypeLabel(commuterType).toLowerCase()} `}discount</Text> : null}
+          </>, false)}
+        </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isInitiatingGcash}
+              onPress={() => setStep(backStep)}
+              style={{ flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: border, borderRadius: 12, opacity: isInitiatingGcash ? 0.5 : 1 }}
+            >
+              <Text style={{ color: isLofi ? "#4B5563" : "rgba(255,255,255,0.6)", fontSize: 14, fontWeight: "600" }}>Back</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isInitiatingGcash}
+              onPress={handleConfirmPayment}
+              style={{ flex: 2, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#1A5FB4", opacity: isInitiatingGcash ? 0.6 : 1 }}
+            >
+              <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }}>{actionLabel}</Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </View>

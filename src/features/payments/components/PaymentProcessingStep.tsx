@@ -1,5 +1,6 @@
-import { ActivityIndicator, Text, View } from "react-native";
-import { useAppTheme } from "../../../core/theme/ThemeProvider";
+import { Text } from "../../../shared/ui/BrandText";
+import { ActivityIndicator, View } from "react-native";
+import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { SelectedPaymentMethod } from "../payment-types";
 
 export interface PaymentProcessingStepProps {
@@ -8,10 +9,10 @@ export interface PaymentProcessingStepProps {
 }
 
 export function PaymentProcessingStep({ styles, selectedMethod }: PaymentProcessingStepProps) {
-  const { colors } = useAppTheme();
+  const { colors } = usePaymentTheme();
 
   return (
-    <View style={[styles.modalCard, { alignItems: "center", paddingVertical: 36 }]}>
+    <View style={[styles.modalCard, { maxWidth: 320, alignItems: "center", padding: 32 }]}>
       <ActivityIndicator
         size="large"
         color={selectedMethod === "GCash" ? colors.primary : colors.success}

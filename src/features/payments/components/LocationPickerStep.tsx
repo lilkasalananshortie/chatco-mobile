@@ -1,7 +1,7 @@
 import { Modal, Pressable, SafeAreaView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../core/theme/ThemeProvider";
-import type { FarePoint } from "../../../core/domain/types";
+import { usePaymentTheme } from "../../../core/theme/payment-theme";
+import type { CommuterType, FarePoint } from "../../../core/domain/types";
 import type { FareInfo, SelectedPaymentMethod, Step } from "../payment-types";
 import { LocationBottomBar } from "./LocationBottomBar";
 import { LocationPointsList } from "./LocationPointsList";
@@ -22,8 +22,6 @@ export interface LocationPickerStepProps {
   setDropoffLandmark: (landmark: string | null) => void;
   selectingField: "pickup" | "dropoff" | null;
   setSelectingField: (field: "pickup" | "dropoff") => void;
-  isAutoPickup: boolean;
-  setIsAutoPickup: (auto: boolean) => void;
   expandedBarangay: number | null;
   setExpandedBarangay: (brgy: number | null) => void;
   searchQuery: string;
@@ -31,9 +29,9 @@ export interface LocationPickerStepProps {
   filteredPoints: FarePoint[];
   fareInfo: FareInfo | null;
   isGroupMode: boolean;
-  setIsGroupMode?: (group: boolean) => void;
-  commuterType?: any;
-  setCommuterType?: (type: any) => void;
+  setIsGroupMode: (group: boolean) => void;
+  commuterType: CommuterType;
+  setCommuterType: (type: CommuterType) => void;
   isSameBarangay: boolean;
   pickupDotColor: string;
   dropoffDotColor: string;
@@ -63,8 +61,6 @@ export function LocationPickerStep({
   setDropoffLandmark,
   selectingField,
   setSelectingField,
-  isAutoPickup,
-  setIsAutoPickup,
   expandedBarangay,
   setExpandedBarangay,
   searchQuery,
@@ -88,7 +84,7 @@ export function LocationPickerStep({
   handleClose,
   setStep,
 }: LocationPickerStepProps) {
-  const { colors } = useAppTheme();
+  const { colors } = usePaymentTheme();
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
@@ -107,8 +103,6 @@ export function LocationPickerStep({
                 styles.methodBadge,
                 selectedMethod === "GCash"
                   ? styles.methodBadgeBlue
-                  : selectedMethod === "Voucher"
-                  ? styles.methodBadgeViolet
                   : styles.methodBadgeGreen,
               ]}
             >
@@ -117,8 +111,6 @@ export function LocationPickerStep({
                   styles.methodBadgeText,
                   selectedMethod === "GCash"
                     ? styles.methodBadgeTextBlue
-                    : selectedMethod === "Voucher"
-                    ? styles.methodBadgeTextViolet
                     : styles.methodBadgeTextGreen,
                 ]}
               >
@@ -135,13 +127,17 @@ export function LocationPickerStep({
         {/* Location Selector Cards Header Section */}
         <LocationSelectorCards
           styles={styles}
+          selectedMethod={selectedMethod}
+          isGroupMode={isGroupMode}
+          setIsGroupMode={setIsGroupMode}
+          commuterType={commuterType}
+          setCommuterType={setCommuterType}
           pickupPoint={pickupPoint}
           dropoffPoint={dropoffPoint}
           pickupLandmark={pickupLandmark}
           dropoffLandmark={dropoffLandmark}
           selectingField={selectingField}
           setSelectingField={setSelectingField}
-          isAutoPickup={isAutoPickup}
           isSameBarangay={isSameBarangay}
           pickupDotColor={pickupDotColor}
           dropoffDotColor={dropoffDotColor}
@@ -170,7 +166,6 @@ export function LocationPickerStep({
           isSameBarangay={isSameBarangay}
           setPickupPoint={setPickupPoint}
           setPickupLandmark={setPickupLandmark}
-          setIsAutoPickup={setIsAutoPickup}
           setSelectingField={setSelectingField}
           setDropoffPoint={setDropoffPoint}
           setDropoffLandmark={setDropoffLandmark}
@@ -187,9 +182,6 @@ export function LocationPickerStep({
           pickupDotColor={pickupDotColor}
           dropoffDotColor={dropoffDotColor}
           isGroupMode={isGroupMode}
-          setIsGroupMode={setIsGroupMode}
-          commuterType={commuterType}
-          setCommuterType={setCommuterType}
           fareInfo={fareInfo}
           setStep={setStep}
         />

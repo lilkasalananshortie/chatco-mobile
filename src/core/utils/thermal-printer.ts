@@ -409,6 +409,35 @@ class GoojprtPrinterManager {
     }
     return { success: false, error: "Bluetooth printer is not connected." };
   }
+
+  // Print an official remittance report through the same paired printer used
+  // for receipts. The backend remains the source of the report values.
+  public async printReportText(report: string): Promise<{ success: boolean; error?: string }> {
+    const printable = report
+      .replace(/₱/g, "PHP ")
+      .replace(/[^\x20-\x7E\n\r]/g, "")
+      .trim();
+    const encoder = new TextEncoder();
+    const firstLineEnd = printable.indexOf("\n");
+    const title = firstLineEnd >= 0 ? printable.slice(0, firstLineEnd) : printable;
+    const details = firstLineEnd >= 0 ? printable.slice(firstLineEnd + 1) : "";
+    const body = encoder.encode(`${details}\n\n`);
+    const bytes = new Uint8Array(2 + 3 + encoder.encode(title).length + 1 + 3 + body.length + 3 + 3);
+    let offset = 0;
+    bytes.set([0x1b, 0x40], offset); offset += 2; // Initialize printer.
+    bytes.set([0x1b, 0x61, 0x01], offset); offset += 3; // Center report title.
+    const encodedTitle = encoder.encode(title);
+    bytes.set(encodedTitle, offset); offset += encodedTitle.length;
+    bytes[offset++] = 0x0a;
+    bytes.set([0x1b, 0x61, 0x00], offset); offset += 3; // Left align report details.
+    bytes.set(body, offset); offset += body.length;
+    bytes.set([0x1b, 0x64, 0x03], offset); offset += 3; // Feed before cut.
+    bytes.set([0x1d, 0x56, 0x00], offset);
+
+    if (Platform.OS === "android") return this.printViaRawbt(bytes);
+    if (this.status === "connected" && this.writeCharacteristic) return this.sendRawBytes(bytes);
+    return { success: false, error: "Pair a Bluetooth printer to print the official report." };
+  }
 }
 
 export const thermalPrinter = new GoojprtPrinterManager();

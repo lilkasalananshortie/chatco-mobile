@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Constants from "expo-constants";
 import L from "leaflet";
-import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer } from "react-leaflet";
+import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import "./leaflet-base.css";
-import type { HailRequest } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
+import type { LiveMapProps } from "./LiveMap";
+import { HAIL_MARKER_HTML, vehicleMarkerHtml, markerPresentation } from "./map-presentation";
 
 const CARTO_API_KEY =
   process.env.EXPO_PUBLIC_CARTO_API_KEY ||
@@ -55,12 +56,47 @@ const ROUTE_COORDS: [number, number][] = [
   [14.725646764905104, 120.9604838112117],
 ];
 
-const routeBounds = L.latLngBounds(ROUTE_COORDS);
-const MAP_CENTER: [number, number] = [routeBounds.getCenter().lat, routeBounds.getCenter().lng];
-const MAP_BOUNDS: [[number, number], [number, number]] = [
-  [routeBounds.getSouth() - 0.04, routeBounds.getWest() - 0.10],
-  [routeBounds.getNorth() + 0.015, routeBounds.getEast() + 0.10],
-];
+/** Fit the route into the exposed map area whenever its actual layout changes. */
+function ResponsiveMapViewport({ bounds, top, bottom }: { bounds: L.LatLngBounds; top: number; bottom: number }) {
+  const map = useMap();
+  const west = bounds.getWest(), south = bounds.getSouth(), east = bounds.getEast(), north = bounds.getNorth();
+  useEffect(() => {
+    const routeBounds = L.latLngBounds([south, west], [north, east]);
+    const container = map.getContainer();
+    let frame = 0;
+    const resize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!container.clientWidth || !container.clientHeight) return;
+        map.stop();
+        map.invalidateSize({ pan: false, debounceMoveend: true });
+        const bottomPadding = Math.min(bottom, Math.max(0, container.clientHeight - 96));
+        const topPadding = Math.min(top, Math.max(0, container.clientHeight - bottomPadding - 96));
+        // getBoundsZoom clamps to the current minimum, so release it before measuring.
+        map.setMinZoom(0);
+        const fitZoom = map.getBoundsZoom(routeBounds, false, L.point(32, topPadding + bottomPadding + 32));
+        // Small screens need a lower zoom to show the entire route between controls.
+        map.setMinZoom(Math.max(0, Math.min(11, fitZoom)));
+        map.fitBounds(routeBounds, {
+          paddingTopLeft: [16, topPadding + 16],
+          paddingBottomRight: [16, bottomPadding + 16],
+          maxZoom: 14,
+          animate: false,
+        });
+      });
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
+    window.addEventListener("resize", resize);
+    resize();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", resize);
+    };
+  }, [map, west, south, east, north, top, bottom]);
+  return null;
+}
 
 function distanceMeters(a: [number, number], b: [number, number]) {
   const toRadians = (degrees: number) => degrees * Math.PI / 180;
@@ -73,20 +109,14 @@ function distanceMeters(a: [number, number], b: [number, number]) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, routeSource = "fallback" }: {
-  latitude?: number;
-  longitude?: number;
-  hails: HailRequest[];
-  unitNumber?: string;
-  fill?: boolean;
-  routeCoordinates?: Array<[number, number]>;
-  routeSource?: "backend" | "fallback";
-}) {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, viewportInsets, capacity = "AVAILABLE", isOnBreak = false, canOperate = false, onHail }: LiveMapProps) {
   const { colors, isLofi } = useAppTheme();
   const [tilesLoading, setTilesLoading] = useState(true);
+  const initialTilesReady = useRef(false);
   const [tileError, setTileError] = useState(false);
+  const [hailBusyId, setHailBusyId] = useState<string | null>(null);
   useEffect(() => {
-    const fallback = setTimeout(() => setTilesLoading(false), 7000);
+    const fallback = setTimeout(() => { initialTilesReady.current = true; setTilesLoading(false); }, 7000);
     return () => clearTimeout(fallback);
   }, []);
   const routeCoords = routeCoordinates?.length && routeCoordinates.length > 1 ? routeCoordinates : ROUTE_COORDS;
@@ -94,13 +124,13 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const mapCenter: [number, number] = [routeBounds.getCenter().lat, routeBounds.getCenter().lng];
   const vehiclePosition: [number, number] = latitude !== undefined && longitude !== undefined
     ? [latitude, longitude]
-    : MAP_CENTER;
+    : mapCenter;
   const visibleHails = hails.filter(hail =>
     distanceMeters(vehiclePosition, [hail.latitude, hail.longitude]) <= RADIUS_METERS
   );
 
   const cartoBase = isLofi
-    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+    ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
   const tileUrl = tileError
@@ -109,32 +139,31 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
 
   const vehicleIcon = useMemo(() => L.divIcon({
     className: "chatco-vehicle-marker",
-    html: `<div class="chatco-vehicle-dot">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1A5FB4" stroke-width="2">
-        <path d="M3 16.5V9.75A2.25 2.25 0 0 1 5.25 7.5h13.5A2.25 2.25 0 0 1 21 9.75v6.75M5 16.5h14M7.5 19.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm9 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/>
-      </svg>
-    </div>`,
+    html: vehicleMarkerHtml(capacity, isOnBreak, isLofi ? colors.surface : "#071A2E"),
     iconSize: [44, 44],
     iconAnchor: [22, 22],
     popupAnchor: [0, -25],
-  }), []);
+  }), [capacity, colors.surface, isLofi, isOnBreak]);
 
   const hailingIcon = useMemo(() => L.divIcon({
     className: "chatco-hail-marker",
-    html: `<div class="chatco-hail-dot"><span></span></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -15],
+    html: HAIL_MARKER_HTML,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -19],
   }), []);
 
   return (
     <div
       className={`chatco-map-shell${fill ? " chatco-map-fill" : ""}`}
       style={{
-        borderRadius: isLofi ? 4 : (fill ? 0 : 18),
+        borderRadius: fill ? 0 : 18,
         borderColor: colors.border,
-        borderWidth: isLofi ? 1.5 : 1,
+        borderWidth: fill ? 0 : 1,
         background: colors.surface,
+        // Match conductor web: contain Leaflet's pane z-indexes below the dashboard.
+        zIndex: 0,
+        isolation: "isolate",
       }}
     >
       <MapContainer
@@ -142,39 +171,41 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         zoom={12}
         zoomControl={false}
         attributionControl={false}
-        maxBounds={[
-          [routeBounds.getSouth() - 0.04, routeBounds.getWest() - 0.10],
-          [routeBounds.getNorth() + 0.015, routeBounds.getEast() + 0.10],
-        ]}
-        maxBoundsViscosity={1}
         minZoom={11}
-        style={{ width: "100%", height: "100%", background: colors.surface }}
+        maxZoom={19}
+        dragging
+        touchZoom
+        scrollWheelZoom
+        doubleClickZoom
+        zoomAnimation={false}
+        style={{ width: "100%", height: "100%", background: colors.surface, touchAction: "none" }}
       >
+        <ResponsiveMapViewport bounds={routeBounds} top={viewportInsets?.top ?? 0} bottom={viewportInsets?.bottom ?? 0} />
         <TileLayer
+          className={isLofi ? "" : "map-tiles-mono"}
           key={tileUrl}
           url={tileUrl}
           keepBuffer={0}
           updateWhenIdle
           updateWhenZooming={false}
           eventHandlers={{
-            loading: () => setTilesLoading(true),
-            load: () => setTilesLoading(false),
+            loading: () => { if (!initialTilesReady.current) setTilesLoading(true); },
+            load: () => { initialTilesReady.current = true; setTilesLoading(false); },
             tileerror: () => {
+              initialTilesReady.current = true;
               setTilesLoading(false);
               setTileError(true);
             },
           }}
         />
-        {!isLofi ? (
-          <Polyline positions={routeCoords} pathOptions={{ color: "#62A0EA", weight: 8, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
-        ) : null}
-        <Polyline positions={routeCoords} pathOptions={{ color: isLofi ? colors.primary : "#62A0EA", weight: 4, opacity: 0.95, dashArray: isLofi ? undefined : "10 10", lineCap: "round", lineJoin: "round" }} />
-        <Circle center={vehiclePosition} radius={RADIUS_METERS} pathOptions={{ color: colors.primary, fillColor: colors.primary, fillOpacity: isLofi ? 0.08 : 0.05, weight: 1.5, opacity: isLofi ? 0.6 : 0.3, dashArray: isLofi ? undefined : "8 4" }} />
+        <Polyline positions={routeCoords} pathOptions={{ color: isLofi ? "#1A5FB4" : "#62A0EA", weight: 8, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
+        <Polyline positions={routeCoords} pathOptions={{ color: isLofi ? "#1A5FB4" : "#62A0EA", weight: 4, opacity: 0.9, dashArray: "10 10", lineCap: "round", lineJoin: "round" }} />
+        <Circle center={vehiclePosition} radius={RADIUS_METERS} pathOptions={{ color: isLofi ? "#071A2E" : "#FFFFFF", fillColor: isLofi ? "#071A2E" : "#FFFFFF", fillOpacity: 0.05, weight: 1.5, opacity: 0.3, dashArray: "8 4" }} />
         <Marker position={vehiclePosition} icon={vehicleIcon}>
           <Popup>
             <div className="chatco-popup">
-              <strong>{unitNumber} (You)</strong><span>Active</span>
-              <p>Status: Available</p><p>Radius: 1 km pickup zone</p>
+              <strong>{unitNumber}</strong><p>Your unit</p>
+              <p>{markerPresentation(capacity, isOnBreak).label}</p>
             </div>
           </Popup>
         </Marker>
@@ -184,6 +215,13 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
               <div className="chatco-popup">
                 <strong style={{ color: "#FF6D3A" }}>{hail.commuterName}</strong>
                 <p>{hail.label || "Passenger waiting"}{hail.etaMinutes ? ` · ${hail.etaMinutes} min away` : ""}</p>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  {(["accept", "reject"] as const).map(action => <button key={action} disabled={!canOperate || hailBusyId !== null} onClick={() => {
+                    if (!canOperate || hailBusyId) return;
+                    setHailBusyId(hail.id);
+                    void Promise.resolve(onHail?.(hail.id, action)).finally(() => setHailBusyId(null));
+                  }} style={{ flex: 1, padding: "6px 8px", borderRadius: 8, border: "1px solid #D1D5DB", background: action === "accept" ? "#1A5FB4" : "#FFFFFF", color: action === "accept" ? "#FFFFFF" : "#374151", fontSize: 12, fontWeight: 700 }}>{hailBusyId === hail.id && action === "accept" ? "Updating..." : action === "accept" ? "Accept" : "Reject"}</button>)}
+                </div>
               </div>
             </Popup>
           </Marker>
@@ -191,11 +229,12 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
       </MapContainer>
       {tilesLoading ? <div className="chatco-map-loading"><span></span><strong>Loading route map…</strong></div> : null}
       <style>{`
-        .chatco-map-shell{position:relative;height:420px;width:100%;overflow:hidden;border-radius:18px;margin-top:14px;border:1px solid rgba(255,255,255,.09);box-shadow:0 7px 18px rgba(0,0,0,.16);background:#050F1A}
+        .map-tiles-mono{filter:grayscale(1)}
+        .chatco-map-shell{position:relative;height:420px;width:100%;overflow:hidden;border-radius:18px;margin-top:14px;border:1px solid ${colors.border};box-shadow:0 7px 18px rgba(0,0,0,.16);background:${colors.background}}
         .chatco-map-shell.chatco-map-fill{position:absolute;inset:0;height:100%;margin:0;border:0;border-radius:0;box-shadow:none}
-        .chatco-map-loading{position:absolute;inset:0;z-index:900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#91A0B4;background:#050F1A;pointer-events:none;font:12px system-ui}
-        .chatco-map-loading span{width:28px;height:28px;border:3px solid #163452;border-top-color:#62A0EA;border-radius:50%;animation:chatco-spin .8s linear infinite}
-        .chatco-map-shell .leaflet-container{background:#050F1A!important;font-family:inherit!important}
+        .chatco-map-loading{position:absolute;inset:0;z-index:900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:${colors.muted};background:${colors.background};pointer-events:none;font:12px system-ui}
+        .chatco-map-loading span{width:28px;height:28px;border:3px solid ${isLofi ? colors.border : "#163452"};border-top-color:${colors.primaryLight};border-radius:50%;animation:chatco-spin .8s linear infinite}
+        .chatco-map-shell .leaflet-container{background:${colors.background}!important;font-family:inherit!important}
         .chatco-vehicle-marker,.chatco-hail-marker{background:transparent!important;border:0!important}
         .chatco-vehicle-dot{width:44px;height:44px;background:#071A2E;border-radius:50%;border:2.5px solid #1A5FB4;display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(0,0,0,.5),0 0 8px #1A5FB440}
         .chatco-hail-dot{position:relative;width:20px;height:20px;background:#FF6D3A;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(255,109,58,.6)}

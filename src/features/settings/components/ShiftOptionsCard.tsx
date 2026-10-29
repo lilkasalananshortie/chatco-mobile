@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../core/api/chatco-api";
+import { Text } from "../../../shared/ui/BrandText";
 import type { Shift } from "../../../core/domain/types";
 
 export interface ShiftOptionsCardProps {

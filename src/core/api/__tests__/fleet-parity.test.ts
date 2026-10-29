@@ -60,3 +60,9 @@ test("GCash initiation preserves a server-confirmed zero fare", async () => {
   (post as jest.Mock).mockResolvedValue({ transaction_id: "zero", amount: 0 });
   expect(await paymentService.initiateGcash({ amount: 17, from: "A", to: "B", baseFare: 17, distance: 1, discountAmount: 0 })).toMatchObject({ amount: 0 });
 });
+
+test("reminder polling stays on the mobile route and keeps notice identity", async () => {
+  (request as jest.Mock).mockResolvedValue({ data: [{ id: "notice", type: "REMITTANCE_REMINDER", reference_id: "shift", message: "Cash due", is_read: false }] });
+  expect(await fleetService.announcements(true)).toMatchObject([{ id: "notice", type: "REMITTANCE_REMINDER", referenceId: "shift", body: "Cash due", isRead: false }]);
+  expect(request).toHaveBeenCalledWith("/mobile/conductor/announcements?unread_only=1&notifications_only=1&types=REMITTANCE_REMINDER&per_page=10");
+});

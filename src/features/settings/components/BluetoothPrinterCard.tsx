@@ -1,6 +1,7 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Text } from "../../../shared/ui/BrandText";
 import type { PrinterStatus } from "../../../core/utils/thermal-printer";
 
 export interface BluetoothPrinterCardProps {

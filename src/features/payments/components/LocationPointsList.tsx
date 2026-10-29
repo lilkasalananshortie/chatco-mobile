@@ -1,6 +1,6 @@
 ﻿import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../core/theme/ThemeProvider";
+import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import { appHaptics } from "../../../core/utils/haptics";
 import type { FarePoint } from "../../../core/domain/types";
 import { subDropoffPoints } from "../fare-helpers";
@@ -20,7 +20,6 @@ export interface LocationPointsListProps {
   isSameBarangay: boolean;
   setPickupPoint: (point: FarePoint | null) => void;
   setPickupLandmark: (landmark: string | null) => void;
-  setIsAutoPickup: (auto: boolean) => void;
   setSelectingField: (field: "pickup" | "dropoff") => void;
   setDropoffPoint: (point: FarePoint | null) => void;
   setDropoffLandmark: (landmark: string | null) => void;
@@ -41,12 +40,11 @@ export function LocationPointsList({
   isSameBarangay,
   setPickupPoint,
   setPickupLandmark,
-  setIsAutoPickup,
   setSelectingField,
   setDropoffPoint,
   setDropoffLandmark,
 }: LocationPointsListProps) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi } = usePaymentTheme();
 
   return (
     <>
@@ -104,7 +102,6 @@ export function LocationPointsList({
                   if (selectingField === "pickup") {
                     setPickupPoint(point);
                     setPickupLandmark(null);
-                    setIsAutoPickup(false);
                     setSelectingField("dropoff");
                     if (pointSubDropoffs.length > 0) {
                       setExpandedBarangay(point.pointNumber);
@@ -221,7 +218,6 @@ export function LocationPointsList({
                             if (pickupPoint?.pointNumber !== point.pointNumber) {
                               setPickupPoint(point);
                             }
-                            setIsAutoPickup(false);
                             setPickupLandmark(landmark);
                             setSelectingField("dropoff");
                           } else {

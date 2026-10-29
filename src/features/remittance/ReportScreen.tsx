@@ -1,40 +1,54 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, Pressable, Share, Text, View } from "react-native";
-import { api } from "../../core/api/chatco-api";
-import { syncPendingCashTransactions } from "../../core/api/chatco-api";
+import { Alert, AppState, Platform, Pressable, Share, View } from "react-native";
+import { Text } from "../../shared/ui/BrandText";
+import { ConductorIcon } from "../../shared/ui/ConductorIcon";
+import { Ionicons } from "@expo/vector-icons";
+import { api, syncPendingCashTransactions } from "../../core/api/chatco-api";
 import type { Remittance, Shift, ShiftEarnings, Transaction } from "../../core/domain/types";
-import { useAppTheme } from "../../core/theme/ThemeProvider";
-import { Header, ScreenShell } from "../../shared/ui";
+import { useReportTheme } from "./report-styles";
+import { ReportPage } from "./ReportPage";
+import { thermalPrinter } from "../../core/utils/thermal-printer";
 import { money, officialReportText } from "./remittance-helpers";
 import { RemittanceConfirmModal } from "./components/RemittanceConfirmModal";
 import { RemittanceSuccessModal } from "./components/RemittanceSuccessModal";
-import { RemittanceHistoryModal } from "./components/RemittanceHistoryModal";
 import { RemittanceReportSlipModal } from "./components/RemittanceReportSlipModal";
 import { RemittanceCollectionsCard } from "./components/RemittanceCollectionsCard";
+import { RemittanceHistorySection, type RemittanceHistoryFilter } from "./components/RemittanceHistorySection";
 import { transactionSummary } from "../../core/domain/transaction-summary";
 
-export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
+type ReportLoadState = "loading" | "success" | "error";
+
+export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }: {
   shift: Shift;
   refreshKey: number;
   canOperate: boolean;
   onEnded: () => void;
+  onBack?: () => void;
 }) {
-  const { colors, isLofi, styles } = useAppTheme();
+  const { colors, isLofi, styles } = useReportTheme();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [earnings, setEarnings] = useState<ShiftEarnings | null>(null);
+  const [reportState, setReportState] = useState<ReportLoadState>("loading");
   const [history, setHistory] = useState<Remittance[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<RemittanceHistoryFilter>("week");
+  const [historyDateFrom, setHistoryDateFrom] = useState("");
+  const [historyDateTo, setHistoryDateTo] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
   const [confirm, setConfirm] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [selected, setSelected] = useState<Remittance | null>(null);
   const [success, setSuccess] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [historyError, setHistoryError] = useState("");
-  const [filter, setFilter] = useState<"ALL" | "WEEK" | "MONTH">("ALL");
-  const [page, setPage] = useState(1);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyPages, setHistoryPages] = useState(1);
+  const [submittedTotals, setSubmittedTotals] = useState<{ cash: number; gcash: number; all: number } | null>(null);
   const loadInFlight = useRef<Promise<void> | null>(null);
+  const endedRef = useRef(false);
+  const onEndedRef = useRef(onEnded);
+
+  useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
 
   const load = useCallback(async () => {
     if (loadInFlight.current) return loadInFlight.current;
@@ -47,8 +61,10 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
         setTransactions(current);
         setEarnings(authoritativeEarnings);
         setError("");
+        setReportState("success");
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Unable to load the report.");
+        setReportState("error");
       } finally {
         loadInFlight.current = null;
       }
@@ -57,22 +73,29 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
     return request;
   }, [shift.shiftId]);
 
-  useEffect(() => {
-    if (!historyOpen) return;
-    let active = true;
-    setHistory([]);
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
     setHistoryError("");
-    void api.remittancesPage(page, filter).then(result => {
-      if (!active) return;
-      setHistory(result.items); setHistoryTotal(result.total); setHistoryPages(result.lastPage);
-    }).catch(() => { if (active) setHistoryError("Remittance history is unavailable. Reconnect and reopen or change the page to retry."); });
-    return () => { active = false; };
-  }, [historyOpen, page, filter]);
+    try {
+      const first = await api.remittancesPage(1, "ALL", 100);
+      const all = [...first.items];
+      for (let page = 2; page <= first.lastPage; page += 1) {
+        const next = await api.remittancesPage(page, "ALL", 100);
+        all.push(...next.items);
+      }
+      setHistory(all);
+      setHistoryLoaded(true);
+    } catch (cause) {
+      setHistoryError(cause instanceof Error ? cause.message : "Remittance history is unavailable.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 15000);
-    const subscription = AppState.addEventListener("change", state => {
+    const timer = setInterval(() => void load(), 20000);
+    const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") void load();
     });
     return () => {
@@ -81,49 +104,37 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
     };
   }, [load, refreshKey]);
 
-  const totals = useMemo(() => { const summary = transactionSummary(transactions); return { ...summary, all: summary.total }; }, [transactions]);
+  useEffect(() => {
+    if (!historyLoaded && !historyLoading && !historyError) void loadHistory();
+  }, [historyLoaded, historyLoading, historyError, loadHistory]);
+
+  useEffect(() => {
+    if (!success) return;
+    endedRef.current = false;
+    const timer = setTimeout(() => {
+      if (endedRef.current) return;
+      endedRef.current = true;
+      void onEndedRef.current();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [success]);
+
+  const totals = useMemo(() => {
+    const summary = transactionSummary(transactions);
+    return { ...summary, all: summary.total };
+  }, [transactions]);
   const accountableTotals = earnings
-    ? {
-        ...totals,
-        cash: earnings.cashTotal,
-        gcash: earnings.gcashTotal,
-        all: earnings.total,
-      }
+    ? { ...totals, cash: earnings.cashTotal, gcash: earnings.gcashTotal, all: earnings.total }
     : totals;
 
-  const pageSize = 15;
-  const pages = historyPages;
-  const visibleHistory = history;
+  const totalPassengers = useMemo(
+    () => transactions.reduce((sum, transaction) => sum + (transaction.totalPassengers ?? 1), 0),
+    [transactions],
+  );
+  const cashCount = useMemo(() => transactions.filter((transaction) => transaction.paymentMethod === "Cash").length, [transactions]);
+  const voucherCount = useMemo(() => transactions.filter((transaction) => transaction.paymentMethod === "Voucher").length, [transactions]);
 
-  const submit = async () => {
-    if (!canOperate) {
-      setError("This shift is active on another device. Complete the handoff before remitting here.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      // A local offline cash receipt is not part of the server's authoritative
-      // earnings yet. Flush it before remittance and block if it remains
-      // queued, so the official report cannot omit collected cash.
-      await syncPendingCashTransactions();
-      const pendingForShift = await api.pendingCashCount(shift.shiftId);
-      if (pendingForShift > 0) {
-        throw new Error(
-          "Some cash transactions are still waiting to sync. Reconnect to internet before submitting remittance.",
-        );
-      }
-
-      await api.remit(shift, accountableTotals.cash, accountableTotals.gcash);
-      setConfirm(false);
-      setSuccess(true);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to submit the remittance.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const canRemit = transactions.length > 0;
 
   const handlePressRemit = async () => {
     if (!canOperate) {
@@ -135,204 +146,183 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded }: {
       await syncPendingCashTransactions();
       const pending = await api.pendingCashCount(shift.shiftId);
       if (pending > 0) {
-        setError("Some cash transactions are still waiting to sync. Reconnect to internet before submitting remittance.");
+        setError("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
         return;
       }
       setConfirm(true);
     } catch {
-      setError("Some cash transactions are still waiting to sync. Reconnect to internet before submitting remittance.");
+      setError("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
     }
   };
 
-  const shareReport = async (item: Remittance | null = null) => {
-    const body = item
-      ? officialReportText(item, shift)
-      : [
-          "CHATCO OFFICIAL SHIFT REPORT",
-          `Unit: ${shift.unitNumber}`,
-          `Conductor: ${shift.conductorName}`,
-          `Driver: ${shift.driverName}`,
-          `Transactions: ${transactions.length}`,
-          `Cash: ${money(accountableTotals.cash)}`,
-          `GCash: ${money(accountableTotals.gcash)}`,
-          `Voucher: ${money(totals.voucher)}`,
-          `Grand total: ${money(accountableTotals.all)}`,
-        ].join("\n");
-    await Share.share({ title: "ChatCo Official Report", message: body });
+  const submit = async () => {
+    if (!canOperate) {
+      setError("This shift is active on another device. Complete the handoff before remitting here.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await syncPendingCashTransactions();
+      const pendingForShift = await api.pendingCashCount(shift.shiftId);
+      if (pendingForShift > 0) {
+        throw new Error("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
+      }
+      await api.remit(shift, accountableTotals.cash, accountableTotals.gcash);
+      setSubmittedTotals({ cash: accountableTotals.cash, gcash: accountableTotals.gcash, all: accountableTotals.all });
+      setConfirm(false);
+      setSuccess(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to submit the remittance.");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const totalPassengers = useMemo(() => {
-    return transactions.reduce((sum, t) => sum + (t.totalPassengers ?? 1), 0);
-  }, [transactions]);
+  const printReport = async (record: Remittance) => {
+    const body = officialReportText(record, shift);
+    if (Platform.OS === "ios") {
+      await Share.share({ title: "CHATCO Official Report", message: body });
+      return;
+    }
+    const result = await thermalPrinter.printReportText(body);
+    if (!result.success) Alert.alert("Unable to print report", result.error || "Check the paired printer and try again.");
+  };
 
-  const cashCount = useMemo(() => transactions.filter(t => t.paymentMethod === "Cash").length, [transactions]);
-  const gcashCount = useMemo(() => transactions.filter(t => t.paymentMethod === "GCash").length, [transactions]);
-  const voucherCount = useMemo(() => transactions.filter(t => t.paymentMethod === "Voucher").length, [transactions]);
+  const exitAfterRemittance = () => {
+    if (endedRef.current) return;
+    endedRef.current = true;
+    setSuccess(false);
+    void onEndedRef.current();
+  };
 
-  const hasRemitted = success;
+  if (reportState === "loading") {
+    return (
+      <ReportPage onBack={onBack}>
+        {[80, 112, 192, 128, 56].map((height, index) => (
+          <View key={index} style={[styles.card, { height, marginTop: index === 0 ? 4 : 12, opacity: 0.55 }]} />
+        ))}
+      </ReportPage>
+    );
+  }
+
+  if (reportState === "error") {
+    return (
+      <ReportPage onBack={onBack}>
+        <Pressable accessibilityRole="button" onPress={() => { setReportState("loading"); void load(); }} style={[styles.card, { paddingVertical: 32, alignItems: "center" }]}>
+          <Text style={styles.error}>{error}</Text>
+          <Text style={[styles.subtitle, { marginTop: 8 }]}>Tap to retry.</Text>
+        </Pressable>
+      </ReportPage>
+    );
+  }
 
   return (
-    <ScreenShell>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <Header
-          eyebrow="Shift Settlement"
-          title="End of Day Report"
-          subtitle={`Unit ${shift.unitNumber} · ${transactions.length} passenger transactions`}
-        />
-        {hasRemitted ? (
-          <View style={{ backgroundColor: isLofi ? "rgba(22, 112, 90, 0.12)" : "rgba(52, 211, 153, 0.15)", borderColor: isLofi ? colors.success : "rgba(52, 211, 153, 0.3)", borderWidth: isLofi ? 1.5 : 1, borderRadius: isLofi ? 3 : 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-            <Text style={{ color: colors.success, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 }}>
-              Submitted
-            </Text>
-          </View>
-        ) : null}
-      </View>
+    <ReportPage onBack={onBack}>
 
-      {/* Driver and Unit Banner Card */}
-      <View style={[styles.card, { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14 }]}>
-        <View style={{ width: 44, height: 44, borderRadius: isLofi ? 4 : 22, backgroundColor: isLofi ? colors.surface2 : "rgba(26, 95, 180, 0.2)", alignItems: "center", justifyContent: "center", borderWidth: isLofi ? 1.5 : 1, borderColor: colors.border }}>
-          <Text style={{ color: colors.primary, fontSize: 18, fontWeight: "800" }}>
-            {(shift.driverName || "D")[0]?.toUpperCase()}
-          </Text>
+      <View style={[styles.card, { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 }]}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isLofi ? colors.surface2 : "rgba(26,95,180,0.15)", alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "800" }}>{(shift.driverName || "D")[0]?.toUpperCase()}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.cardTitle, { fontSize: 15 }]}>{shift.driverName}</Text>
-          <Text style={[styles.subtitle, { fontSize: 12, marginTop: 2 }]}>
-            Unit {shift.unitNumber} · {shift.route || "Regular Route"}
-          </Text>
+          <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: "700" }}>{shift.driverName}</Text>
+          <Text style={{ color: colors.muted, fontSize: 11, lineHeight: 16, fontWeight: "500" }}>{shift.unitNumber} · {shift.route || "—"}</Text>
         </View>
       </View>
 
-      {/* Total Collections & Payment Breakdown Cards */}
       <RemittanceCollectionsCard
         totalAmount={accountableTotals.all}
         totalPassengers={totalPassengers}
         transactionCount={transactions.length}
+        transactions={transactions}
         accountableTotals={accountableTotals}
         voucherTotal={totals.voucher}
         cashCount={cashCount}
-        gcashCount={gcashCount}
         voucherCount={voucherCount}
       />
 
-      {/* Collection Summary: Cash vs GCash Overview */}
-      <View style={[styles.card, { backgroundColor: isLofi ? colors.surface : "rgba(26, 95, 180, 0.08)", borderColor: colors.border }]}>
-        <Text style={[styles.label, { color: colors.primary, marginBottom: 10 }]}>Collection Summary</Text>
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: isLofi ? 3 : 12, padding: 12, borderWidth: isLofi ? 1.5 : 1, borderColor: colors.border }}>
-            <Text style={[styles.label, { color: colors.primary, fontSize: 9 }]}>GCASH</Text>
-            <Text style={{ color: colors.primary, fontSize: 17, fontWeight: "900", marginTop: 3 }}>
-              {money(accountableTotals.gcash)}
-            </Text>
-          </View>
-          <View style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: isLofi ? 3 : 12, padding: 12, borderWidth: isLofi ? 1.5 : 1, borderColor: colors.border }}>
-            <Text style={[styles.label, { color: colors.success, fontSize: 9 }]}>CASH</Text>
-            <Text style={{ color: colors.success, fontSize: 17, fontWeight: "900", marginTop: 3 }}>
-              {money(accountableTotals.cash)}
-            </Text>
-          </View>
+      <View style={[styles.card, { backgroundColor: isLofi ? colors.surface : "rgba(26,95,180,0.08)", borderColor: isLofi ? colors.border : "rgba(26,95,180,0.2)", gap: 12 }]}>
+        <Text style={[styles.label, { color: isLofi ? "#4B5563" : "rgba(98,160,234,0.6)" }]}>Collection Summary</Text>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          {[
+            { label: "GCash", amount: accountableTotals.gcash, color: isLofi ? colors.text : "#60A5FA" },
+            { label: "Cash", amount: accountableTotals.cash, color: colors.success },
+          ].map((item) => (
+            <View key={item.label} style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: isLofi ? colors.border : "rgba(255,255,255,0.05)" }}>
+              <Text style={[styles.label, { color: isLofi ? "#4B5563" : item.label === "GCash" ? "rgba(96,165,250,0.6)" : "rgba(52,211,153,0.6)", fontWeight: "600" }]}>{item.label}</Text>
+              <Text style={{ color: item.color, fontSize: 18, lineHeight: 28, fontWeight: "800", marginTop: 2 }}>{money(item.amount)}</Text>
+            </View>
+          ))}
         </View>
-        <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 10 }} />
+        <View style={{ height: 1, backgroundColor: colors.border }} />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={[styles.label, { color: colors.muted }]}>Grand Total</Text>
-          <Text style={{ color: colors.primary, fontSize: 22, fontWeight: "900" }}>{money(accountableTotals.all)}</Text>
+          <Text style={[styles.label, { color: colors.secondary, fontSize: 12, lineHeight: 16 }]}>Grand Total</Text>
+          <Text style={{ color: colors.primary, fontSize: 24, lineHeight: 32, fontWeight: "800" }}>{money(accountableTotals.all)}</Text>
         </View>
       </View>
 
-      {/* Remittance Action Section */}
-      {!hasRemitted ? (
-        <View style={{ marginTop: 6, gap: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface2, borderColor: colors.border, borderWidth: isLofi ? 1.5 : 1, borderRadius: isLofi ? 4 : 12, padding: 12 }}>
-            <View style={{ width: 34, height: 34, borderRadius: isLofi ? 3 : 8, backgroundColor: isLofi ? colors.surface : "rgba(26, 95, 180, 0.2)", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 16 }}>🏛</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontSize: 12, fontWeight: "700" }}>Remittance to Admin</Text>
-              <Text style={{ color: colors.muted, fontSize: 10, marginTop: 2 }}>
-                All recorded transactions will be submitted to admin.
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            disabled={!canOperate}
-            style={[styles.button, !canOperate && { opacity: 0.45 }]}
-            onPress={() => void handlePressRemit()}
-          >
-            <Text style={styles.buttonText}>Remit to Admin and end shift</Text>
-          </Pressable>
-          {!canOperate ? <Text style={styles.error}>This shift is active on another device. Complete handoff to remit.</Text> : null}
-        </View>
-      ) : (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: isLofi ? "rgba(22, 112, 90, 0.12)" : "rgba(52, 211, 153, 0.08)", borderColor: isLofi ? colors.success : "rgba(52, 211, 153, 0.25)", borderWidth: isLofi ? 1.5 : 1, borderRadius: isLofi ? 4 : 16, padding: 14, marginTop: 6 }}>
-          <View style={{ width: 38, height: 38, borderRadius: isLofi ? 4 : 19, backgroundColor: isLofi ? colors.surface2 : "rgba(52, 211, 153, 0.2)", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: colors.success, fontSize: 18, fontWeight: "900" }}>✓</Text>
+      <View style={{ gap: 12 }}>
+        <View style={[styles.card, { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, backgroundColor: isLofi ? "#F9FAFB" : "rgba(255,255,255,0.03)" }]}>
+          <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: isLofi ? "#F3F4F6" : "rgba(26,95,180,0.15)", alignItems: "center", justifyContent: "center" }}>
+            <ConductorIcon name="globe" size={16} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.success, fontSize: 14, fontWeight: "800" }}>Submitted to Admin</Text>
-            <Text style={[styles.subtitle, { fontSize: 11, marginTop: 2 }]}>
-              GCash {money(accountableTotals.gcash)} · Cash {money(accountableTotals.cash)} · Total {money(accountableTotals.all)}
-            </Text>
+            <Text style={{ color: colors.secondary, fontSize: 12, lineHeight: 16, fontWeight: "600" }}>Remittance to Admin</Text>
+            <Text style={{ color: isLofi ? "#6B7280" : "rgba(255,255,255,0.3)", fontSize: 10, lineHeight: 15, marginTop: 2 }}>All recorded transactions will be submitted to admin</Text>
           </View>
         </View>
-      )}
+        <Pressable
+          accessibilityRole="button"
+          disabled={!canOperate || !canRemit}
+          onPress={() => void handlePressRemit()}
+          style={[styles.button, (!canOperate || !canRemit) && { backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: colors.border }]}
+        >
+          <Text style={[styles.buttonText, (!canOperate || !canRemit) && { color: colors.muted }]}>
+            {!canRemit ? "No pending remittance" : canOperate ? "Remit to Admin" : "Complete shift handoff to remit"}
+          </Text>
+        </Pressable>
+        {!canOperate ? <Text style={styles.error}>This shift is active on another device. Complete handoff to remit.</Text> : null}
+      </View>
 
-      {/* Auxiliary Actions */}
-      <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => { setPage(1); setHistoryOpen(true); }}>
-        <Text style={[styles.buttonText, styles.secondaryButtonText]}>Remittance history</Text>
-      </Pressable>
-      <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => void shareReport()}>
-        <Text style={[styles.buttonText, styles.secondaryButtonText]}>Share current official report</Text>
-      </Pressable>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <RemittanceHistorySection
+        history={history}
+        expanded={historyExpanded}
+        onToggle={() => setHistoryExpanded((value) => !value)}
+        loading={historyLoading}
+        error={historyError}
+        onRetry={() => void loadHistory()}
+        filter={historyFilter}
+        onFilterChange={(value) => { setHistoryFilter(value); setHistoryPage(1); }}
+        dateFrom={historyDateFrom}
+        onDateFromChange={setHistoryDateFrom}
+        dateTo={historyDateTo}
+        onDateToChange={setHistoryDateTo}
+        page={historyPage}
+        onPageChange={setHistoryPage}
+        onView={setSelected}
+        onPrint={(record) => void printReport(record)}
+      />
 
-      {/* Confirmation Modal */}
+      {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
+
       <RemittanceConfirmModal
         visible={confirm}
         onClose={() => setConfirm(false)}
         busy={busy}
-        accountableTotals={{ ...accountableTotals, voucher: totals.voucher }}
+        shiftInfo={{ driverName: shift.driverName, unitNumber: shift.unitNumber }}
+        totalPassengers={totalPassengers}
+        accountableTotals={accountableTotals}
         onConfirm={() => void submit()}
       />
 
-      {/* Success Modal */}
       <RemittanceSuccessModal
         visible={success}
-        onClose={() => {
-          setSuccess(false);
-          onEnded();
-        }}
-        accountableTotals={accountableTotals}
-        onShareReport={() => void shareReport()}
-        onReturn={() => {
-          setSuccess(false);
-          onEnded();
-        }}
+        accountableTotals={submittedTotals ?? accountableTotals}
+        unitNumber={shift.unitNumber}
+        onClose={exitAfterRemittance}
       />
 
-      {/* History Modal */}
-      <RemittanceHistoryModal
-        visible={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        historyError={historyError}
-        filter={filter}
-        setFilter={setFilter}
-        page={page}
-        setPage={setPage}
-        totalPages={pages}
-        totalFiltered={historyTotal}
-        pageSize={pageSize}
-        visibleHistory={visibleHistory}
-        onSelect={setSelected}
-      />
-
-      {/* Official Report Slip Modal */}
-      <RemittanceReportSlipModal
-        selected={selected}
-        onClose={() => setSelected(null)}
-        shift={shift}
-        onShare={(item) => void shareReport(item)}
-      />
-    </ScreenShell>
+      <RemittanceReportSlipModal selected={selected} onClose={() => setSelected(null)} shift={shift} />
+    </ReportPage>
   );
 }

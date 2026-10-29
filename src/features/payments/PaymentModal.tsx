@@ -1,7 +1,7 @@
-import { useMemo } from "react";
-import { Modal, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, Modal, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { Shift } from "../../core/domain/types";
-import { useAppTheme } from "../../core/theme/ThemeProvider";
+import { usePaymentTheme } from "../../core/theme/payment-theme";
 import { createPaymentStyles } from "./payment-styles";
 import { usePaymentFlow } from "./hooks/usePaymentFlow";
 import { MethodSelectionStep } from "./components/MethodSelectionStep";
@@ -28,7 +28,13 @@ export function PaymentModal({
   onClose,
   onSaved,
 }: PaymentModalProps) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi } = usePaymentTheme();
+  const { width } = useWindowDimensions();
+  const centeredPanel = width >= 640;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const panelProgress = useRef(new Animated.Value(1)).current;
+  const [panelHeight, setPanelHeight] = useState(0);
+  const useNativeDriver = Platform.OS !== "web";
   const styles = useMemo(() => createPaymentStyles(colors, isLofi), [colors, isLofi]);
 
   const flow = usePaymentFlow({
@@ -40,6 +46,28 @@ export function PaymentModal({
     colors,
     isLofi,
   });
+
+  useEffect(() => {
+    if (!visible || flow.step === "select" || panelHeight <= 0) return;
+    backdropOpacity.setValue(0);
+    panelProgress.setValue(1);
+    const animation = Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver,
+      }),
+      Animated.timing(panelProgress, {
+        toValue: 0,
+        duration: 320,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+        useNativeDriver,
+      }),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [visible, flow.step, panelHeight, backdropOpacity, panelProgress, useNativeDriver]);
 
   if (!visible) return null;
 
@@ -61,8 +89,6 @@ export function PaymentModal({
         setDropoffLandmark={flow.setDropoffLandmark}
         selectingField={flow.selectingField}
         setSelectingField={flow.setSelectingField}
-        isAutoPickup={flow.isAutoPickup}
-        setIsAutoPickup={flow.setIsAutoPickup}
         expandedBarangay={flow.expandedBarangay}
         setExpandedBarangay={flow.setExpandedBarangay}
         searchQuery={flow.searchQuery}
@@ -91,12 +117,20 @@ export function PaymentModal({
 
   // MODAL OVERLAY FOR OTHER STEPS
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={flow.handleClose}>
-      <View style={styles.modalBackdrop}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={flow.handleClose}>
+      <Animated.View style={[styles.modalBackdrop, flow.step === "method" && !centeredPanel ? { padding: 0, alignItems: "stretch" } : null, { justifyContent: centeredPanel || flow.step === "qr_code" ? "center" : "flex-end", backgroundColor: flow.step === "qr_code" ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.6)", opacity: backdropOpacity }]}>
         {flow.fareNotice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.text, backgroundColor: colors.surface, padding: 12, marginBottom: 8 }}>{flow.fareNotice}</Text> : null}
+        <Animated.View
+          onLayout={(event) => {
+            const nextHeight = event.nativeEvent.layout.height;
+            setPanelHeight(current => Math.abs(current - nextHeight) > 1 ? nextHeight : current);
+          }}
+          style={{ width: "100%", alignItems: "center", opacity: panelProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateY: panelProgress.interpolate({ inputRange: [0, 1], outputRange: [0, panelHeight] }) }] }}
+        >
         {flow.step === "method" ? (
           <MethodSelectionStep
             styles={styles}
+            fullBottomSheet={!centeredPanel}
             isOnline={isOnline}
             onSelectMethod={(method) => {
               if (!flow.fareReady) return;
@@ -116,7 +150,6 @@ export function PaymentModal({
             groupCounts={flow.groupCounts}
             setGroupCounts={flow.setGroupCounts}
             groupEnteredCount={flow.groupEnteredCount}
-            groupGrossFare={flow.groupGrossFare}
             groupDiscount={flow.groupDiscount}
             groupTotalFare={flow.groupTotalFare}
             fareInfo={flow.fareInfo}
@@ -138,12 +171,10 @@ export function PaymentModal({
             isGroupMode={flow.isGroupMode}
             groupPassengerCount={flow.groupPassengerCount}
             groupTotalFare={flow.groupTotalFare}
+            groupDiscount={flow.groupDiscount}
+            groupPassengers={flow.groupPassengers}
             fareInfo={flow.fareInfo}
-            voucherCode={flow.voucherCode}
-            setVoucherCode={flow.setVoucherCode}
             isInitiatingGcash={flow.isInitiatingGcash}
-            pickupBadgeText={flow.pickupBadgeText}
-            dropoffBadgeText={flow.dropoffBadgeText}
             handleConfirmPayment={flow.handleConfirmPayment}
             setStep={flow.setStep}
           />
@@ -159,7 +190,6 @@ export function PaymentModal({
             gcashError={flow.gcashError}
             qrSecondsLeft={flow.qrSecondsLeft}
             isCancellingGcash={flow.isCancellingGcash}
-            handleSimulatePayment={flow.handleSimulatePayment}
             handleCancelGcash={flow.handleCancelGcash}
             stopPolling={flow.stopPolling}
             setStep={flow.setStep}
@@ -211,7 +241,8 @@ export function PaymentModal({
             setStep={flow.setStep}
           />
         ) : null}
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }

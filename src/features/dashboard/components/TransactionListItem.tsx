@@ -1,6 +1,8 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import type { Transaction } from "../../../core/domain/types";
+import { Text } from "../../../shared/ui/BrandText";
+import { ConductorIcon } from "../../../shared/ui/ConductorIcon";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
 
 interface TransactionListItemProps {
@@ -9,67 +11,79 @@ interface TransactionListItemProps {
   onToggleExpand: () => void;
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
-  const { styles } = useAppTheme();
+const formatPeso = (amount: number) =>
+  new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(amount || 0);
+
+function Detail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  const { isLofi } = useAppTheme();
   return (
-    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, marginVertical: 3 }}>
-      <Text style={styles.subtitle}>{label}</Text>
-      <Text style={[styles.cardTitle, { flex: 1, textAlign: "right", fontSize: 12 }]}>{value}</Text>
+    <View style={{ minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)", paddingVertical: 6 }}>
+      <Text style={{ color: isLofi ? "#6B7280" : "rgba(255,255,255,0.45)", fontSize: 12 }}>{label}</Text>
+      <Text style={{ flex: 1, color: isLofi ? "#111827" : "#FFFFFF", fontSize: mono ? 11 : 12, fontWeight: "500", textAlign: "right", fontFamily: mono ? "monospace" : undefined }}>
+        {value}
+      </Text>
     </View>
   );
 }
 
-export function TransactionListItem({
-  transaction,
-  isExpanded,
-  onToggleExpand,
-}: TransactionListItemProps) {
-  const { colors, styles } = useAppTheme();
+export function TransactionListItem({ transaction, isExpanded, onToggleExpand }: TransactionListItemProps) {
+  const { isLofi } = useAppTheme();
+  const text = isLofi ? "#111827" : "#FFFFFF";
+  const muted = isLofi ? "#6B7280" : "rgba(255,255,255,0.45)";
+  const when = new Date(transaction.timestamp);
+  const displayDate = when.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const displayTime = when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  const paymentMethod = transaction.paymentMethod.startsWith("GCash") ? "GCash" : transaction.paymentMethod;
 
   return (
-    <Pressable style={styles.card} onPress={onToggleExpand}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>
-            {transaction.from} → {transaction.to}
-          </Text>
-          <Text style={styles.subtitle}>
-            {new Date(transaction.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ·{" "}
-            {transaction.paymentMethod} · {transaction.status || "PAID"}
-          </Text>
+    <View style={{ backgroundColor: isExpanded ? (isLofi ? "#F9FAFB" : "#0B223A") : "transparent" }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isExpanded }}
+        onPress={onToggleExpand}
+        style={{ minHeight: 68, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 12 }}
+      >
+        <View style={{ width: 56 }}>
+          <Text style={{ color: isLofi ? "#374151" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{displayTime}</Text>
+          <Text style={{ color: muted, fontSize: 10, marginTop: 2 }}>{when.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</Text>
         </View>
-        <Text style={[styles.cardTitle, { color: colors.primary }]}>
-          ₱{transaction.finalAmount.toFixed(2)}
-        </Text>
-      </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ color: text, fontSize: 14, fontWeight: "600" }}>{transaction.passengerName || "Walk-in"}</Text>
+          <Text numberOfLines={1} style={{ color: muted, fontSize: 12, marginTop: 2 }}>{transaction.from} → {transaction.to}</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={{ color: text, fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatPeso(transaction.finalAmount)}</Text>
+            <Text style={{ color: muted, fontSize: 10, fontWeight: "500", marginTop: 2 }}>{paymentMethod}</Text>
+          </View>
+          <ConductorIcon name={isExpanded ? "up" : "down"} size={16} color={isLofi ? "#9CA3AF" : "rgba(255,255,255,0.35)"} />
+        </View>
+      </Pressable>
 
       {isExpanded ? (
-        <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }}>
-          <Detail label="Transaction ID" value={transaction.transactionId} />
-          <Detail label="Status" value={transaction.status || "PAID"} />
-          <Detail
-            label="Paid at"
-            value={
-              transaction.paidAt
-                ? new Date(transaction.paidAt).toLocaleString()
-                : new Date(transaction.timestamp).toLocaleString()
-            }
-          />
-          <Detail label="Passenger" value={transaction.passengerName || "Walk-in"} />
-          <Detail label="Passenger ID" value={transaction.passengerId || "—"} />
-          <Detail label="Role" value={transaction.passengerRole || "—"} />
-          <Detail label="Distance" value={`${transaction.distance ?? 0} route points`} />
-          <Detail label="Base fare" value={`₱${(transaction.baseFare ?? 0).toFixed(2)}`} />
-          <Detail label="Succeeding distance" value={String(transaction.succeedingKm ?? 0)} />
-          <Detail label="Discount" value={`₱${(transaction.discountAmount ?? 0).toFixed(2)}`} />
-          {transaction.voucherCode ? (
-            <Detail label="Voucher" value={transaction.voucherCode} />
-          ) : null}
-          <Detail label="Conductor" value={transaction.conductorName || "—"} />
-          <Detail label="Driver" value={transaction.driverName || "—"} />
-          <Detail label="Unit" value={transaction.unitNumber || "—"} />
+        <View style={{ gap: 12, paddingHorizontal: 20, paddingBottom: 16 }}>
+          <View style={{ borderTopWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)" }}>
+            <Detail label="Fare" value={formatPeso(transaction.finalAmount)} />
+            <Detail label="First km" value={formatPeso(transaction.baseFare ?? 0)} />
+            <Detail label="Succeeding rate" value={formatPeso(transaction.succeedingKm ?? 0)} />
+            {(transaction.discountAmount ?? 0) > 0 ? <Detail label="Discount" value={`− ${formatPeso(transaction.discountAmount ?? 0)}`} /> : null}
+            <Detail label="Distance" value={`${transaction.distance ?? 0} km`} />
+            <Detail label="Payment" value={paymentMethod} />
+          </View>
+          <View style={{ borderTopWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)" }}>
+            <Detail label="Passenger" value={transaction.passengerName || "Walk-in"} />
+            <Detail label="Passenger ID" value={transaction.passengerId || "—"} />
+            {transaction.passengerRole ? <Detail label="Type" value={transaction.passengerRole} /> : null}
+          </View>
+          <View style={{ borderTopWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)" }}>
+            <Detail label="Unit" value={transaction.unitNumber || "—"} />
+            <Detail label="Driver" value={transaction.driverName || "—"} />
+            <Detail label="Conductor" value={transaction.conductorName || "—"} />
+            <Detail label="Recorded" value={`${displayDate}, ${displayTime}`} />
+            <Detail label="Txn ID" value={transaction.transactionId} mono />
+          </View>
         </View>
       ) : null}
-    </Pressable>
+    </View>
   );
 }

@@ -1,7 +1,8 @@
 import React from "react";
-import { Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
+import { Platform, Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../core/theme/ThemeProvider";
+import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { CommuterType, FarePoint, GcashInitiation, ReceiptSettings, Shift, Transaction } from "../../../core/domain/types";
 import { thermalPrinter, type PrinterStatus } from "../../../core/utils/thermal-printer";
 import type { FareInfo, GroupPassengerRow, SelectedPaymentMethod } from "../payment-types";
@@ -65,13 +66,13 @@ export function PaymentSuccessStep({
   handlePrint,
   handleClose,
 }: PaymentSuccessStepProps) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi } = usePaymentTheme();
   const summary = receiptSummary(receiptTransactions, isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0, selectedMethod ?? "Cash");
 
   return (
     // Amounts and passenger roles below come from the final server receipt rows.
-    <View style={[styles.modalCard, { maxHeight: "90%" }]}>
-      <ScrollView contentContainerStyle={{ padding: 20, alignItems: "center" }}>
+    <View style={[styles.modalCard, { maxWidth: 384, maxHeight: "92%", flexShrink: 1, flexDirection: "column" }]}>
+      <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ padding: 20, alignItems: "center" }}>
         <View style={styles.successCheckCircle}>
           <Ionicons name="checkmark" size={32} color={isLofi ? colors.success : "#34D399"} />
         </View>

@@ -45,9 +45,9 @@ test("recent published fares survive offline restart for their originating route
 });
 test("expired, future and malformed cache cannot authorize estimated fares", async () => {
   const now = Date.now(); const matrix = normalizePublishedFares(raw);
-  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 2, savedAt: now - FARE_CACHE_MAX_AGE_MS - 1, matrix }));
+  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 3, savedAt: now - FARE_CACHE_MAX_AGE_MS - 1, matrix }));
   expect(await cachedPublishedFares(undefined, now)).toBeNull();
-  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 2, savedAt: now + 1, matrix }));
+  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 3, savedAt: now + 1, matrix }));
   expect(await cachedPublishedFares(undefined, now)).toBeNull();
   (appStorage.getItem as jest.Mock).mockResolvedValue("corrupt");
   expect(await cachedPublishedFares()).toBeNull();
@@ -59,9 +59,20 @@ test("fare fetch requests the shift route and saves only published values", asyn
   expect(request).toHaveBeenCalledWith("/mobile/fare-matrix?route_id=route");
   expect(appStorage.setItem).toHaveBeenCalledTimes(1);
 });
+
+test("old fare caches are not reused after the pricing-rule upgrade", async () => {
+  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 2, savedAt: Date.now(), matrix: normalizePublishedFares(raw) }));
+  expect(await cachedPublishedFares()).toBeNull();
+  expect(appStorage.getItem).toHaveBeenCalledWith("chatco_published_fares_v3:active");
+});
+
+test.each([0, 100])("published %s percent discount accepts zero-value derived fares", discountRate => {
+  const data = normalizePublishedFares({ ...raw, config: { discountRate, baseFareDiscounted: discountRate === 100 ? 0 : 17, succeedingFareDiscounted: discountRate === 100 ? 0 : 2.25 } });
+  expect(data.config.discountRate).toBe(discountRate);
+});
 test("network failure can use recent cached fares but authorization errors cannot", async () => {
   const matrix = normalizePublishedFares(raw);
-  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 2, savedAt: Date.now(), matrix }));
+  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 3, savedAt: Date.now(), matrix }));
   (request as jest.Mock).mockRejectedValue(new NetworkError("Offline"));
   expect((await paymentService.fareMatrix("route")).isCached).toBe(true);
   (request as jest.Mock).mockRejectedValue(new Error("Forbidden"));

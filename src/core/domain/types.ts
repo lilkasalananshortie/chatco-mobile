@@ -173,6 +173,7 @@ export interface FarePoint {
 }
 
 export interface FareConfig {
+  discountRate?: number;
   baseBarangayCount: number;
   baseFareRegular: number;
   baseFareDiscounted: number;

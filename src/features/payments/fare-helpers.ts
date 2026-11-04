@@ -47,17 +47,13 @@ export function getFareBetween(
   config: FareConfig,
   isDiscounted: boolean
 ): number {
-  if (from.pointNumber === to.pointNumber) {
-    return isDiscounted ? config.baseFareDiscounted : config.baseFareRegular;
-  }
-  const rawFare = isDiscounted
-    ? Math.abs(from.discountedFare - to.discountedFare)
-    : Math.abs(from.regularFare - to.regularFare);
-  return (
-    Math.round(
-      Math.max(rawFare, isDiscounted ? config.baseFareDiscounted : config.baseFareRegular) * 100
-    ) / 100
-  );
+  // Match Laravel FareRules: both endpoints count as traversed barangays.
+  // Stored stop fares are for trips from stop 1, not cumulative distances.
+  const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+  const traversed = getBarangaysTraversed(from, to);
+  const regular = round(config.baseFareRegular + Math.max(0, traversed - config.baseBarangayCount) * config.succeedingFareRegular);
+  const rate = config.discountRate ?? ((1 - config.baseFareDiscounted / config.baseFareRegular) * 100);
+  return isDiscounted ? round(regular * (100 - rate) / 100) : regular;
 }
 
 export function getBarangaysTraversed(from: FarePoint, to: FarePoint): number {

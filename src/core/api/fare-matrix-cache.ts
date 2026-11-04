@@ -1,7 +1,7 @@
 import type { FareConfig, FareMatrix, FarePoint } from "../domain/types";
 import { appStorage } from "../storage/app-storage";
 
-const PREFIX = "chatco_published_fares_v2:";
+const PREFIX = "chatco_published_fares_v3:";
 export const FARE_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const CURRENT_FARE_DEFAULTS: FareConfig = {
   baseBarangayCount: 4, baseFareRegular: 17, baseFareDiscounted: 13.6,
@@ -26,18 +26,22 @@ export function normalizePublishedFares(raw: any, requestedRoute?: string): Fare
     || new Set(points.map((p) => p.id)).size !== points.length) throw new Error("The published fare matrix is invalid. Refresh before collecting fares.");
   const config = Object.fromEntries(Object.entries(CURRENT_FARE_DEFAULTS).map(([key, fallback]) => [key, Number(raw.config?.[key] ?? fallback)])) as unknown as FareConfig;
   config.totalPoints = points.length;
-  if (Object.entries(config).some(([key, value]) => !Number.isFinite(value) || (key === "totalPoints" ? value < 0 : value <= 0))) throw new Error("The published fare configuration is invalid.");
+  config.discountRate = Number(raw.config?.discountRate ?? ((1 - config.baseFareDiscounted / config.baseFareRegular) * 100));
+  if (Object.values(config).some(value => !Number.isFinite(value))
+    || config.baseFareRegular <= 0 || !Number.isInteger(config.baseBarangayCount) || config.baseBarangayCount < 1
+    || config.baseFareDiscounted < 0 || config.succeedingFareRegular < 0 || config.succeedingFareDiscounted < 0
+    || config.discountRate < 0 || config.discountRate > 100) throw new Error("The published fare configuration is invalid.");
   return { points, config, routeId: raw.route?.id ?? raw.routeId ?? requestedRoute };
 }
 export async function savePublishedFares(matrix: FareMatrix, routeId?: string, at = Date.now()): Promise<void> {
-  await appStorage.setItem(PREFIX + (routeId ?? "active"), JSON.stringify({ version: 2, savedAt: at, matrix }));
+  await appStorage.setItem(PREFIX + (routeId ?? "active"), JSON.stringify({ version: 3, savedAt: at, matrix }));
 }
 export async function cachedPublishedFares(routeId?: string, at = Date.now()): Promise<FareMatrix | null> {
   const stored = await appStorage.getItem(PREFIX + (routeId ?? "active"));
   if (!stored) return null;
   try {
     const data = JSON.parse(stored);
-    if (data.version !== 2 || !Number.isFinite(data.savedAt) || data.savedAt > at || at - data.savedAt > FARE_CACHE_MAX_AGE_MS) return null;
+    if (data.version !== 3 || !Number.isFinite(data.savedAt) || data.savedAt > at || at - data.savedAt > FARE_CACHE_MAX_AGE_MS) return null;
     if (routeId && data.matrix?.routeId !== routeId) return null;
     const matrix = normalizePublishedFares(data.matrix, routeId);
     return { ...matrix, isCached: true, loadedAt: data.savedAt };

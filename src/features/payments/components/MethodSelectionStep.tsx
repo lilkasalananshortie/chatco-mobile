@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { SelectedPaymentMethod } from "../payment-types";
@@ -19,9 +19,12 @@ export function MethodSelectionStep({
   onClose,
 }: MethodSelectionStepProps) {
   const { colors, isLofi } = usePaymentTheme();
+  const { height: screenHeight } = useWindowDimensions();
+  const sheetMaxHeight = Math.max(240, screenHeight - 24);
+  const bodyMaxHeight = Math.max(160, sheetMaxHeight - 96);
 
   return (
-    <View style={[styles.modalCard, fullBottomSheet ? { maxWidth: "100%", borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : null]}>
+    <View style={[styles.modalCard, fullBottomSheet ? { maxWidth: "100%", maxHeight: sheetMaxHeight, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : null]}>
       <View style={styles.modalHeader}>
         <View>
           <Text style={styles.modalTitle}>Collect Payment</Text>
@@ -33,7 +36,7 @@ export function MethodSelectionStep({
       </View>
 
       <ScrollView
-        style={{ flex: 1, minHeight: 0 }}
+        style={fullBottomSheet ? { flexGrow: 0, flexShrink: 1, maxHeight: bodyMaxHeight } : { flex: 1, minHeight: 0 }}
         contentContainerStyle={styles.modalBody}
         keyboardShouldPersistTaps="handled"
       >

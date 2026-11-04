@@ -1,6 +1,5 @@
 import React from "react";
 import { Pressable, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../../../shared/ui/BrandText";
 import type { PrinterStatus } from "../../../core/utils/thermal-printer";
 
@@ -22,7 +21,6 @@ export interface BluetoothPrinterCardProps {
 export function BluetoothPrinterCard({
   styles,
   colors,
-  isLofi,
   printerStatus,
   printerName,
   isConnectingPrinter,
@@ -33,175 +31,68 @@ export function BluetoothPrinterCard({
   isTestingPrinter,
   onTestPrint,
 }: BluetoothPrinterCardProps) {
+  const connected = printerStatus === "connected";
+  const connecting = printerStatus === "connecting" || isConnectingPrinter;
+  const deviceLabel = connected
+    ? printerName || "Bluetooth thermal printer"
+    : connecting
+    ? "Searching for a nearby printer…"
+    : printerName
+    ? `${printerName} · saved, disconnected`
+    : "No printer paired";
+
   return (
     <View style={styles.sectionCard}>
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionHeaderTitle}>Bluetooth Belt Printer</Text>
-        <View
-          style={{
-            backgroundColor: isLofi ? colors.surface : "rgba(16, 185, 129, 0.15)",
-            paddingHorizontal: 6,
-            paddingVertical: 2,
-            borderRadius: 4,
-            borderWidth: 1,
-            borderColor: isLofi ? colors.border : "rgba(16, 185, 129, 0.3)",
-          }}
-        >
-          <Text style={{ fontSize: 9, fontWeight: "800", color: isLofi ? colors.text : "#34D399" }}>
-            58MM / 80MM ESC/POS
-          </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.sectionHeaderTitle}>Receipt printer</Text>
+          <Text style={[styles.prefSubtitle, { marginTop: 3 }]}>Bluetooth · 58 mm / 80 mm ESC/POS</Text>
         </View>
       </View>
 
-      {/* Pairing / Connection Status Row */}
-      <View style={[styles.infoRow, { marginTop: 8 }]}>
-        <View style={{ flex: 1, paddingRight: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor:
-                  printerStatus === "connected"
-                    ? isLofi
-                      ? colors.success
-                      : "#10B981"
-                    : isLofi
-                    ? colors.muted
-                    : "#6B7280",
-              }}
-            />
-            <Text style={styles.rowLabel}>
-              {printerStatus === "connected" ? "Connected Device" : "Pairing Status"}
-            </Text>
-          </View>
-          <Text style={[styles.rowValue, { marginTop: 2, fontSize: 13 }]}>
-            {printerStatus === "connected"
-              ? printerName || "Bluetooth Thermal Printer"
-              : printerStatus === "connecting"
-              ? "Searching / Connecting..."
-              : printerName
-              ? `Saved: ${printerName} (Disconnected)`
-              : "No Printer Paired"}
-          </Text>
-        </View>
-
-        {printerStatus === "connected" ? (
-          <Pressable
-            onPress={onDisconnectPrinter}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: isLofi ? 2 : 8,
-              backgroundColor: isLofi ? colors.surface2 : "rgba(239, 68, 68, 0.1)",
-              borderWidth: 1,
-              borderColor: isLofi ? colors.border : "rgba(239, 68, 68, 0.25)",
-            }}
-          >
-            <Text style={{ fontSize: 11, fontWeight: "700", color: isLofi ? colors.danger : "#F87171" }}>
-              Disconnect
-            </Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            disabled={isConnectingPrinter}
-            onPress={onConnectPrinter}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: isLofi ? 2 : 8,
-              backgroundColor: colors.primary,
-              opacity: isConnectingPrinter ? 0.6 : 1,
-            }}
-          >
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>
-              {isConnectingPrinter ? "Pairing..." : "Connect Printer"}
-            </Text>
-          </Pressable>
-        )}
-      </View>
-
-      {/* Auto-Print on Payment Switch (ON / OFF) */}
-      <View style={[styles.infoRow, { marginTop: 8, paddingVertical: 10 }]}>
-        <View style={{ flex: 1, paddingRight: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={styles.prefTitle}>Auto-Print on Ticket</Text>
-            <View
-              style={{
-                backgroundColor: autoPrint
-                  ? isLofi
-                    ? "rgba(22, 112, 90, 0.15)"
-                    : "rgba(16, 185, 129, 0.15)"
-                  : colors.surface,
-                paddingHorizontal: 6,
-                paddingVertical: 2,
-                borderRadius: 4,
-                borderWidth: 1,
-                borderColor: autoPrint
-                  ? isLofi
-                    ? colors.success
-                    : "rgba(16, 185, 129, 0.3)"
-                  : colors.border,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 9,
-                  fontWeight: "800",
-                  color: autoPrint ? (isLofi ? colors.success : "#34D399") : colors.muted,
-                }}
-              >
-                {autoPrint ? "ON" : "OFF"}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.prefSubtitle}>
-            {autoPrint
-              ? "Active: Automatically outputs 58mm paper slip upon cash or GCash confirmation"
-              : "Off: Manual print only — prints when tapping Print Receipt"}
-          </Text>
-        </View>
+      <View style={{ marginTop: 14, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, backgroundColor: colors.surface2 }}>
+        <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" }}>
+          Printer status
+        </Text>
+        <Text numberOfLines={2} style={{ color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 4 }}>
+          {deviceLabel}
+        </Text>
         <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{ checked: autoPrint }}
-          onPress={onToggleAutoPrint}
-          style={[
-            styles.toggleTrack,
-            autoPrint ? styles.toggleTrackActive : styles.toggleTrackInactive,
-          ]}
+          accessibilityRole="button"
+          disabled={connecting}
+          onPress={connected ? onDisconnectPrinter : onConnectPrinter}
+          style={{ minHeight: 42, alignItems: "center", justifyContent: "center", marginTop: 12, paddingHorizontal: 14, borderRadius: 8, backgroundColor: connected ? colors.surface : colors.primary, borderWidth: connected ? 1 : 0, borderColor: colors.border }}
         >
-          <View
-            style={[
-              styles.toggleThumb,
-              autoPrint ? styles.toggleThumbActive : styles.toggleThumbInactive,
-            ]}
-          />
+          <Text style={{ color: connected ? colors.text : "#FFFFFF", fontSize: 13, fontWeight: "700" }}>
+            {connected ? "Disconnect printer" : connecting ? "Pairing…" : "Pair printer"}
+          </Text>
         </Pressable>
       </View>
 
-      {/* Test Print Slip Button */}
       <Pressable
+        accessibilityRole="switch"
+        accessibilityLabel="Automatically print receipts after payment"
+        accessibilityState={{ checked: autoPrint }}
+        onPress={onToggleAutoPrint}
+        style={{ minHeight: 64, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.prefTitle}>Print receipts automatically</Text>
+          <Text style={styles.prefSubtitle}>{autoPrint ? "Prints after each confirmed cash or GCash payment." : "Receipts can still be printed manually after payment."}</Text>
+        </View>
+        <View style={{ width: 46, height: 27, borderRadius: 14, padding: 3, justifyContent: "center", backgroundColor: autoPrint ? colors.primary : colors.border }}>
+          <View style={{ width: 21, height: 21, borderRadius: 11, backgroundColor: "#FFFFFF", alignSelf: autoPrint ? "flex-end" : "flex-start" }} />
+        </View>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
         disabled={isTestingPrinter}
         onPress={onTestPrint}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 6,
-          marginTop: 8,
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-          borderRadius: isLofi ? 2 : 10,
-          backgroundColor: isLofi ? colors.surface2 : "rgba(16, 185, 129, 0.1)",
-          borderWidth: 1,
-          borderColor: isLofi ? colors.border : "rgba(16, 185, 129, 0.25)",
-          alignSelf: "flex-start",
-          opacity: isTestingPrinter ? 0.6 : 1,
-        }}
+        style={{ minHeight: 46, alignItems: "center", justifyContent: "center", marginTop: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface2 }}
       >
-        <Ionicons name="receipt-outline" size={16} color={isLofi ? colors.success : "#34D399"} />
-        <Text style={{ fontSize: 12, fontWeight: "700", color: isLofi ? colors.success : "#34D399" }}>
-          {isTestingPrinter ? "Printing Test Slip..." : "Test Print Slip (58mm)"}
+        <Text style={{ color: colors.text, fontSize: 13, fontWeight: "700" }}>
+          {isTestingPrinter ? "Printing test receipt…" : "Print test receipt"}
         </Text>
       </Pressable>
     </View>

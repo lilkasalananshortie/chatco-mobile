@@ -5,6 +5,7 @@ import * as Location from "expo-location";
 import { api } from "../../core/api/chatco-api";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { sosModalStyles as styles } from "./sos-modal-styles";
+import { SlideToConfirm } from "./SlideToConfirm";
 
 interface SosConfirmModalProps {
   isOpen: boolean;
@@ -13,7 +14,6 @@ interface SosConfirmModalProps {
 
 type SosStatus = "confirming" | "locating" | "sending" | "active" | "responded" | "error";
 
-const DEFAULT_LOCATION = { lat: 14.8434, lng: 120.875 };
 const POLL_INTERVAL_MS = 3000;
 let lastSosTimestamp = 0;
 
@@ -26,6 +26,7 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activating = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -104,24 +105,28 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
   }, []);
 
   const handleActivate = useCallback(async () => {
+    if (activating.current) return;
     if (Date.now() - lastSosTimestamp < 60000) {
       setStatus("error");
       setErrorMessage("Too many requests. Please slow down. Emergency alert is already active.");
       return;
     }
     setStatus("locating");
+    activating.current = true;
     setErrorMessage("");
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== "granted") {
-        // Fallback to default Meycauayan location
-        void sendSos(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng);
-        return;
+        throw new Error("Location access is required to send SOS. Enable GPS or call emergency services below.");
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      void sendSos(position.coords.latitude, position.coords.longitude);
-    } catch {
-      void sendSos(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng);
+      if (!Number.isFinite(position.coords.latitude) || !Number.isFinite(position.coords.longitude)) throw new Error("A valid GPS location is required to send SOS.");
+      await sendSos(position.coords.latitude, position.coords.longitude);
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(error instanceof Error ? error.message : "Location unavailable. Retry or call emergency services below.");
+    } finally {
+      activating.current = false;
     }
   }, [sendSos]);
 
@@ -222,11 +227,8 @@ export function SosConfirmModal({ isOpen, onClose }: SosConfirmModalProps) {
                 >
                   <Text style={[styles.cancelText, isLofi && { color: colors.text }]}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={() => void handleActivate()} style={[styles.button, styles.sosButton, isLofi && { borderRadius: 3 }]}>
-                  <Ionicons name="warning" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.sosButtonText}>Send SOS</Text>
-                </Pressable>
               </View>
+              <SlideToConfirm label="Slide to send SOS" onComplete={handleActivate} commitRatio={0.9} trackColor={colors.surface2} handleColor="#DC2626" textColor={colors.text} style={{ borderColor: "#991B1B", borderWidth: 1 }} />
               {renderSpeedDial()}
             </View>
           )}

@@ -12,6 +12,9 @@ import {
 } from "./api-client";
 import { mapDriver, mapShift, mapUnit } from "./api-mappers";
 
+let activeShiftRequest: Promise<Shift | null> | null = null;
+let connectivityRequest: Promise<boolean> | null = null;
+
 export const shiftService = {
   units: async (): Promise<Unit[]> => {
     try {
@@ -87,38 +90,56 @@ export const shiftService = {
   },
 
   activeShift: async (): Promise<Shift | null> => {
-    try {
-      const data = await request<any | null>("/mobile/conductor/shift");
-      if (data) {
-        await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
-        return mapShift(data);
-      }
-      const provisionalRaw = await appStorage.getItem(PROVISIONAL_SHIFT_KEY);
-      if (provisionalRaw) {
-        try {
-          return JSON.parse(provisionalRaw) as Shift;
-        } catch {}
-      }
-      return null;
-    } catch (cause) {
-      if (cause instanceof NetworkError) {
+    if (activeShiftRequest) return activeShiftRequest;
+    const pending = (async (): Promise<Shift | null> => {
+      try {
+        const data = await request<any | null>("/mobile/conductor/shift");
+        if (data) {
+          await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
+          return mapShift(data);
+        }
         const provisionalRaw = await appStorage.getItem(PROVISIONAL_SHIFT_KEY);
         if (provisionalRaw) {
           try {
             return JSON.parse(provisionalRaw) as Shift;
           } catch {}
         }
+        return null;
+      } catch (cause) {
+        if (cause instanceof NetworkError) {
+          const provisionalRaw = await appStorage.getItem(PROVISIONAL_SHIFT_KEY);
+          if (provisionalRaw) {
+            try {
+              return JSON.parse(provisionalRaw) as Shift;
+            } catch {}
+          }
+        }
+        throw cause;
       }
-      throw cause;
+    })();
+    activeShiftRequest = pending;
+    try {
+      return await pending;
+    } finally {
+      if (activeShiftRequest === pending) activeShiftRequest = null;
     }
   },
 
   checkConnectivity: async (): Promise<boolean> => {
+    if (connectivityRequest) return connectivityRequest;
+    const pending = (async () => {
+      try {
+        await request<any>("/mobile/system-status");
+        return true;
+      } catch (cause) {
+        return !(cause instanceof NetworkError);
+      }
+    })();
+    connectivityRequest = pending;
     try {
-      await request<any>("/mobile/system-status");
-      return true;
-    } catch (cause) {
-      return !(cause instanceof NetworkError);
+      return await pending;
+    } finally {
+      if (connectivityRequest === pending) connectivityRequest = null;
     }
   },
 

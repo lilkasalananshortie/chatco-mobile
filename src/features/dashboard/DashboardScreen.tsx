@@ -31,7 +31,8 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const safeInsets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [dashboardHeight, setDashboardHeight] = useState(0);
-  const bottomNavigationHeight = 64 + safeInsets.bottom;
+  const bottomNavigationInset = Platform.OS === "android" ? Math.max(safeInsets.bottom, 24) : safeInsets.bottom;
+  const bottomNavigationHeight = 64 + bottomNavigationInset;
   const availableHeight = windowHeight - safeInsets.top;
   const dashboardMaxHeight = Math.max(90, Math.min(availableHeight * 0.75, availableHeight - bottomNavigationHeight - 160));
   const usesWebMapFallback = Platform.OS === "android" && Constants.expoConfig?.extra?.googleMapsConfigured !== true;

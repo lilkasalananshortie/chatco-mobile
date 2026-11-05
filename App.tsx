@@ -5,7 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api, setSessionEndedHandler, syncPendingCashTransactions } from "./src/core/api/chatco-api";
 import { appStorage } from "./src/core/storage/app-storage";
 import { ThemeProvider, useAppTheme } from "./src/core/theme/ThemeProvider";
-import { BottomNav, Loading } from "./src/shared/ui";
+import { BottomNav, Loading, VerificationBackButton } from "./src/shared/ui";
 import { DashboardScreen } from "./src/features/dashboard/DashboardScreen";
 import { ShiftGpsProvider } from "./src/features/dashboard/ShiftGpsProvider";
 import { LoginScreen } from "./src/features/auth/LoginScreen";
@@ -231,11 +231,12 @@ function AppRoot() {
   const reminder = <RemittanceReminder key={user.id} dismissedIds={dismissedReminderIds} suspended={payment} onViewReport={() => setScreen("report")} />;
   if (!shift && screen === "report") return <><RemittanceOverview onBack={() => setScreen("verify")} />{reminder}</>;
   if (!shift && screen === "metrics") return <><MetricsScreen onBack={() => setScreen("verify")} />{reminder}</>;
-  if (!shift && screen === "settings") return <View style={{ flex: 1, backgroundColor: colors.background }}><Pressable accessibilityRole="button" onPress={() => setScreen("verify")} style={{ padding: 20 }}><Text style={{ color: colors.primaryLight }}>Back to verification</Text></Pressable><SettingsScreen user={user} shift={null} onLogout={() => { setUser(null); setScreen("verify"); }} />{reminder}</View>;
+  if (!shift && screen === "settings") return <View style={{ flex: 1, backgroundColor: colors.background }}><View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 }}><VerificationBackButton onPress={() => setScreen("verify")} /></View><SettingsScreen user={user} shift={null} onLogout={() => { setUser(null); setScreen("verify"); }} />{reminder}</View>;
   if (!shift || screen === "verify") {
     return (
       <>
       <VerificationScreen
+        conductorName={user.name}
         onViewMetrics={() => setScreen("metrics")}
         onViewSettings={() => setScreen("settings")}
         onStarted={s => { setShift(s); setScreen("home"); }}

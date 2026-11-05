@@ -7,6 +7,7 @@ import { Text } from "../../shared/ui/BrandText";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { LiveMapProps } from "./LiveMap";
 import { distanceMeters, PICKUP_RADIUS_METERS, ROUTE_COORDINATES } from "./route-data";
+import { vehicleMarkerHtml } from "./map-presentation";
 
 /** Use the platform map over native UI; keep Leaflet as the configured fallback. */
 export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, capacity = "AVAILABLE", isOnBreak = false, canOperate = false, onHail }: LiveMapProps) {
@@ -40,6 +41,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const routeColor = isLofi ? colors.primary : "#62A0EA";
   const neutralColor = isLofi ? "#071A2E" : "#FFFFFF";
   const vehicleLabel = `Unit ${unitNumber} · ${isOnBreak ? "On Break" : capacity.replace("_", " ")}`;
+  const vehicleIconHtml = vehicleMarkerHtml(capacity, isOnBreak, isLofi ? colors.surface : "#071A2E");
   const lines = useMemo(() => [
     { id: "route-shadow", coordinates: route.map(([lat, lng]) => ({ latitude: lat, longitude: lng })), color: isLofi ? "rgba(26,95,180,0.2)" : "rgba(98,160,234,0.2)", width: 8, geodesic: true },
     { id: "route", coordinates: route.map(([lat, lng]) => ({ latitude: lat, longitude: lng })), color: routeColor, width: 4, geodesic: true },
@@ -74,11 +76,11 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
       var coords=${JSON.stringify(route)},bounds=L.latLngBounds(coords),map=L.map('map',{zoomControl:false,attributionControl:false,minZoom:11,maxBounds:bounds.pad(.5),maxBoundsViscosity:1});map.fitBounds(bounds,{padding:[20,20]});
       L.tileLayer(${JSON.stringify(tiles)},{className:${JSON.stringify(isLofi ? "" : "map-tiles-mono")},maxZoom:19}).addTo(map);
       var routeColor='${routeColor}',neutral='${neutralColor}';L.polyline(coords,{color:routeColor,weight:8,opacity:.2}).addTo(map);L.polyline(coords,{color:routeColor,weight:4,opacity:.9,dashArray:'10 10'}).addTo(map);
-      var vehicle=L.marker([${position.latitude},${position.longitude}]).addTo(map),circle=L.circle([${position.latitude},${position.longitude}],{radius:1000,color:neutral,fillColor:neutral,fillOpacity:.05,weight:1.5,opacity:.3,dashArray:'8 4'}).addTo(map),hails=${JSON.stringify(visibleHails)};
+      var vehicleIcon=L.divIcon({className:'chatco-vehicle-marker',html:${JSON.stringify(vehicleIconHtml)},iconSize:[44,44],iconAnchor:[22,22],popupAnchor:[0,-25]}),vehicle=L.marker([${position.latitude},${position.longitude}],{icon:vehicleIcon}).addTo(map),circle=L.circle([${position.latitude},${position.longitude}],{radius:1000,color:neutral,fillColor:neutral,fillOpacity:.05,weight:1.5,opacity:.3,dashArray:'8 4'}).addTo(map),hails=${JSON.stringify(visibleHails)};
       var vehiclePopup=document.createElement('div');vehiclePopup.textContent=${JSON.stringify(vehicleLabel)};vehicle.bindPopup(vehiclePopup);
       hails.forEach(function(h){var box=document.createElement('div'),title=document.createElement('strong'),body=document.createElement('p'),row=document.createElement('div');title.textContent=h.commuterName;title.style.color='#FF6D3A';body.textContent=(h.label||'Passenger waiting')+(h.etaMinutes?' · '+h.etaMinutes+' min away':'');row.className='hail-actions';['accept','reject'].forEach(function(action){var button=document.createElement('button');button.textContent=action==='accept'?'Accept':'Reject';button.disabled=${!canOperate};button.onclick=function(){if(!window.ReactNativeWebView||!${canOperate})return;row.querySelectorAll('button').forEach(function(b){b.disabled=true});window.ReactNativeWebView.postMessage(JSON.stringify({type:'hail',id:h.id,action:action}))};row.appendChild(button)});box.appendChild(title);box.appendChild(body);box.appendChild(row);L.marker([h.latitude,h.longitude]).bindPopup(box).addTo(map)});
     </script></body></html>`;
-  }, [capacity, canOperate, isLofi, mapColor, neutralColor, position, route, routeColor, vehicleLabel, visibleHails]);
+  }, [capacity, canOperate, isLofi, mapColor, neutralColor, position, route, routeColor, vehicleIconHtml, vehicleLabel, visibleHails]);
 
   const frameStyle = [fill ? StyleSheet.absoluteFill : { height: 420, borderRadius: 18, overflow: "hidden" as const }, { backgroundColor: mapColor }];
   if (Platform.OS === "android" && !configured) {

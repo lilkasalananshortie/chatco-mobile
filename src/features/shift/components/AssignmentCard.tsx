@@ -12,201 +12,65 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
   const { colors, isLofi, styles } = useAppTheme();
   const isUnit = "unitNumber" in item;
   const available = item.status === "available" && !item.unavailableReason;
+  const title = isUnit ? item.unitNumber : item.name;
+  const subtitle = isUnit
+    ? item.plateNumber
+    : available
+      ? "Ready for dispatch"
+      : item.unavailableReason || (item.status === "on-shift" ? "Driver already on active shift" : "Unavailable");
+  const status = available
+    ? "Available"
+    : isUnit
+      ? item.status === "maintenance"
+        ? "Maintenance"
+        : item.status === "in-use"
+          ? "In use"
+          : "Unavailable"
+      : item.status === "on-shift"
+        ? "On shift"
+        : "Unavailable";
 
-  if (isUnit) {
-    const u = item as Unit;
-    return (
-      <Pressable
-        style={[
-          styles.card,
-          {
-            marginTop: 0,
-            padding: 14,
-            borderColor: available ? colors.border : isLofi ? colors.border : "rgba(255,255,255,0.03)",
-            borderRadius: isLofi ? 3 : 18,
-            opacity: available ? 1 : 0.8,
-          },
-        ]}
-        onPress={() => onSelect(u)}
-      >
-        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-            <View
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: isLofi ? 2 : 12,
-                backgroundColor: available
-                  ? isLofi
-                    ? colors.surface2
-                    : "rgba(26, 95, 180, 0.15)"
-                  : isLofi
-                  ? colors.surface2
-                  : "rgba(255,255,255,0.05)",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons
-                name="bus-outline"
-                size={22}
-                color={available ? (isLofi ? colors.primary : "#62A0EA") : colors.muted}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: available ? colors.text : colors.muted, fontSize: 14, fontWeight: "800" }}>
-                {u.unitNumber}
-              </Text>
-              <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "500", marginTop: 2 }}>
-                {u.plateNumber}
-              </Text>
-              {!available && u.unavailableReason ? <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>{u.unavailableReason}</Text> : null}
-            </View>
-          </View>
-
-          <View
-            style={{
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: isLofi ? 2 : 999,
-              borderWidth: isLofi ? 1.5 : 1,
-              backgroundColor: available
-                ? isLofi
-                  ? "rgba(22, 112, 90, 0.12)"
-                  : "rgba(52, 211, 153, 0.15)"
-                : u.status === "maintenance"
-                ? isLofi
-                  ? "#FEF3C7"
-                  : "rgba(245, 158, 11, 0.15)"
-                : isLofi
-                ? colors.surface2
-                : "rgba(255,255,255,0.05)",
-              borderColor: available
-                ? isLofi
-                  ? colors.success
-                  : "rgba(52, 211, 153, 0.25)"
-                : u.status === "maintenance"
-                ? isLofi
-                  ? colors.warning
-                  : "rgba(245, 158, 11, 0.25)"
-                : isLofi
-                ? colors.border
-                : "rgba(255,255,255,0.1)",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 9,
-                fontWeight: "800",
-                textTransform: "uppercase",
-                letterSpacing: 0.8,
-                color: available
-                  ? isLofi
-                    ? colors.success
-                    : "#34D399"
-                  : u.status === "maintenance"
-                  ? isLofi
-                    ? colors.warning
-                    : "#FBBF24"
-                  : colors.muted,
-              }}
-            >
-              {available ? "Available" : u.status === "maintenance" ? "Maintenance" : u.status === "in-use" ? "In Use" : "Unavailable"}
-            </Text>
-          </View>
-        </View>
-      </Pressable>
-    );
-  }
-
-  const d = item as Driver;
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${status}${!available && item.unavailableReason ? `. ${item.unavailableReason}` : ""}`}
+      onPress={() => onSelect(item)}
       style={[
         styles.card,
         {
           marginTop: 0,
           padding: 14,
-          borderColor: available ? colors.border : isLofi ? colors.border : "rgba(255,255,255,0.03)",
-          borderRadius: isLofi ? 3 : 18,
-          opacity: available ? 1 : 0.8,
+          borderColor: colors.border,
+          borderRadius: isLofi ? 3 : 14,
+          backgroundColor: colors.surface,
+          opacity: available ? 1 : 0.78,
         },
       ]}
-      onPress={() => onSelect(d)}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-          <View
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: isLofi ? 2 : 21,
-              backgroundColor: available
-                ? isLofi
-                  ? colors.surface2
-                  : "rgba(26, 95, 180, 0.15)"
-                : isLofi
-                ? colors.surface2
-                : "rgba(255,255,255,0.05)",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "800",
-                color: available ? (isLofi ? colors.primary : "#62A0EA") : colors.muted,
-              }}
-            >
-              {d.name[0]?.toUpperCase()}
-            </Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: available ? colors.text : colors.muted, fontSize: 14, fontWeight: "800" }}>
-              {d.name}
-            </Text>
-            <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "500", marginTop: 2 }}>
-              {available ? "Ready for dispatch" : d.unavailableReason || (d.status === "on-shift" ? "Currently on shift" : "Unavailable")}
-            </Text>
-          </View>
-        </View>
-
-        <View
-          style={{
-            paddingHorizontal: 8,
-            paddingVertical: 3,
-            borderRadius: isLofi ? 2 : 999,
-            borderWidth: isLofi ? 1.5 : 1,
-            backgroundColor: available
-              ? isLofi
-                ? "rgba(22, 112, 90, 0.12)"
-                : "rgba(52, 211, 153, 0.15)"
-              : isLofi
-              ? colors.surface2
-              : "rgba(255,255,255,0.05)",
-            borderColor: available
-              ? isLofi
-                ? colors.success
-                : "rgba(52, 211, 153, 0.25)"
-              : isLofi
-              ? colors.border
-              : "rgba(255,255,255,0.1)",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 9,
-              fontWeight: "800",
-              textTransform: "uppercase",
-              letterSpacing: 0.8,
-              color: available ? (isLofi ? colors.success : "#34D399") : colors.muted,
-            }}
-          >
-            {available ? "Available" : d.status === "on-shift" ? "On Shift" : "Unavailable"}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Ionicons
+          name={isUnit ? "bus-outline" : "person-outline"}
+          size={isUnit ? 27 : 25}
+          color={colors.muted}
+        />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ color: available ? colors.text : colors.muted, fontSize: 14, fontWeight: "700" }}>
+            {title}
+          </Text>
+          <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 11, fontWeight: "500", marginTop: 3 }}>
+            {subtitle}
           </Text>
         </View>
+        <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          {status}
+        </Text>
+        {available ? <Ionicons name="chevron-forward" size={16} color={colors.muted} /> : null}
       </View>
+      {!available && isUnit && item.unavailableReason ? (
+        <Text style={{ color: colors.muted, fontSize: 11, marginTop: 6, marginLeft: 39 }}>
+          {item.unavailableReason}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

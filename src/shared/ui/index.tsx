@@ -3,6 +3,7 @@ import { Text } from "./BrandText";
 import { ConductorIcon } from "./ConductorIcon";
 import {
   ActivityIndicator,
+  Platform,
   Modal,
   Pressable,
   SafeAreaView,
@@ -10,7 +11,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { SafeAreaView as SafeAreaContextView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { Screen } from "../../core/domain/types";
@@ -36,6 +37,15 @@ export function Header({ title, subtitle, eyebrow }: {
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
     </View>
   );
+}
+
+export function VerificationBackButton({ onPress }: { onPress: () => void }) {
+  const { colors } = useAppTheme();
+  return <Pressable accessibilityRole="button" accessibilityLabel="Back to verification" onPress={onPress}
+    style={({ pressed }) => ({ minHeight: 44, maxWidth: "100%", alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, opacity: pressed ? 0.65 : 1 })}>
+    <ConductorIcon name="back" size={18} color={colors.primaryLight} />
+    <Text style={{ color: colors.primaryLight, fontSize: 14, fontWeight: "600", flexShrink: 1 }}>Back to verification</Text>
+  </Pressable>;
 }
 
 export function ScreenShell({ children }: { children: ReactNode }) {
@@ -88,8 +98,10 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
   current: Screen; onNavigate: (screen: Screen) => void; onPayment: () => void; isPaymentDisabled?: boolean;
 }) {
   const { colors, isLofi } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const bottomOffset = Platform.OS === "android" ? Math.max(insets.bottom, 24) : insets.bottom;
   return (
-    <SafeAreaContextView edges={["bottom"]} style={[local.navSafe, { backgroundColor: colors.background } ]}>
+    <View style={[local.navSafe, { bottom: bottomOffset, backgroundColor: colors.background }]}>
       <View style={[local.nav, { borderColor: colors.border }]}>
         {tabs.slice(0, 2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
         <Pressable
@@ -114,7 +126,7 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
         </Pressable>
         {tabs.slice(2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
       </View>
-    </SafeAreaContextView>
+    </View>
   );
 }
 

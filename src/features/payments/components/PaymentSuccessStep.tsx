@@ -152,11 +152,32 @@ export function PaymentSuccessStep({
             </View>
           ) : null}
           {selectedMethod === "Cash" && receiptSettings?.showManualCode !== false && (receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken) ? (
-            <View style={[styles.confirmRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.border }]}>
+            <View
+              accessible
+              accessibilityLabel={`Reward Claim Code: ${receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken}`}
+              style={[styles.confirmRow, { flexDirection: "column", alignItems: "stretch", gap: 4, marginTop: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border }]}
+            >
               <Text style={[styles.confirmRowLabel, { fontWeight: "700", color: isLofi ? colors.primary : "#38BDF8" }]}>Reward Claim Code</Text>
-              <Text style={[styles.confirmRowValue, { fontFamily: Platform.OS === "ios" ? "Courier" : "monospace", fontWeight: "700", fontSize: 14, letterSpacing: 1.5, color: isLofi ? colors.primary : "#38BDF8" }]}>
-                {receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken}
-              </Text>
+              <View style={{ width: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "center" }}>
+                {Array.from(
+                  { length: Math.ceil((receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken ?? "").length / 6) },
+                  (_, index) => (
+                    <Text
+                      key={index}
+                      accessible={false}
+                      style={{
+                        fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+                        fontWeight: "700",
+                        fontSize: 13,
+                        letterSpacing: 1,
+                        color: isLofi ? colors.primary : "#38BDF8",
+                      }}
+                    >
+                      {(receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken ?? "").slice(index * 6, index * 6 + 6)}
+                    </Text>
+                  ),
+                )}
+              </View>
             </View>
           ) : null}
         </View>

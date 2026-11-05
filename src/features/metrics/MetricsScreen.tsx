@@ -3,7 +3,7 @@ import { Pressable, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../core/api/chatco-api";
 import { Text } from "../../shared/ui/BrandText";
-import { Header, ScreenShell } from "../../shared/ui";
+import { Header, ScreenShell, VerificationBackButton } from "../../shared/ui";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { Rating, Shift } from "../../core/domain/types";
 
@@ -72,8 +72,10 @@ export function MetricsScreen({ onBack }: { shift?: Shift | null; onBack?: () =>
   return (
     <ScreenShell>
       <Header title="Performance Metrics" subtitle="Commuter ratings across all your shifts" />
-      {onBack && <Pressable accessibilityRole="button" onPress={onBack} style={styles.secondaryButton}><Text style={styles.subtitle}>Back to verification</Text></Pressable>}
-      <Text style={{ color: colors.primaryLight, fontSize: 12, fontWeight: "600", marginTop: -2, marginBottom: 20 }}>All time</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 16, rowGap: 4, marginBottom: 20 }}>
+        {onBack && <VerificationBackButton onPress={onBack} />}
+        <Text style={{ color: colors.primaryLight, fontSize: 12, fontWeight: "600", marginLeft: "auto" }}>All time</Text>
+      </View>
 
       {loading ? (
         <View accessibilityRole="progressbar" accessibilityLabel="Loading ratings" style={[cardStyle, { borderRadius: 12, overflow: "hidden" }]}>

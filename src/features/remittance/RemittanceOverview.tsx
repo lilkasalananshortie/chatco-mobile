@@ -4,7 +4,7 @@ import { Pressable, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
 import type { Remittance } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
-import { ScreenShell } from "../../shared/ui";
+import { ScreenShell, VerificationBackButton } from "../../shared/ui";
 
 /** Read-only history remains available after the operational shift ends. */
 export function RemittanceOverview({ onBack }: { onBack: () => void }) {
@@ -26,9 +26,7 @@ export function RemittanceOverview({ onBack }: { onBack: () => void }) {
     return () => { active = false; };
   }, [page, retry]);
   return <ScreenShell>
-    <Pressable accessibilityRole="button" onPress={onBack} style={[styles.button, styles.secondaryButton]}>
-      <Text style={[styles.buttonText, styles.secondaryButtonText]}>Back to verification</Text>
-    </Pressable>
+    <VerificationBackButton onPress={onBack} />
     <Text style={[styles.title, { marginTop: 20 }]}>Shift reports</Text>
     <Text style={styles.subtitle}>Hand cash to the office. Admin records your remittance.</Text>
     {loading ? <Text style={styles.subtitle}>Loading reports…</Text> : error ? <Pressable accessibilityRole="button" onPress={() => setRetry(value => value + 1)}><Text style={styles.error}>{error} Tap to retry.</Text></Pressable> : <>

@@ -11,7 +11,7 @@ export interface AssignmentCardProps {
 export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
   const { colors, isLofi, styles } = useAppTheme();
   const isUnit = "unitNumber" in item;
-  const available = item.status === "available";
+  const available = item.status === "available" && !item.unavailableReason;
 
   if (isUnit) {
     const u = item as Unit;
@@ -60,6 +60,7 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
               <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "500", marginTop: 2 }}>
                 {u.plateNumber}
               </Text>
+              {!available && u.unavailableReason ? <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>{u.unavailableReason}</Text> : null}
             </View>
           </View>
 
@@ -110,7 +111,7 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
                   : colors.muted,
               }}
             >
-              {available ? "Available" : u.status === "maintenance" ? "Maintenance" : "In Use"}
+              {available ? "Available" : u.status === "maintenance" ? "Maintenance" : u.status === "in-use" ? "In Use" : "Unavailable"}
             </Text>
           </View>
         </View>
@@ -166,7 +167,7 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
               {d.name}
             </Text>
             <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "500", marginTop: 2 }}>
-              {available ? "Ready for dispatch" : "Currently on shift"}
+              {available ? "Ready for dispatch" : d.unavailableReason || (d.status === "on-shift" ? "Currently on shift" : "Unavailable")}
             </Text>
           </View>
         </View>
@@ -202,7 +203,7 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
               color: available ? (isLofi ? colors.success : "#34D399") : colors.muted,
             }}
           >
-            {available ? "Available" : "On Shift"}
+            {available ? "Available" : d.status === "on-shift" ? "On Shift" : "Unavailable"}
           </Text>
         </View>
       </View>

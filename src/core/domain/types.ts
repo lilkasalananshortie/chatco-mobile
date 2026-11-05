@@ -15,13 +15,15 @@ export interface Unit {
   plateNumber: string;
   route: string;
   routeId?: string;
-  status: "available" | "in-use" | "maintenance";
+  status: "available" | "in-use" | "maintenance" | "unavailable";
+  unavailableReason?: string | null;
 }
 
 export interface Driver {
   id: string;
   name: string;
-  status: "available" | "on-shift";
+  status: "available" | "on-shift" | "unavailable";
+  unavailableReason?: string | null;
 }
 
 export interface Shift {

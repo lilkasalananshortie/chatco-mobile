@@ -18,7 +18,7 @@ let connectivityRequest: Promise<boolean> | null = null;
 export const shiftService = {
   units: async (): Promise<Unit[]> => {
     try {
-      const units = (await request<any[]>("/mobile/conductor/units")).map(mapUnit);
+      const units = (await request<any[]>("/mobile/conductor/units?include_unavailable=1")).map(mapUnit);
       await appStorage.setItem(CACHED_UNITS_KEY, JSON.stringify(units)).catch(() => null);
       return units;
     } catch (cause) {
@@ -36,7 +36,7 @@ export const shiftService = {
 
   drivers: async (): Promise<Driver[]> => {
     try {
-      const drivers = (await request<any[]>("/mobile/conductor/drivers")).map(mapDriver);
+      const drivers = (await request<any[]>("/mobile/conductor/drivers?include_unavailable=1")).map(mapDriver);
       await appStorage.setItem(CACHED_DRIVERS_KEY, JSON.stringify(drivers)).catch(() => null);
       return drivers;
     } catch (cause) {

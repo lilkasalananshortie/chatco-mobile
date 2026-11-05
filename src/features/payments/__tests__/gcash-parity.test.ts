@@ -1,6 +1,9 @@
 /// <reference types="jest" />
 import { useGcashPayment } from "../hooks/useGcashPayment";
 import { api } from "../../../core/api/chatco-api";
+import { appStorage } from "../../../core/storage/app-storage";
+import { appHaptics } from "../../../core/utils/haptics";
+import { audioCues, loadScanSoundSetting, setScanSoundEnabled } from "../../../core/utils/audio-cues";
 let mockStates: any[] = [];
 let mockRefs: any[] = [];
 let mockCursor = 0;
@@ -15,8 +18,10 @@ jest.mock("react", () => ({
     return [mockStates[slot], (value: any) => { mockStates[slot] = typeof value === "function" ? value(mockStates[slot]) : value; }];
   },
 }));
+jest.mock("react-native", () => ({ Platform: { OS: "android" } }));
 jest.mock("../../../core/api/chatco-api", () => ({ api: { initiateGcash: jest.fn(), paymentStatusDetails: jest.fn(), pendingGcash: jest.fn(), cancelPayment: jest.fn(), simulatePayment: jest.fn() } }));
 jest.mock("../../../core/utils/haptics", () => ({ appHaptics: { success: jest.fn(), error: jest.fn() } }));
+jest.mock("../../../core/storage/app-storage", () => ({ appStorage: { getItem: jest.fn(), setItem: jest.fn() } }));
 const setStep = jest.fn(); const receipts = jest.fn(); const saved = jest.fn();
 const point = { id: "a", pointNumber: 1, name: "A", code: "A", landmarks: [], regularFare: 17, discountedFare: 13.6 };
 function render(online = true) {
@@ -32,9 +37,23 @@ async function flush() { for (let i = 0; i < 6; i++) await Promise.resolve(); }
 beforeEach(() => {
   jest.useFakeTimers(); jest.clearAllMocks(); mockStates = []; mockRefs = [];
   mockEffects = [];
+  (appStorage.getItem as jest.Mock).mockResolvedValue("on");
+  (appStorage.setItem as jest.Mock).mockResolvedValue(undefined);
   (api.initiateGcash as jest.Mock).mockResolvedValue({ transactionId: "ride", qrToken: "qr", amount: 51, expiresAt: new Date(Date.now() + 300000).toISOString() });
 });
 afterEach(() => { jest.clearAllTimers(); jest.useRealTimers(); });
+test("scan sound preference pairs a single success haptic with the payment sound", async () => {
+  await loadScanSoundSetting();
+  audioCues.playPaymentSound();
+  expect(appHaptics.success).toHaveBeenCalledTimes(1);
+});
+test("disabling scan sound also disables its paired haptic", async () => {
+  await loadScanSoundSetting();
+  await setScanSoundEnabled(false);
+  audioCues.playPaymentSound();
+  expect(appStorage.setItem).toHaveBeenCalledWith("conductor_scan_sound", "off");
+  expect(appHaptics.success).not.toHaveBeenCalled();
+});
 test("commuter discount updates the remaining group amount without marking it paid", async () => {
   const flow = render(); await flow.handleInitiateGcash();
   const rows = [{ transactionId: "payer", paymentMethod: "GCash", finalAmount: 12, passengerRole: "REGULAR", voucherId: "v" }, { transactionId: "companion", paymentMethod: "GCash", finalAmount: 17 }];

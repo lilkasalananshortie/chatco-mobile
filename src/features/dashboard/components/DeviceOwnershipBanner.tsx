@@ -30,19 +30,15 @@ export function DeviceOwnershipBanner({
 }: DeviceOwnershipBannerProps) {
   const { colors, styles, isLofi } = useAppTheme();
 
-  if (isOperatingDevice && canOperate && !recoveredByAdmin) {
+  if (isOperatingDevice && canOperate) {
     return null;
   }
 
   return (
     <View
       style={{
-        backgroundColor: ownsShift
-          ? (isLofi ? "#E0F2FE" : "rgba(14, 165, 233, 0.12)")
-          : (isLofi ? "#FEF3C7" : "rgba(245, 158, 11, 0.12)"),
-        borderColor: ownsShift
-          ? (isLofi ? "#0284C7" : "rgba(56, 189, 248, 0.35)")
-          : (isLofi ? colors.warning : "rgba(251, 191, 36, 0.35)"),
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
         borderWidth: 1.5,
         borderRadius: isLofi ? 4 : 14,
         padding: 14,
@@ -51,9 +47,7 @@ export function DeviceOwnershipBanner({
     >
       <Text
         style={{
-          color: ownsShift
-            ? (isLofi ? "#0369A1" : "#BAE6FD")
-            : (isLofi ? "#92400E" : "#FDE68A"),
+          color: colors.text,
           fontSize: 14,
           fontWeight: "700",
         }}
@@ -68,16 +62,14 @@ export function DeviceOwnershipBanner({
       </Text>
       <Text
         style={{
-          color: ownsShift
-            ? (isLofi ? "#0C4A6E" : "#E0F2FE")
-            : (isLofi ? "#78350F" : "#FEF3C7"),
+          color: colors.muted,
           fontSize: 12,
           marginTop: 4,
           lineHeight: 16,
         }}
       >
         {recoveredByAdmin
-          ? "An administrator released this device from the shift. Please log in again."
+          ? "An administrator released the previous device. Claim the shift here to continue."
           : ownsShift
           ? "Release only when moving the shift to Web or Mobile."
           : unclaimed
@@ -89,7 +81,7 @@ export function DeviceOwnershipBanner({
           {deviceError}
         </Text>
       ) : null}
-      {!ownsShift && !recoveredByAdmin ? (
+      {!ownsShift ? (
         <Pressable
           disabled={deviceBusy}
           style={[styles.button, { marginTop: 10, backgroundColor: colors.primary }]}

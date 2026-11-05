@@ -10,6 +10,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { SafeAreaView as SafeAreaContextView } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { Screen } from "../../core/domain/types";
@@ -88,13 +89,13 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
 }) {
   const { colors, isLofi } = useAppTheme();
   return (
-    <SafeAreaView style={[local.navSafe, { backgroundColor: isLofi ? "rgba(255,255,255,0.9)" : "rgba(11,30,51,0.9)" }]}>
+    <SafeAreaContextView edges={["bottom"]} style={[local.navSafe, { backgroundColor: colors.background } ]}>
       <View style={[local.nav, { borderColor: colors.border }]}>
         {tabs.slice(0, 2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
         <Pressable
           style={[local.payWrap, isPaymentDisabled && { opacity: 0.55 }]}
           onPress={onPayment}
-          accessibilityLabel={isPaymentDisabled ? "Payment (Disabled during break)" : "Collect payment"}
+          accessibilityLabel={isPaymentDisabled ? "Payment (unavailable until the shift is active on this device)" : "Collect payment"}
         >
           <View style={[local.payButton, {
             backgroundColor: isPaymentDisabled ? colors.surface2 : colors.primary,
@@ -108,12 +109,12 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
             />
           </View>
           <Text style={[local.navLabel, { color: isPaymentDisabled ? colors.muted : colors.text }]}>
-            {isPaymentDisabled ? "On Break" : "Payment"}
+            Payment
           </Text>
         </Pressable>
         {tabs.slice(2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
       </View>
-    </SafeAreaView>
+    </SafeAreaContextView>
   );
 }
 

@@ -17,8 +17,7 @@ import { AccountSessionSection } from "./components/AccountSessionSection";
 import { thermalPrinter, type PrinterStatus } from "../../core/utils/thermal-printer";
 import { pickProfilePhoto } from "./profile-photo";
 import { transactionSummary } from "../../core/domain/transaction-summary";
-
-const SCAN_SOUND_KEY = "conductor_scan_sound";
+import { loadScanSoundSetting, setScanSoundEnabled } from "../../core/utils/audio-cues";
 
 export function SettingsScreen({
   user,
@@ -46,7 +45,13 @@ export function SettingsScreen({
       const photo = await pickProfilePhoto();
       if (!photo || !mounted.current) return;
       const url = await api.uploadProfilePhoto(photo, user.id);
-      if (mounted.current) setProfile(previous => previous ? { ...previous, profilePictureUrl: url } : previous);
+      if (mounted.current) setProfile(previous => ({
+        id: user.id,
+        name: previous?.name ?? user.name,
+        username: previous?.username ?? user.email.split("@")[0] ?? user.email,
+        phoneNumber: previous?.phoneNumber,
+        profilePictureUrl: url,
+      }));
     } catch (error) { if (mounted.current) setPhotoError(error instanceof Error ? error.message : "Upload failed. Please retry."); }
     finally { photoPending.current = false; if (mounted.current) setPhotoBusy(false); }
   };
@@ -72,13 +77,13 @@ export function SettingsScreen({
     const [nextProfile, transactionResult, sound, remittanceResult] = await Promise.all([
       api.profile().catch(() => null),
       transactionRequest,
-      appStorage.getItem(SCAN_SOUND_KEY).catch(() => null),
+      loadScanSoundSetting(),
       remittanceRequest,
     ]);
     if (!mounted.current) return;
     if (nextProfile) setProfile(nextProfile);
     setTransactions(transactionResult.data);
-    setScanSound(sound !== "off");
+    setScanSound(sound);
     setHistory(remittanceResult.data);
     setLogoutCheckStatus(transactionResult.ok && remittanceResult.ok ? "ready" : "error");
   }, [shift?.shiftId]);
@@ -160,7 +165,7 @@ export function SettingsScreen({
   const toggleSound = async () => {
     const next = !scanSound;
     setScanSound(next);
-    await appStorage.setItem(SCAN_SOUND_KEY, next ? "on" : "off");
+    await setScanSoundEnabled(next);
   };
 
   const logoutLocked = useMemo(() => {

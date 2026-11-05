@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { transactionSummary } from "../../../core/domain/transaction-summary";
 import { api } from "../../../core/api/chatco-api";
-import type { Announcement, Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../../core/domain/types";
+import type { Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../../core/domain/types";
 import { appHaptics } from "../../../core/utils/haptics";
 import { audioCues } from "../../../core/utils/audio-cues";
 
@@ -30,40 +30,15 @@ export function useDashboardShift({
   const [breakPending, setBreakPending] = useState(false);
   const [breakConfirmOpen, setBreakConfirmOpen] = useState(false);
   const [hails, setHails] = useState<HailRequest[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [syncState, setSyncState] = useState<"idle" | "syncing" | "error">(api.getSyncState());
   const [deviceId, setDeviceId] = useState<string>("");
   const [deviceBusy, setDeviceBusy] = useState(false);
   const [deviceError, setDeviceError] = useState("");
   const [error, setError] = useState("");
-  const [announcementError, setAnnouncementError] = useState("");
 
   const operationalRefreshInFlight = useRef<Promise<void> | null>(null);
   const breakBusy = useRef(false);
-
-  useEffect(() => {
-    let active = true;
-    let running = false;
-    setAnnouncements([]);
-    const load = async () => {
-      if (running) return;
-      running = true;
-      try {
-        const notices = await api.announcements();
-        if (active) { setAnnouncements(notices); setAnnouncementError(""); }
-      } catch {
-        // Retain the last successful list during a temporary outage.
-        if (active) setAnnouncementError("Announcements are temporarily unavailable. Retrying automatically.");
-      } finally { running = false; }
-    };
-    void load();
-    const timer = setInterval(() => void load(), 30000);
-    const listener = AppState.addEventListener("change", state => {
-      if (state === "active") void load();
-    });
-    return () => { active = false; clearInterval(timer); listener.remove(); };
-  }, [shift.shiftId, refreshKey]);
 
   useEffect(() => {
     void api.getDeviceId().then(setDeviceId);
@@ -123,12 +98,10 @@ export function useDashboardShift({
 
   useEffect(() => {
     void refreshOperationalData();
-    const timer = setInterval(() => void refreshOperationalData(), 15000);
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") void refreshOperationalData();
     });
     return () => {
-      clearInterval(timer);
       subscription.remove();
     };
   }, [refreshKey, refreshOperationalData]);
@@ -201,15 +174,10 @@ export function useDashboardShift({
       setHails((current) => current.filter((hail) => hail.id !== hailId));
     } catch (cause) {
       appHaptics.error();
+      // A commuter may cancel a hail while it is still displayed locally.
+      void api.hails().then(setHails).catch(() => undefined);
       setError(cause instanceof Error ? cause.message : "Unable to update pickup request.");
     }
-  };
-
-  const handleMarkAnnouncementRead = (id: string) => {
-    setAnnouncements((current) =>
-      current.map((row) => (row.id === id ? { ...row, isRead: true } : row))
-    );
-    void api.markAnnouncementRead(id).catch(() => undefined);
   };
 
   const claimDevice = async () => {
@@ -229,13 +197,20 @@ export function useDashboardShift({
     setDeviceBusy(true);
     setDeviceError("");
     try {
-      const pending = await api.pendingCashCount(shift.shiftId).catch(() => pendingOfflineCount);
-      const online = await api.checkConnectivity().catch(() => isOnline);
+      const [pending, online] = await Promise.all([
+        api.pendingCashCount(shift.shiftId),
+        api.checkConnectivity().catch(() => false),
+      ]);
       if (pending > 0 || !online) {
         setDeviceError("Offline cash fares are still waiting to sync. Reconnect device to sync before handoff.");
         return;
       }
-      await api.syncPendingCashTransactions().catch(() => null);
+      await api.syncPendingCashTransactions();
+      const remaining = await api.pendingCashCount(shift.shiftId);
+      if (remaining > 0) {
+        setDeviceError("Offline cash fares are still waiting to sync. Reconnect device to sync before handoff.");
+        return;
+      }
       const updated = await api.releaseShiftDevice(shift.shiftId);
       onShiftUpdated?.(updated);
     } catch (cause) {
@@ -269,18 +244,16 @@ export function useDashboardShift({
     breakConfirmOpen,
     setBreakConfirmOpen,
     hails,
-    announcements,
     pendingOfflineCount,
     syncState,
     deviceId,
     deviceBusy,
     deviceError,
-    error: error || announcementError,
+    error,
     setError,
     updateCapacity,
     updateBreak,
     handleHail,
-    handleMarkAnnouncementRead,
     claimDevice,
     releaseDevice,
     transactionTotals,

@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { StatusBar } from "expo-status-bar";
 import { Alert, AppState, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -18,7 +18,7 @@ import { RemittanceOverview } from "./src/features/remittance/RemittanceOverview
 import { BrandFonts } from "./src/shared/ui/BrandFonts";
 import { SettingsScreen } from "./src/features/settings/SettingsScreen";
 import { VerificationScreen } from "./src/features/shift/VerificationScreen";
-import { audioCues } from "./src/core/utils/audio-cues";
+import { audioCues, loadScanSoundSetting } from "./src/core/utils/audio-cues";
 import type { Screen, Shift, User } from "./src/core/domain/types";
 
 export default function App() {
@@ -87,10 +87,15 @@ function AppRoot() {
   const [payment, setPayment] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isOnline, setIsOnline] = useState(false);
+  const currentShiftRef = useRef(shift);
+  const currentScreenRef = useRef(screen);
+  currentShiftRef.current = shift;
+  currentScreenRef.current = screen;
   const dismissedReminderIds = useMemo(() => new Set<string>(), [user?.id]);
 
   useEffect(() => {
     void api.getDeviceId().then(setDeviceId);
+    void loadScanSoundSetting();
   }, []);
 
   // A 401 ends authentication; a 403/device ownership change remains view-only.
@@ -108,12 +113,12 @@ function AppRoot() {
   const loadSession = useCallback(async () => {
     try {
       const currentUser = await api.me();
-      setUser(currentUser);
       if (currentUser && !currentUser.must_change_password) {
         const active = await api.activeShift().catch(() => null);
         setShift(active);
         setScreen(active ? "home" : "verify");
       }
+      setUser(currentUser);
     } catch {
       setUser(null);
       setShift(null);
@@ -123,11 +128,12 @@ function AppRoot() {
     }
   }, []);
   const handleLogin = useCallback(async (currentUser: User) => {
+    if (!currentUser.must_change_password) {
+      const active = await api.activeShift().catch(() => null);
+      setShift(active);
+      setScreen(active ? "home" : "verify");
+    }
     setUser(currentUser);
-    if (currentUser.must_change_password) return;
-    const active = await api.activeShift().catch(() => null);
-    setShift(active);
-    setScreen(active ? "home" : "verify");
   }, []);
   useEffect(() => { void loadSession(); }, [loadSession]);
   // Periodically revalidate the shift so an ended/remitted shift returns
@@ -149,9 +155,13 @@ function AppRoot() {
         const current = await api.activeShift();
         if (!active) return;
         if (!current) {
+          const shiftJustEnded = Boolean(currentShiftRef.current?.isActive);
           setShift(null);
           setScreen(previous => previous === "report" || previous === "settings" || previous === "metrics" ? previous : "verify");
           setPayment(false);
+          if (shiftJustEnded && currentScreenRef.current === "home") {
+            Alert.alert("Shift Ended", "The shift has already ended. No new fares can be recorded.");
+          }
         } else {
           setShift(current);
         }
@@ -159,7 +169,6 @@ function AppRoot() {
         // Keep the current operational state during a temporary network outage.
       }
     };
-    void revalidate();
     const timer = setInterval(() => void revalidate(), 30000);
     const subscription = AppState.addEventListener("change", state => {
       if (state === "active") void revalidate();
@@ -211,11 +220,10 @@ function AppRoot() {
     };
   }, [user]);
   const ownsShift = Boolean(shift?.operatingDeviceId && deviceId && shift.operatingDeviceId === deviceId);
-  const unclaimed = Boolean(shift && !shift.operatingDeviceId);
-  const isOperatingDevice = ownsShift || unclaimed;
+  const isOperatingDevice = ownsShift;
   const canOperate = Boolean(shift?.isActive && !shift.timeOut && isOperatingDevice);
-  const isViewOnlyDevice = Boolean(shift?.operatingDeviceId && !ownsShift);
-  const isPaymentDisabled = Boolean(shift?.isOnBreak) || isViewOnlyDevice || Boolean(!shift);
+  const isViewOnlyDevice = Boolean(shift && !ownsShift);
+  const isPaymentDisabled = Boolean(shift?.isOnBreak) || !canOperate;
 
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
@@ -259,11 +267,9 @@ function AppRoot() {
             onBack={() => setScreen("home")}
             refreshKey={refreshKey}
             canOperate={canOperate}
-            onEnded={async () => {
-              await api.logout().catch(() => undefined);
-              setUser(null);
+            onEnded={() => {
               setShift(null);
-              setScreen("verify");
+              setScreen("report");
             }}
           />
         ) : null}
@@ -294,7 +300,9 @@ function AppRoot() {
             if (isViewOnlyDevice) {
               Alert.alert(
                 "View-Only Mode",
-                "This shift is active on another device. Sync and release that device before collecting fares here."
+                shift?.operatingDeviceId
+                  ? "This shift is active on another device. Sync and release that device before collecting fares here."
+                  : "This shift has been released. Claim it on this device before collecting fares."
               );
               return;
             }

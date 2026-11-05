@@ -26,7 +26,7 @@ export function AppPreferencesCard({
         <View style={{ flex: 1, paddingRight: 10 }}>
           <Text style={styles.prefTitle}>Scan Sound</Text>
           <Text style={styles.prefSubtitle}>
-            Play sound on successful scan
+            Play sound and haptic on successful scan/payment
           </Text>
         </View>
         <Pressable

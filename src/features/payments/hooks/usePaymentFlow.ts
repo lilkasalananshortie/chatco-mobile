@@ -369,7 +369,6 @@ export function usePaymentFlow({
         setCashReceiptToken(transaction.receiptQrToken ?? null);
         setReceiptTransactions(txns);
       }
-      appHaptics.success();
       setShowReceiptDetails(false);
       onSaved();
 
@@ -427,7 +426,6 @@ export function usePaymentFlow({
       });
       const txns = [transaction];
       setReceiptTransactions(txns);
-      appHaptics.success();
       setShowReceiptDetails(false);
       onSaved();
 

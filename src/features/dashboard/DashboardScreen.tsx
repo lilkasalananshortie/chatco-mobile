@@ -58,9 +58,8 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
       finally { running = false; }
     };
     void load();
-    const timer = setInterval(() => void load(), 30000);
     const listener = AppState.addEventListener("change", state => { if (state === "active") void load(); });
-    return () => { active = false; clearInterval(timer); listener.remove(); };
+    return () => { active = false; listener.remove(); };
   }, [shift.shiftId]);
 
   useEffect(() => { tripCycleStateRef.current = tripCycleState; }, [tripCycleState]);
@@ -120,21 +119,13 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   </ScrollView>;
 
   return <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.background }}>
-    <View style={{ flex: 1, paddingBottom: usesWebMapFallback ? 64 + safeInsets.bottom : 0 }}>
-      {usesWebMapFallback ? <>
+    <View style={{ flex: 1 }}>
+      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} viewportInsets={{ top: dashboardHeight, bottom: bottomNavigationHeight }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} canOperate={canOperate} onHail={(id, action) => shiftData.handleHail(id, action)} />
+      <View renderToHardwareTextureAndroid onLayout={event => setDashboardHeight(event.nativeEvent.layout.height)} style={{ pointerEvents: "box-none", position: "absolute", top: 0, left: 0, right: 0, maxHeight: dashboardMaxHeight, zIndex: 10, elevation: 10 }}>
         {dashboardContent}
-        <View style={{ flex: 1, minHeight: 120, position: "relative" }}>
-          <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} canOperate={canOperate} onHail={(id, action) => shiftData.handleHail(id, action)} />
-        </View>
-      </> : <>
-        <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} viewportInsets={{ top: dashboardHeight, bottom: bottomNavigationHeight }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} canOperate={canOperate} onHail={(id, action) => shiftData.handleHail(id, action)} />
-        <View renderToHardwareTextureAndroid onLayout={event => setDashboardHeight(event.nativeEvent.layout.height)} style={{ pointerEvents: "box-none", position: "absolute", top: 0, left: 0, right: 0, maxHeight: dashboardMaxHeight, zIndex: 10, elevation: 10 }}>
-          {dashboardContent}
-        </View>
-      </>}
+      </View>
       {combinedError ? <View accessibilityRole="alert" style={{ position: "absolute", bottom: bottomNavigationHeight + 16, left: 16, right: 16, padding: 12, borderRadius: 8, backgroundColor: isLofi ? "#FEF2F2" : "#450A0A", zIndex: 15 }}><Text style={{ color: isLofi ? "#B91C1C" : "#FECACA", fontSize: 12 }}>{combinedError}</Text></View> : null}
     </View>
-
     <ModalShell visible={actions} title="Conductor actions" onClose={() => setActions(false)}>
       <Text style={styles.subtitle}>Unit {shift.unitNumber} · {shift.conductorName}</Text>
       <Pressable onPress={() => openAction(() => setSos(true))} style={[styles.button, { backgroundColor: "#B91C1C" }]}><Text style={styles.buttonText}>Emergency SOS</Text></Pressable>

@@ -10,13 +10,17 @@ export const mapUnit = (v: any): Unit => ({
     ? "maintenance"
     : (v.active_shift_id || v.active_shift)
     ? "in-use"
+    : v.unavailable_reason
+    ? "unavailable"
     : "available",
+  unavailableReason: v.unavailable_reason ?? null,
 });
 
 export const mapDriver = (d: any): Driver => ({
   id: String(d.id),
   name: [d.first_name, d.last_name].filter(Boolean).join(" ") || "Unknown Driver",
-  status: (d.active_shift_id || d.active_shift) ? "on-shift" : "available",
+  status: (d.active_shift_id || d.active_shift) ? "on-shift" : d.unavailable_reason ? "unavailable" : "available",
+  unavailableReason: d.unavailable_reason ?? null,
 });
 
 export const mapShift = (s: any): Shift => ({

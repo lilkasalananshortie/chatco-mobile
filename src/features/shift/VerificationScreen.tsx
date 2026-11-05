@@ -74,8 +74,8 @@ export function VerificationScreen({
     setUnit(selected);
     setUnitDropdownOpen(false);
 
-    if (selected.status === "maintenance") {
-      setError("This vehicle is currently under maintenance and cannot be operated.");
+    if (selected.unavailableReason || selected.status === "maintenance") {
+      setError(selected.unavailableReason || "This vehicle is currently under maintenance and cannot be operated.");
     } else if (selected.status === "in-use") {
       setError("Vehicle is already assigned to an active shift.");
     } else {
@@ -89,8 +89,8 @@ export function VerificationScreen({
     setDriver(selected);
     setDriverDropdownOpen(false);
 
-    if (selected.status === "on-shift") {
-      setError("Driver is already on an active shift.");
+    if (selected.unavailableReason || selected.status === "on-shift") {
+      setError(selected.unavailableReason || "Driver is already on an active shift.");
     } else {
       if (error && (error.includes("Driver") || error.includes("driver") || error.includes("selection"))) {
         setError("");
@@ -111,6 +111,11 @@ export function VerificationScreen({
       return;
     }
 
+    if (unit.status === "unavailable" || unit.unavailableReason) {
+      setError(unit.unavailableReason || "This vehicle is unavailable for assignment.");
+      return;
+    }
+
     if (unit.status === "in-use") {
       setError("Vehicle is already assigned to an active shift.");
       return;
@@ -118,6 +123,11 @@ export function VerificationScreen({
 
     if (driver.status === "on-shift") {
       setError("Driver is already on an active shift.");
+      return;
+    }
+
+    if (driver.status === "unavailable" || driver.unavailableReason) {
+      setError(driver.unavailableReason || "This driver is unavailable for assignment.");
       return;
     }
 

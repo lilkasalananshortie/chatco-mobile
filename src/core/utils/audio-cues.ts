@@ -3,8 +3,10 @@ import { appHaptics } from "./haptics";
 import { appStorage } from "../storage/app-storage";
 
 const AUDIO_CUES_STORAGE_KEY = "chatco_audio_cues_enabled";
+const SCAN_SOUND_STORAGE_KEY = "conductor_scan_sound";
 
 let isAudioEnabled = true;
+let isScanSoundEnabled = true;
 let sharedCtx: any = null;
 
 function getAudioContext(): any {
@@ -49,6 +51,20 @@ export async function toggleAudioCues(): Promise<boolean> {
   return next;
 }
 
+export async function loadScanSoundSetting(): Promise<boolean> {
+  try {
+    isScanSoundEnabled = (await appStorage.getItem(SCAN_SOUND_STORAGE_KEY)) !== "off";
+  } catch {
+    isScanSoundEnabled = true;
+  }
+  return isScanSoundEnabled;
+}
+
+export async function setScanSoundEnabled(enabled: boolean): Promise<void> {
+  isScanSoundEnabled = enabled;
+  await appStorage.setItem(SCAN_SOUND_STORAGE_KEY, enabled ? "on" : "off").catch(() => null);
+}
+
 // ─── Web Audio Tone Synthesizers ─────────────────────────────────────────────
 
 function playTone(freq: number, type: OscillatorType, durationMs: number, delayMs = 0, gainLevel = 0.2) {
@@ -83,7 +99,7 @@ export const audioCues = {
    * Unified Sound: Crisp Double Coin Clink ("Kalansing")
    */
   playPaymentSound() {
-    if (!isAudioEnabled) return;
+    if (!isAudioEnabled || !isScanSoundEnabled) return;
     appHaptics.success();
     // High metallic coin harmonics
     playTone(2400, "sine", 70, 0, 0.25);

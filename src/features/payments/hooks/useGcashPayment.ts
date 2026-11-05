@@ -103,7 +103,6 @@ export function useGcashPayment({
           if (status === "PAID") {
             stopPolling();
             onSaved();
-            appHaptics.success();
             if (details.receipts && details.receipts.length > 0) {
               setReceiptTransactions(details.receipts);
             }

@@ -15,8 +15,27 @@ afterAll(() => {
   if (previousUrl === undefined) delete process.env.EXPO_PUBLIC_API_URL;
   else process.env.EXPO_PUBLIC_API_URL = previousUrl;
 });
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => { jest.clearAllMocks(); (appStorage.getItem as jest.Mock).mockResolvedValue("session-token"); });
 afterEach(() => jest.restoreAllMocks());
+
+test("fare signout removes only authentication, preserving server shift and queued cash", async () => {
+  const ended = jest.fn();
+  client.resetSessionEndedNotified();
+  const cleanup = client.setSessionEndedHandler(ended);
+  const fetchMock = jest.spyOn(globalThis, "fetch");
+  try {
+    await client.endSessionForFareChange("session-token");
+    expect(appStorage.removeItem).toHaveBeenCalledTimes(1);
+    expect(appStorage.removeItem).toHaveBeenCalledWith(client.TOKEN_KEY);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(ended).toHaveBeenCalledWith(expect.stringContaining("your shift stays open"));
+  } finally { cleanup(); }
+});
+
+test("late fare update cannot sign out a newer login", async () => {
+  await client.endSessionForFareChange("old-token");
+  expect(appStorage.removeItem).not.toHaveBeenCalled();
+});
 
 test("mobile requests retain bearer authentication and unwrap the existing envelope", async () => {
   const fetchMock = jest.spyOn(globalThis, "fetch").mockResolvedValue({

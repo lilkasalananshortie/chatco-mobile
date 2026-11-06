@@ -19,14 +19,14 @@ export class NetworkError extends Error {
 
 type Envelope<T> = { data: T; message?: string; errors?: unknown };
 
-let sessionEndedHandler: (() => void) | null = null;
+let sessionEndedHandler: ((message?: string) => void) | null = null;
 let sessionEndedNotified = false;
 
 /**
  * Lets the application shell react immediately when another device replaces
  * this device's conductor session.
  */
-export function setSessionEndedHandler(handler: (() => void) | null): () => void {
+export function setSessionEndedHandler(handler: ((message?: string) => void) | null): () => void {
   sessionEndedHandler = handler;
   return () => {
     if (sessionEndedHandler === handler) sessionEndedHandler = null;
@@ -35,6 +35,16 @@ export function setSessionEndedHandler(handler: (() => void) | null): () => void
 
 export function resetSessionEndedNotified() {
   sessionEndedNotified = false;
+}
+
+/** Fare changes end only this session, never the shift or its pending cash. */
+export async function endSessionForFareChange(expectedToken: string): Promise<void> {
+  if (await appStorage.getItem(TOKEN_KEY) !== expectedToken) return;
+  await appStorage.removeItem(TOKEN_KEY);
+  if (!sessionEndedNotified) {
+    sessionEndedNotified = true;
+    sessionEndedHandler?.("Fares or fare points were updated by an admin. Sign in again to continue; your shift stays open. Pending offline cash remains saved.");
+  }
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {

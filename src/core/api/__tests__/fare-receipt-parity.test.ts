@@ -6,13 +6,28 @@ jest.mock("../api-client", () => ({
 }));
 import { appStorage } from "../../storage/app-storage";
 import { NetworkError, request } from "../api-client";
-import { cachedPublishedFares, FARE_CACHE_MAX_AGE_MS, normalizePublishedFares, savePublishedFares } from "../fare-matrix-cache";
+import { cachedPublishedFares, fareMatrixFingerprint, FARE_CACHE_MAX_AGE_MS, normalizePublishedFares, savePublishedFares } from "../fare-matrix-cache";
 import { paymentService } from "../payment-service";
 import { mapTransaction } from "../api-mappers";
 const raw = { route: { id: "route" }, points: [
   { id: "one", pointNumber: 1, name: "Terminal", code: "A", regularFare: 17, discountedFare: 13.6, landmarks: "Market, School" },
   { id: "two", pointNumber: 5, name: "Town", code: "B", regularFare: 26, discountedFare: 20.8, landmarks: '["Hall"]' },
 ] };
+
+test("33 unpinned stops remain selectable without fabricated coordinates", () => {
+  const matrix = normalizePublishedFares({ ...raw, points: Array.from({ length: 33 }, (_, i) => ({ ...raw.points[0], id: String(i + 1), pointNumber: i + 1, latitude: null, longitude: null })) });
+  expect(matrix.points).toHaveLength(33);
+  expect(matrix.config.totalPoints).toBe(33);
+  expect(matrix.points.every(point => point.latitude === undefined && point.longitude === undefined)).toBe(true);
+});
+
+test("fare change detection ignores cache metadata but detects prices and stop edits", () => {
+  const matrix = normalizePublishedFares(raw);
+  const fingerprint = fareMatrixFingerprint(matrix);
+  expect(fareMatrixFingerprint({ ...matrix, loadedAt: Date.now(), isCached: false })).toBe(fingerprint);
+  expect(fareMatrixFingerprint({ ...matrix, config: { ...matrix.config, succeedingFareRegular: 3 } })).not.toBe(fingerprint);
+  expect(fareMatrixFingerprint({ ...matrix, points: matrix.points.map(point => ({ ...point, name: "Renamed" })) })).not.toBe(fingerprint);
+});
 beforeEach(() => {
   jest.resetAllMocks();
   (appStorage.setItem as jest.Mock).mockResolvedValue(undefined);
@@ -26,7 +41,7 @@ test("published points and identifiers are preserved without synthetic places", 
   expect(data.points[1]!.landmarks).toEqual(["Hall"]);
 });
 test("new defaults do not override explicit backend tariffs", () => {
-  expect(normalizePublishedFares(raw).config).toMatchObject({ baseFareRegular: 17, baseFareDiscounted: 13.6, succeedingFareDiscounted: 1.8 });
+  expect(normalizePublishedFares(raw).config).toMatchObject({ baseFareRegular: 17, baseFareDiscounted: 13.5, succeedingFareDiscounted: 1.92 });
   expect(normalizePublishedFares({ ...raw, config: { baseFareRegular: 15, baseFareDiscounted: 12 } }).config.baseFareRegular).toBe(15);
 });
 test("invalid or mismatched route data is rejected", () => {
@@ -45,9 +60,9 @@ test("recent published fares survive offline restart for their originating route
 });
 test("expired, future and malformed cache cannot authorize estimated fares", async () => {
   const now = Date.now(); const matrix = normalizePublishedFares(raw);
-  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 3, savedAt: now - FARE_CACHE_MAX_AGE_MS - 1, matrix }));
+  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 4, savedAt: now - FARE_CACHE_MAX_AGE_MS - 1, matrix }));
   expect(await cachedPublishedFares(undefined, now)).toBeNull();
-  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 3, savedAt: now + 1, matrix }));
+  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 4, savedAt: now + 1, matrix }));
   expect(await cachedPublishedFares(undefined, now)).toBeNull();
   (appStorage.getItem as jest.Mock).mockResolvedValue("corrupt");
   expect(await cachedPublishedFares()).toBeNull();
@@ -63,7 +78,7 @@ test("fare fetch requests the shift route and saves only published values", asyn
 test("old fare caches are not reused after the pricing-rule upgrade", async () => {
   (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 2, savedAt: Date.now(), matrix: normalizePublishedFares(raw) }));
   expect(await cachedPublishedFares()).toBeNull();
-  expect(appStorage.getItem).toHaveBeenCalledWith("chatco_published_fares_v3:active");
+  expect(appStorage.getItem).toHaveBeenCalledWith("chatco_published_fares_v4:active");
 });
 
 test.each([0, 100])("published %s percent discount accepts zero-value derived fares", discountRate => {
@@ -72,7 +87,7 @@ test.each([0, 100])("published %s percent discount accepts zero-value derived fa
 });
 test("network failure can use recent cached fares but authorization errors cannot", async () => {
   const matrix = normalizePublishedFares(raw);
-  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 3, savedAt: Date.now(), matrix }));
+  (appStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ version: 4, savedAt: Date.now(), matrix }));
   (request as jest.Mock).mockRejectedValue(new NetworkError("Offline"));
   expect((await paymentService.fareMatrix("route")).isCached).toBe(true);
   (request as jest.Mock).mockRejectedValue(new Error("Forbidden"));

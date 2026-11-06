@@ -4,6 +4,8 @@ import { Alert, AppState, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api, setSessionEndedHandler, syncPendingCashTransactions } from "./src/core/api/chatco-api";
 import { appStorage } from "./src/core/storage/app-storage";
+import { endSessionForFareChange, TOKEN_KEY } from "./src/core/api/api-client";
+import { fareMatrixFingerprint } from "./src/core/api/fare-matrix-cache";
 import { ThemeProvider, useAppTheme } from "./src/core/theme/ThemeProvider";
 import { BottomNav, Loading, VerificationBackButton } from "./src/shared/ui";
 import { DashboardScreen } from "./src/features/dashboard/DashboardScreen";
@@ -99,16 +101,44 @@ function AppRoot() {
   }, []);
 
   // A 401 ends authentication; a 403/device ownership change remains view-only.
-  useEffect(() => setSessionEndedHandler(() => {
+  useEffect(() => setSessionEndedHandler((message?: string) => {
     setPayment(false);
     setUser(null);
     setShift(null);
     setScreen("verify");
     Alert.alert(
       "Session ended",
-      "Please sign in again. Pending offline cash remains saved on this device.",
+      message ?? "Please sign in again. Pending offline cash remains saved on this device.",
     );
   }), []);
+
+  // Mobile uses polling; token expiry still enforces signout if an update is missed.
+  useEffect(() => {
+    if (!user || user.must_change_password) return;
+    let active = true;
+    let running = false;
+    let baseline: string | null = null;
+    const refresh = async () => {
+      if (!active || running) return;
+      running = true;
+      try {
+        const token = await appStorage.getItem(TOKEN_KEY);
+        if (!token) return;
+        const matrix = await api.fareMatrix(shift?.routeId);
+        if (!active || matrix.isCached || await appStorage.getItem(TOKEN_KEY) !== token) return;
+        const fingerprint = fareMatrixFingerprint(matrix);
+        if (baseline !== null && baseline !== fingerprint) {
+          await endSessionForFareChange(token);
+        }
+        baseline = fingerprint;
+      } catch { /* Outages do not sign out a conductor or discard saved cash. */ }
+      finally { running = false; }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 15000);
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") void refresh(); });
+    return () => { active = false; clearInterval(timer); subscription.remove(); };
+  }, [user?.id, user?.must_change_password, shift?.routeId]);
 
   const loadSession = useCallback(async () => {
     try {

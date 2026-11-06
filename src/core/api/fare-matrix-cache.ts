@@ -1,12 +1,17 @@
 import type { FareConfig, FareMatrix, FarePoint } from "../domain/types";
 import { appStorage } from "../storage/app-storage";
 
-const PREFIX = "chatco_published_fares_v3:";
+const PREFIX = "chatco_published_fares_v4:";
 export const FARE_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const CURRENT_FARE_DEFAULTS: FareConfig = {
-  baseBarangayCount: 4, baseFareRegular: 17, baseFareDiscounted: 13.6,
-  succeedingFareRegular: 2.25, succeedingFareDiscounted: 1.8, totalPoints: 0,
+  baseBarangayCount: 4, baseFareRegular: 17, baseFareDiscounted: 13.5,
+  succeedingFareRegular: 2.4, succeedingFareDiscounted: 1.92, discountRate: 20, totalPoints: 0,
 };
+
+/** Ignore cache age/transport metadata; compare only published route content. */
+export function fareMatrixFingerprint(matrix: FareMatrix): string {
+  return JSON.stringify({ routeId: matrix.routeId, config: matrix.config, points: [...matrix.points].sort((a, b) => a.pointNumber - b.pointNumber) });
+}
 function list(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String);
   if (typeof value !== "string") return [];
@@ -26,7 +31,7 @@ export function normalizePublishedFares(raw: any, requestedRoute?: string): Fare
     || new Set(points.map((p) => p.id)).size !== points.length) throw new Error("The published fare matrix is invalid. Refresh before collecting fares.");
   const config = Object.fromEntries(Object.entries(CURRENT_FARE_DEFAULTS).map(([key, fallback]) => [key, Number(raw.config?.[key] ?? fallback)])) as unknown as FareConfig;
   config.totalPoints = points.length;
-  config.discountRate = Number(raw.config?.discountRate ?? ((1 - config.baseFareDiscounted / config.baseFareRegular) * 100));
+  config.discountRate = Number(raw.config?.discountRate ?? 20);
   if (Object.values(config).some(value => !Number.isFinite(value))
     || config.baseFareRegular <= 0 || !Number.isInteger(config.baseBarangayCount) || config.baseBarangayCount < 1
     || config.baseFareDiscounted < 0 || config.succeedingFareRegular < 0 || config.succeedingFareDiscounted < 0
@@ -34,14 +39,14 @@ export function normalizePublishedFares(raw: any, requestedRoute?: string): Fare
   return { points, config, routeId: raw.route?.id ?? raw.routeId ?? requestedRoute };
 }
 export async function savePublishedFares(matrix: FareMatrix, routeId?: string, at = Date.now()): Promise<void> {
-  await appStorage.setItem(PREFIX + (routeId ?? "active"), JSON.stringify({ version: 3, savedAt: at, matrix }));
+  await appStorage.setItem(PREFIX + (routeId ?? "active"), JSON.stringify({ version: 4, savedAt: at, matrix }));
 }
 export async function cachedPublishedFares(routeId?: string, at = Date.now()): Promise<FareMatrix | null> {
   const stored = await appStorage.getItem(PREFIX + (routeId ?? "active"));
   if (!stored) return null;
   try {
     const data = JSON.parse(stored);
-    if (data.version !== 3 || !Number.isFinite(data.savedAt) || data.savedAt > at || at - data.savedAt > FARE_CACHE_MAX_AGE_MS) return null;
+    if (data.version !== 4 || !Number.isFinite(data.savedAt) || data.savedAt > at || at - data.savedAt > FARE_CACHE_MAX_AGE_MS) return null;
     if (routeId && data.matrix?.routeId !== routeId) return null;
     const matrix = normalizePublishedFares(data.matrix, routeId);
     return { ...matrix, isCached: true, loadedAt: data.savedAt };

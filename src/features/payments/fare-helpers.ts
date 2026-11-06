@@ -3,10 +3,11 @@ import type { CommuterType, FareConfig, FarePoint } from "../../core/domain/type
 export const DEFAULT_FARE_CONFIG: FareConfig = {
   baseBarangayCount: 4,
   baseFareRegular: 17,
-  baseFareDiscounted: 13.6,
-  succeedingFareRegular: 2.25,
-  succeedingFareDiscounted: 1.8,
-  totalPoints: 34,
+  baseFareDiscounted: 13.5,
+  succeedingFareRegular: 2.4,
+  succeedingFareDiscounted: 1.92,
+  discountRate: 20,
+  totalPoints: 33,
 };
 
 export function formatCurrency(amount: number): string {
@@ -49,11 +50,11 @@ export function getFareBetween(
 ): number {
   // Match Laravel FareRules: both endpoints count as traversed barangays.
   // Stored stop fares are for trips from stop 1, not cumulative distances.
-  const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+  const round = (value: number) => Math.round(Number((value * 4).toFixed(6))) / 4;
   const traversed = getBarangaysTraversed(from, to);
-  const regular = round(config.baseFareRegular + Math.max(0, traversed - config.baseBarangayCount) * config.succeedingFareRegular);
-  const rate = config.discountRate ?? ((1 - config.baseFareDiscounted / config.baseFareRegular) * 100);
-  return isDiscounted ? round(regular * (100 - rate) / 100) : regular;
+  const regular = config.baseFareRegular + Math.max(0, traversed - config.baseBarangayCount) * config.succeedingFareRegular;
+  const rate = config.discountRate ?? 20;
+  return round(isDiscounted ? regular * (100 - rate) / 100 : regular);
 }
 
 export function getBarangaysTraversed(from: FarePoint, to: FarePoint): number {

@@ -42,7 +42,7 @@ export function AppPreferencesCard({
       <View style={[styles.infoRow, { marginTop: 8, paddingVertical: 10 }]}>
         <View style={{ flex: 1, paddingRight: 10 }}>
           <Text style={styles.prefTitle}>Lofi mode</Text>
-          <Text style={styles.prefSubtitle}>Use the light color palette across the app</Text>
+          <Text style={styles.prefSubtitle}>Use simpler styling and fewer animations</Text>
         </View>
         <Pressable
           accessibilityRole="switch"

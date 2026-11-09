@@ -128,6 +128,8 @@ export function LocationSelectorCards({
               clearPickup();
             }}
             style={styles.clearButton}
+            accessibilityRole="button"
+            hitSlop={8}
             accessibilityLabel="Clear pickup"
           >
             <Ionicons name="close" size={14} color={colors.muted} />
@@ -137,7 +139,7 @@ export function LocationSelectorCards({
 
       {/* Swap Button */}
       <View style={styles.swapButtonWrapper}>
-        <Pressable onPress={swapLocations} style={styles.swapButton} accessibilityLabel="Swap locations">
+        <Pressable accessibilityRole="button" hitSlop={4} onPress={swapLocations} style={styles.swapButton} accessibilityLabel="Swap locations">
           <Ionicons name="swap-vertical" size={16} color={colors.text} />
         </Pressable>
       </View>
@@ -211,6 +213,8 @@ export function LocationSelectorCards({
               clearDropoff();
             }}
             style={styles.clearButton}
+            accessibilityRole="button"
+            hitSlop={8}
             accessibilityLabel="Clear drop-off"
           >
             <Ionicons name="close" size={14} color={colors.muted} />

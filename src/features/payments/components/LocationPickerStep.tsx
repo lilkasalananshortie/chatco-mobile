@@ -92,10 +92,10 @@ export function LocationPickerStep({
         {/* Top Bar: Back, Title, Method Badge, Close */}
         <View style={styles.topBar}>
           <View style={styles.topBarLeft}>
-            <Pressable onPress={() => setStep("method")} style={styles.iconButton} accessibilityLabel="Back">
+            <Pressable accessibilityRole="button" onPress={() => setStep("method")} style={styles.iconButton} accessibilityLabel="Back to payment methods">
               <Ionicons name="chevron-back" size={20} color={colors.text} />
             </Pressable>
-            <Text style={styles.topBarTitle}>Select Location</Text>
+            <Text numberOfLines={1} style={styles.topBarTitle}>Select Location</Text>
           </View>
           <View style={styles.topBarRight}>
             <View
@@ -117,7 +117,7 @@ export function LocationPickerStep({
                 {selectedMethod}
               </Text>
             </View>
-            <Pressable onPress={handleClose} style={styles.iconButton} accessibilityLabel="Close">
+            <Pressable accessibilityRole="button" onPress={handleClose} style={styles.iconButton} accessibilityLabel="Close payment">
               <Ionicons name="close" size={20} color={colors.muted} />
             </Pressable>
           </View>

@@ -74,6 +74,9 @@ export function usePaymentFlow({
   const [showReceiptDetails, setShowReceiptDetails] = useState(false);
   const [fareReady, setFareReady] = useState(false);
   const [fareNotice, setFareNotice] = useState("");
+  const [fareLoading, setFareLoading] = useState(false);
+  const [fareLoadFailed, setFareLoadFailed] = useState(false);
+  const [fareLoadAttempt, setFareLoadAttempt] = useState(0);
   const submitting = useRef(false);
   const paymentKey = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -85,6 +88,8 @@ export function usePaymentFlow({
     if (!visible) return;
     let cancelled = false;
     setFareReady(false);
+    setFareLoading(true);
+    setFareLoadFailed(false);
     setFareNotice("Loading published fares…");
 
     void api
@@ -94,13 +99,20 @@ export function usePaymentFlow({
         setPointAreas(matrix.points);
         setFareConfig(matrix.config);
         setFareReady(true);
-        setFareNotice(matrix.isCached ? `Offline: using published fares saved ${new Date(matrix.loadedAt!).toLocaleString("en-PH")}. Final amounts are validated when cash syncs.` : "");
+        setFareLoading(false);
+        setFareNotice(matrix.isCached
+          ? `Offline: using published fares saved ${new Date(matrix.loadedAt!).toLocaleString("en-PH")}. Cash will sync when the connection returns.`
+          : matrix.cachePersisted === false
+            ? "Published fares loaded, but could not be saved for offline use. Reconnect and retry the fare cache before an outage."
+            : "");
         setPickupPoint((current) => current ? matrix.points.find((point) => point.id === current.id) ?? null : current);
         setDropoffPoint((current) => current ? matrix.points.find((point) => point.id === current.id) ?? null : current);
 
       })
       .catch((err) => {
         if (cancelled) return;
+        setFareLoading(false);
+        setFareLoadFailed(true);
         setFareNotice(err instanceof Error ? err.message : "Unable to load published fares.");
         gcash.setGcashError(err instanceof Error ? err.message : "Unable to load fare matrix.");
       });
@@ -110,7 +122,7 @@ export function usePaymentFlow({
       .then((settings) => { if (!cancelled) setReceiptSettings(settings); })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [visible, shift.routeId, isOnline]);
+  }, [visible, shift.routeId, fareLoadAttempt]);
 
   const triggerSuccessAlert = useCallback((_amount: number, _method: string) => {
     // Silent success - no modal alert popup ("sana wala na tanungan")
@@ -505,6 +517,9 @@ export function usePaymentFlow({
     fareInfo,
     fareReady,
     fareNotice,
+    fareLoading,
+    fareLoadFailed,
+    retryFareLoad: () => setFareLoadAttempt(attempt => attempt + 1),
     groupPassengers,
     groupEnteredCount,
     groupPassengerCount,

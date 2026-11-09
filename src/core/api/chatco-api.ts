@@ -13,7 +13,7 @@
  * - sync-service.ts: Offline cash synchronization & provisional shift reconciliation.
  * - transaction-service.ts: Cash transactions, group cash recording, pagination, earnings.
  * - payment-service.ts: GCash checkout initiation, polling, simulation, fare matrix, receipt settings.
- * - fleet-service.ts: GPS location reporting, hails, capacity, SOS, announcements, ratings, remittances.
+ * - fleet-service.ts: GPS location reporting, hails, capacity, announcements, ratings, remittances.
  */
 
 import { getConductorDeviceId } from "../storage/device-id";
@@ -23,7 +23,6 @@ import {
   CACHED_UNITS_KEY,
   CACHED_USER_KEY,
   NetworkError,
-  PROVISIONAL_SHIFT_KEY,
   setSessionEndedHandler,
 } from "./api-client";
 import { authService } from "./auth-service";
@@ -33,7 +32,6 @@ import { shiftService } from "./shift-service";
 import {
   addSyncListener,
   getSyncState,
-  reconcileProvisionalShift,
   syncPendingCashTransactions,
   type SyncState,
 } from "./sync-service";
@@ -45,11 +43,9 @@ export {
   CACHED_UNITS_KEY,
   CACHED_USER_KEY,
   NetworkError,
-  PROVISIONAL_SHIFT_KEY,
   setSessionEndedHandler,
   addSyncListener,
   getSyncState,
-  reconcileProvisionalShift,
   syncPendingCashTransactions,
   type SyncState,
 };
@@ -72,18 +68,19 @@ export const api = {
   activeShift: shiftService.activeShift,
   checkConnectivity: shiftService.checkConnectivity,
   startShift: shiftService.startShift,
+  updateTripDirection: shiftService.updateTripDirection,
   claimShiftDevice: shiftService.claimShiftDevice,
   releaseShiftDevice: shiftService.releaseShiftDevice,
   getDeviceId: () => getConductorDeviceId(),
 
-  // Offline Sync & Reconciliation
-  reconcileProvisionalShift,
+  // Offline cash synchronization (only for a server-authorized shift)
   syncPendingCashTransactions,
   addSyncListener,
   getSyncState,
 
   // Transactions & Cash Management
   pendingCashCount: transactionService.pendingCashCount,
+  pendingCashSyncError: transactionService.pendingCashSyncError,
   transactions: transactionService.transactions,
   transactionsPage: transactionService.transactionsPage,
   earnings: transactionService.earnings,
@@ -108,8 +105,6 @@ export const api = {
   rejectHail: fleetService.rejectHail,
   capacity: fleetService.capacity,
   location: fleetService.location,
-  sos: fleetService.sos,
-  sosStatus: fleetService.sosStatus,
   announcements: fleetService.announcements,
   markAnnouncementRead: fleetService.markAnnouncementRead,
   ratings: fleetService.ratings,

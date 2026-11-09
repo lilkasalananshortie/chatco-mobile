@@ -1,7 +1,7 @@
 import { Platform, StyleSheet } from "react-native";
 import type { useAppTheme } from "../../../core/theme/ThemeProvider";
 
-export function createMethodGroupStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean) {
+export function createMethodGroupStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean, isLowFidelity = false) {
   return StyleSheet.create({
     modalBackdrop: {
       flex: 1,
@@ -102,9 +102,9 @@ export function createMethodGroupStyles(colors: ReturnType<typeof useAppTheme>["
       alignItems: "center",
       justifyContent: "space-between",
       padding: 12,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.03)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
     },
     groupCounterLabel: {
@@ -130,8 +130,8 @@ export function createMethodGroupStyles(colors: ReturnType<typeof useAppTheme>["
     stepperMinus: {
       width: 32,
       height: 32,
-      borderRadius: isLofi ? 3 : 8,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderRadius: isLowFidelity ? 3 : 8,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
       backgroundColor: isLofi ? colors.surface : "rgba(255,255,255,0.05)",
       alignItems: "center",
@@ -140,7 +140,7 @@ export function createMethodGroupStyles(colors: ReturnType<typeof useAppTheme>["
     stepperPlus: {
       width: 32,
       height: 32,
-      borderRadius: isLofi ? 3 : 8,
+      borderRadius: isLowFidelity ? 3 : 8,
       backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
@@ -161,10 +161,10 @@ export function createMethodGroupStyles(colors: ReturnType<typeof useAppTheme>["
     // Group summary box
     groupSummaryBox: {
       backgroundColor: isLofi ? colors.surface2 : "rgba(59, 130, 246, 0.1)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: isLofi ? colors.primary : "rgba(59, 130, 246, 0.2)",
       padding: 14,
-      borderRadius: isLofi ? 4 : 14,
+      borderRadius: isLowFidelity ? 4 : 14,
       gap: 6,
     },
     summaryLine: {
@@ -190,8 +190,8 @@ export function createMethodGroupStyles(colors: ReturnType<typeof useAppTheme>["
       backgroundColor: isLofi ? colors.surface : "rgba(255,255,255,0.1)",
       paddingHorizontal: 8,
       paddingVertical: 3,
-      borderRadius: isLofi ? 3 : 999,
-      borderWidth: isLofi ? 1 : 0,
+      borderRadius: 4,
+      borderWidth: isLowFidelity ? 1 : 0,
       borderColor: isLofi ? colors.border : "transparent",
     },
     summaryPillText: {
@@ -202,7 +202,7 @@ export function createMethodGroupStyles(colors: ReturnType<typeof useAppTheme>["
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      borderTopWidth: isLofi ? 1.5 : 1,
+      borderTopWidth: isLowFidelity ? 1.5 : 1,
       borderTopColor: colors.border,
       paddingTop: 8,
       marginTop: 4,

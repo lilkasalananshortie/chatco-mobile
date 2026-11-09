@@ -9,7 +9,7 @@ import { PasswordScreen } from "./PasswordScreen";
 import { LegalSupportCard } from "../../shared/legal/LegalSupportCard";
 
 export function LoginScreen({ onLogin }: { onLogin: (user: User) => void | Promise<void> }) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi , isLowFidelity } = useAppTheme();
   const { height } = useWindowDimensions();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const compact = keyboardVisible || height < 760;
@@ -46,9 +46,14 @@ export function LoginScreen({ onLogin }: { onLogin: (user: User) => void | Promi
           <View style={s.content}>
             {!keyboardVisible ? <>
               <View style={s.brandRow}>
-                <View>
-                  <Text style={[s.wordmark, { color: colors.text }]}>CHATCO<Text style={{ color: colors.primaryLight }}>.</Text></Text>
-                  <Text style={[s.brandLabel, { color: colors.muted }]}>CONDUCTOR</Text>
+                <View style={s.brandLockup} accessible accessibilityLabel="Chatco logo">
+                  <View style={[s.logoMark, { backgroundColor: colors.primaryLight }]}>
+                    <Ionicons name="chatbubbles" size={22} color="#FFFFFF" accessible={false} />
+                  </View>
+                  <View>
+                    <Text style={[s.wordmark, { color: colors.text }]}>CHATCO<Text style={{ color: colors.primaryLight }}>.</Text></Text>
+                    <Text style={[s.brandLabel, { color: colors.muted }]}>CONDUCTOR</Text>
+                  </View>
                 </View>
                 <Ionicons name="bus-outline" size={34} color={colors.primaryLight} accessible={false} />
               </View>
@@ -59,7 +64,7 @@ export function LoginScreen({ onLogin }: { onLogin: (user: User) => void | Promi
               </View>
             </> : null}
 
-            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: isLofi ? 6 : 24, padding: compact ? 16 : 22 }]}>
+            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: isLowFidelity ? 6 : 24, padding: compact ? 16 : 22 }]}>
               <Text nativeID="conductor-login-label" style={[s.label, { color: colors.text }]}>Username or email</Text>
               <View style={[s.field, { minHeight: compact ? 48 : 56, marginTop: compact ? 7 : 10, backgroundColor: colors.surface2, borderColor: focused === "login" ? colors.primaryLight : colors.border }]}>
                 <Ionicons name="person-outline" size={19} color={colors.muted} accessible={false} />
@@ -126,6 +131,8 @@ const s = StyleSheet.create({
   contentFrame: { flex: 1, justifyContent: "center", paddingHorizontal: 22 },
   content: { width: "100%", maxWidth: 460, alignSelf: "center" },
   brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  brandLockup: { flexDirection: "row", alignItems: "center", gap: 10 },
+  logoMark: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   wordmark: { fontSize: 27, fontWeight: "900", letterSpacing: -1 },
   brandLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 3, marginTop: 4 },
   accent: { width: 36, height: 4, borderRadius: 2 },

@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 jest.mock("../app-storage", () => ({ appStorage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() } }));
 import { appStorage } from "../app-storage";
-import { enqueuePendingCash, getPendingCash, removePendingCash, type PendingCashItem } from "../offline-cash-queue";
+import { enqueuePendingCash, getPendingCash, pendingCashSyncError, removePendingCash, type PendingCashItem } from "../offline-cash-queue";
 let store: Map<string, string>;
 const item = (id: string): PendingCashItem => ({ id, shiftId: "original-shift", idempotencyKey: id, kind: "single", payload: {}, localTransactions: [], createdAt: 1, deviceId: "original-device" });
 beforeEach(() => {
@@ -31,4 +31,11 @@ test("corrupt queue is preserved and not replaced by the next fare", async () =>
   store.set("chatco_pending_cash_v1", "{broken");
   await expect(enqueuePendingCash(item("b"))).rejects.toThrow("preserved for recovery");
   expect(store.get("chatco_pending_cash_v1")).toBe("{broken");
+});
+test("sync rejection is reported for the matching shift without exposing another shift's error", async () => {
+  await enqueuePendingCash({ ...item("older"), shiftId: "shift-one", lastError: "Older rejection", lastAttemptAt: 10 });
+  await enqueuePendingCash({ ...item("newer"), shiftId: "shift-one", lastError: "Fare matrix changed", lastAttemptAt: 20 });
+  await enqueuePendingCash({ ...item("other"), shiftId: "shift-two", lastError: "Other shift" });
+  expect(await pendingCashSyncError("shift-one")).toBe("Fare matrix changed");
+  expect(await pendingCashSyncError("shift-two")).toBe("Other shift");
 });

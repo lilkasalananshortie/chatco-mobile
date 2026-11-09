@@ -36,6 +36,12 @@ export async function initAudioCues(): Promise<boolean> {
   return isAudioEnabled;
 }
 
+export function preloadAudioCues(): void {
+  if (Platform.OS !== "web") {
+    void import("./native-audio").then(({ preloadNativeAudio }) => preloadNativeAudio()).catch(() => undefined);
+  }
+}
+
 export function isAudioCuesActive(): boolean {
   return isAudioEnabled;
 }
@@ -91,6 +97,12 @@ function playTone(freq: number, type: OscillatorType, durationMs: number, delayM
   }, delayMs);
 }
 
+function playMobileCue(name: import("./native-audio").CueName): void {
+  if (Platform.OS !== "web") {
+    void import("./native-audio").then(({ playNativeCue }) => playNativeCue(name)).catch(() => undefined);
+  }
+}
+
 // ─── 6 Unified Category Sound Signatures ──────────────────────────────────────
 
 export const audioCues = {
@@ -101,6 +113,7 @@ export const audioCues = {
   playPaymentSound() {
     if (!isAudioEnabled || !isScanSoundEnabled) return;
     appHaptics.success();
+    playMobileCue("payment");
     // High metallic coin harmonics
     playTone(2400, "sine", 70, 0, 0.25);
     playTone(3200, "triangle", 90, 45, 0.22);
@@ -113,6 +126,7 @@ export const audioCues = {
   playCapacitySound() {
     if (!isAudioEnabled) return;
     appHaptics.medium();
+    playMobileCue("capacity");
     // Short mechanical low-mid thump
     playTone(220, "triangle", 45, 0, 0.35);
   },
@@ -125,6 +139,7 @@ export const audioCues = {
     if (!isAudioEnabled) return;
     appHaptics.medium();
     setTimeout(() => appHaptics.medium(), 85);
+    playMobileCue("hail");
     // High piercing double whistle chirp
     playTone(2100, "sine", 80, 0, 0.3);
     playTone(2600, "sine", 95, 85, 0.32);
@@ -137,6 +152,7 @@ export const audioCues = {
   playWarningSound() {
     if (!isAudioEnabled) return;
     appHaptics.error();
+    playMobileCue("warning");
     // Urgent dual square-wave beeps
     playTone(880, "square", 80, 0, 0.25);
     playTone(880, "square", 80, 110, 0.25);
@@ -149,6 +165,7 @@ export const audioCues = {
   playDutySound() {
     if (!isAudioEnabled) return;
     appHaptics.success();
+    playMobileCue("duty");
     // Transport two-tone bell chime (D5 then A4)
     playTone(587.33, "sine", 160, 0, 0.3);
     playTone(440.0, "sine", 240, 120, 0.25);
@@ -161,6 +178,7 @@ export const audioCues = {
   playSyncSound() {
     if (!isAudioEnabled) return;
     appHaptics.light();
+    playMobileCue("sync");
     // Delicate upward sweep
     playTone(1100, "sine", 50, 0, 0.15);
   },

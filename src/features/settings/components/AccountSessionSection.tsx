@@ -7,7 +7,7 @@ export interface AccountSessionSectionProps {
   styles: any;
   colors: any;
   isLofi: boolean;
-  onOpenSOS: () => void;
+  isLowFidelity?: boolean;
   onClearCache: () => void;
   logoutLocked: boolean;
   logoutCheckStatus: "loading" | "ready" | "error";
@@ -22,7 +22,7 @@ export function AccountSessionSection({
   styles,
   colors,
   isLofi,
-  onOpenSOS,
+  isLowFidelity = false,
   onClearCache,
   logoutLocked,
   logoutCheckStatus,
@@ -34,20 +34,6 @@ export function AccountSessionSection({
 }: AccountSessionSectionProps) {
   return (
     <View>
-      {/* Emergency SOS */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionHeaderTitle}>Emergency</Text>
-        <Pressable accessibilityRole="button" onPress={onOpenSOS} style={styles.sosCardButton}>
-          <View style={styles.sosIconBox}>
-            <Ionicons name="warning-outline" size={28} color={isLofi ? "#DC2626" : "#F87171"} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.sosButtonTitle}>Emergency SOS</Text>
-            <Text style={styles.sosButtonSubtitle}>Open the emergency confirmation</Text>
-          </View>
-        </Pressable>
-      </View>
-
       {/* Data & Storage */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionHeaderTitle}>Data & Storage</Text>
@@ -107,7 +93,7 @@ export function AccountSessionSection({
       <Modal
         visible={showLogoutConfirm}
         transparent
-        animationType={isLofi ? "none" : "fade"}
+        animationType={isLowFidelity ? "none" : "fade"}
         onRequestClose={() => setShowLogoutConfirm(false)}
       >
         <View style={styles.modalBackdrop}>

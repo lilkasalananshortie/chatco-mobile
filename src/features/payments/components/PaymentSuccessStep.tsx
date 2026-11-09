@@ -68,6 +68,7 @@ export function PaymentSuccessStep({
 }: PaymentSuccessStepProps) {
   const { colors, isLofi } = usePaymentTheme();
   const summary = receiptSummary(receiptTransactions, isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0, selectedMethod ?? "Cash");
+  const hasPendingOfflineCash = selectedMethod === "Cash" && receiptTransactions.some(transaction => transaction.offlinePending);
 
   return (
     // Amounts and passenger roles below come from the final server receipt rows.
@@ -77,9 +78,11 @@ export function PaymentSuccessStep({
           <Ionicons name="checkmark" size={32} color={isLofi ? colors.success : "#34D399"} />
         </View>
 
-        <Text style={styles.successTitle}>Payment Successful!</Text>
+        <Text style={styles.successTitle}>{hasPendingOfflineCash ? "Saved on this device" : "Payment Successful!"}</Text>
         <Text style={styles.successSubtitle}>
-          {selectedMethod === "Voucher" && summary.amount > 0
+          {hasPendingOfflineCash
+            ? "Cash fare saved locally. It will sync to this shift when the connection returns."
+            : selectedMethod === "Voucher" && summary.amount > 0
             ? `Voucher applied. Collect ₱${summary.amount.toFixed(2)} remaining fare in cash.`
             : summary.amount === 0 && summary.hasVoucher ? "The voucher covered the fare. No cash is due."
             : selectedMethod === "GCash" ? "Payment confirmed by ChatCo."

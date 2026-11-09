@@ -12,10 +12,10 @@ export interface RemittanceSuccessModalProps {
 }
 
 export function RemittanceSuccessModal({ visible, onClose, accountableTotals, unitNumber }: RemittanceSuccessModalProps) {
-  const { colors, isLofi, styles } = useReportTheme();
+  const { colors, isLofi, styles , isLowFidelity } = useReportTheme();
 
   return (
-    <Modal visible={visible} transparent animationType={isLofi ? "none" : "fade"} onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={isLowFidelity ? "none" : "fade"} onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 16 }}>
         <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 384, backgroundColor: colors.dialog, borderWidth: 1, borderColor: colors.hairline, borderRadius: 12, padding: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>

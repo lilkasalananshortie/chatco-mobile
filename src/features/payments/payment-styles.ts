@@ -5,12 +5,12 @@ import { createLocationStyles } from "./styles/location-styles";
 import { createMethodGroupStyles } from "./styles/method-group-styles";
 import { createSuccessReceiptStyles } from "./styles/success-receipt-styles";
 
-export function createPaymentStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean) {
+export function createPaymentStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean, isLowFidelity = false) {
   return {
-    ...createLocationStyles(colors, isLofi),
-    ...createMethodGroupStyles(colors, isLofi),
-    ...createConfirmationStyles(colors, isLofi),
-    ...createGcashQrStyles(colors, isLofi),
-    ...createSuccessReceiptStyles(colors, isLofi),
+    ...createLocationStyles(colors, isLofi, isLowFidelity),
+    ...createMethodGroupStyles(colors, isLofi, isLowFidelity),
+    ...createConfirmationStyles(colors, isLofi, isLowFidelity),
+    ...createGcashQrStyles(colors, isLofi, isLowFidelity),
+    ...createSuccessReceiptStyles(colors, isLofi, isLowFidelity),
   };
 }

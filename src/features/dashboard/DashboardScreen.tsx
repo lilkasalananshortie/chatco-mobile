@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState, Linking, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import Constants from "expo-constants";
+import { getNativeMaps } from "./native-map-module";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useKeepAwake } from "expo-keep-awake";
+import { useDashboardKeepAwake } from "./hooks/useDashboardKeepAwake";
 import { Text } from "../../shared/ui/BrandText";
 import { api } from "../../core/api/chatco-api";
 import type { Shift } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { ModalShell } from "../../shared/ui";
-import { SosConfirmModal } from "../../shared/ui/SosConfirmModal";
-import { TransactionHistoryModal } from "./TransactionHistoryModal";
 import { createDashStyles } from "./dashboard-styles";
 import { useDashboardShift } from "./hooks/useDashboardShift";
 import { useShiftGps } from "./ShiftGpsProvider";
@@ -17,11 +16,13 @@ import { DeviceOwnershipBanner } from "./components/DeviceOwnershipBanner";
 import { DashboardHeaderCard } from "./components/DashboardHeaderCard";
 import { LiveMap } from "./LiveMap";
 import { BreakConfirmModal } from "./components/BreakConfirmModal";
-import { completeAndAdvanceTrip, loadTripCycleState, saveTripCycleState, switchActiveTripDirection, undoLastTurnaround, type TripCycleState } from "../../core/utils/trip-cycle-tracker";
+import { completeAndAdvanceTrip, loadTripCycleState, saveTripCycleState, switchActiveTripDirection, undoLastTurnaround, type TripCycleState, type TripDirection } from "../../core/utils/trip-cycle-tracker";
 import { audioCues } from "../../core/utils/audio-cues";
 import { TripLogbookModal } from "./TripLogbookModal";
 import { RouteAdvisoryBanners } from "./components/RouteAdvisoryBanners";
-import { IncidentReportModal } from "./components/IncidentReportModal";
+import { RouteDeviationNotice } from "./components/RouteDeviationNotice";
+import { CORRIDOR_DEVIATION_THRESHOLD_METERS } from "../../core/utils/corridor-guard";
+import { TripDirectionModal } from "./components/TripDirectionModal";
 
 export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShiftUpdated, onShiftEnded }: {
   shift: Shift; refreshKey: number; canOperate: boolean; isOnline: boolean;
@@ -35,15 +36,13 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const bottomNavigationHeight = 64 + bottomNavigationInset;
   const availableHeight = windowHeight - safeInsets.top;
   const dashboardMaxHeight = Math.max(90, Math.min(availableHeight * 0.75, availableHeight - bottomNavigationHeight - 160));
-  const usesWebMapFallback = Platform.OS === "android" && Constants.expoConfig?.extra?.googleMapsConfigured !== true;
-  useKeepAwake();
+  const usesWebMapFallback = Platform.OS !== "web" && (!getNativeMaps() || (Platform.OS === "android" && Constants.expoConfig?.extra?.googleMapsConfigured !== true));
+  useDashboardKeepAwake();
   const dashStyles = useMemo(() => createDashStyles(colors, isLofi), [colors, isLofi]);
-  const [history, setHistory] = useState(false);
   const [actions, setActions] = useState(false);
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
-  const [sos, setSos] = useState(false);
-  const [incidentModalOpen, setIncidentModalOpen] = useState(false);
   const [tripModalOpen, setTripModalOpen] = useState(false);
+  const [directionModalOpen, setDirectionModalOpen] = useState(false);
   const [tripCycleState, setTripCycleState] = useState<TripCycleState | null>(null);
   const tripCycleStateRef = useRef<TripCycleState | null>(null);
   const shiftData = useDashboardShift({ shift, refreshKey, canOperate, isOnline, onShiftUpdated, onShiftEnded });
@@ -67,10 +66,15 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   useEffect(() => {
     let active = true;
     void loadTripCycleState(shift.shiftId, shift.timeIn).then(state => {
+      const serverDirection = shift.tripDirection === "FORWARD" ? "SOUTHBOUND" : shift.tripDirection === "REVERSE" ? "NORTHBOUND" : null;
+      if (serverDirection && state.activeTrip.direction !== serverDirection) {
+        state = switchActiveTripDirection(state);
+        if (active) void saveTripCycleState(state);
+      }
       if (active) { setTripCycleState(state); tripCycleStateRef.current = state; }
     });
     return () => { active = false; };
-  }, [shift.shiftId, shift.timeIn]);
+  }, [shift.shiftId, shift.timeIn, shift.tripDirection]);
 
   const handleAdvanceTrip = useCallback(async () => {
     if (!tripCycleStateRef.current) return;
@@ -78,22 +82,37 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
     const next = completeAndAdvanceTrip(tripCycleStateRef.current, shiftData.transactions);
     setTripCycleState(next); tripCycleStateRef.current = next; await saveTripCycleState(next);
   }, [shiftData.transactions]);
-  const handleSwitchDirection = useCallback(async () => {
-    if (!tripCycleStateRef.current) return;
+  const handleSaveDirection = useCallback(async (direction: TripDirection) => {
+    if (!canOperate) throw new Error("Claim this shift on this device before changing direction.");
+    if (!tripCycleStateRef.current) throw new Error("Trip direction is still loading. Try again.");
+    const serverDirection = direction === "SOUTHBOUND" ? "FORWARD" : "REVERSE";
+    await api.updateTripDirection(serverDirection);
+    const current = tripCycleStateRef.current;
+    const next = current.activeTrip.direction === direction ? current : switchActiveTripDirection(current);
+    setTripCycleState(next);
+    tripCycleStateRef.current = next;
+    await saveTripCycleState(next);
+    onShiftUpdated?.({ ...shift, tripDirection: serverDirection });
     audioCues.playDutySound();
-    const next = switchActiveTripDirection(tripCycleStateRef.current);
-    setTripCycleState(next); tripCycleStateRef.current = next; await saveTripCycleState(next);
-  }, []);
+  }, [canOperate, onShiftUpdated, shift]);
+  const handleSwitchDirection = useCallback(async () => {
+    const current = tripCycleStateRef.current;
+    if (!current) return;
+    try { await handleSaveDirection(current.activeTrip.direction === "SOUTHBOUND" ? "NORTHBOUND" : "SOUTHBOUND"); }
+    catch (cause) { Alert.alert("Unable to switch direction", cause instanceof Error ? cause.message : "Try again."); }
+  }, [handleSaveDirection]);
   const handleUndoTurnaround = useCallback(async () => {
     if (!tripCycleStateRef.current) return;
     const next = undoLastTurnaround(tripCycleStateRef.current);
     setTripCycleState(next); tripCycleStateRef.current = next; await saveTripCycleState(next);
   }, []);
   const combinedError = shiftData.error || gpsData.gpsError;
+  const routeDeviationActive = gpsData.corridorDeviationMeters > CORRIDOR_DEVIATION_THRESHOLD_METERS;
   const openAction = (action: () => void) => { setActions(false); action(); };
-  const dashboardContent = <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={usesWebMapFallback ? { maxHeight: dashboardMaxHeight, flexGrow: 0, flexShrink: 1 } : undefined}>
-    {!isOnline ? <View accessibilityRole="alert" style={{ backgroundColor: isLofi ? "#FEF3C7" : "#451A03", borderBottomWidth: 1, borderColor: isLofi ? "#FDE68A" : "rgba(251,191,36,0.3)", paddingHorizontal: 16, paddingVertical: 8 }}>
-      <Text style={{ color: isLofi ? "#78350F" : "#FEF3C7", textAlign: "center", fontSize: 12, fontWeight: "500", lineHeight: 18 }}>Offline mode: cash fares are saved on this device and will sync when the connection returns. GCash is unavailable.</Text>
+  const hasStatusBanner = !isOnline || shiftData.syncState === "syncing";
+  const dashboardContent = <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" stickyHeaderIndices={hasStatusBanner ? [0] : []} style={usesWebMapFallback ? { maxHeight: dashboardMaxHeight, flexGrow: 0, flexShrink: 1 } : undefined}>
+    {!isOnline ? <View style={{ backgroundColor: colors.surface, borderBottomWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 8 }}>
+      <Text accessibilityLiveRegion="polite" style={{ color: colors.text, textAlign: "center", fontSize: 12, fontWeight: "500", lineHeight: 18 }}>Offline mode: cash payments use saved route fares and sync when the connection returns. GCash is unavailable.</Text>
     </View> : null}
     {shiftData.syncState === "syncing" ? <View style={{ backgroundColor: colors.surface, paddingHorizontal: 16, paddingVertical: 8 }}><Text style={{ color: colors.text, fontSize: 12 }}>Syncing offline transactions…</Text></View> : null}
     <DeviceOwnershipBanner shift={shift} isOperatingDevice={shiftData.isOperatingDevice} canOperate={canOperate} ownsShift={shiftData.ownsShift} unclaimed={shiftData.unclaimed} recoveredByAdmin={shiftData.recoveredByAdmin} deviceBusy={shiftData.deviceBusy} deviceError={shiftData.deviceError} claimDevice={shiftData.claimDevice} releaseDevice={shiftData.releaseDevice} />
@@ -112,25 +131,26 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
       profilePictureUrl={profilePictureUrl} shift={shift} dashStyles={dashStyles} colors={colors} isLofi={isLofi}
       canOperate={canOperate} isOnBreak={shiftData.isOnBreak} breakPending={shiftData.breakPending}
       onOpenBreakConfirm={() => shiftData.setBreakConfirmOpen(true)}
+      tripDestination={tripCycleState?.activeTrip.direction === "NORTHBOUND" ? "Calumpit" : "Meycauayan"}
+      directionReady={Boolean(tripCycleState)} onOpenDirection={() => setDirectionModalOpen(true)}
       capacity={shiftData.capacity} onUpdateCapacity={value => void shiftData.updateCapacity(value)}
-      onOpenHistory={() => setHistory(true)} onOpenActions={() => setActions(true)}
-      totals={shiftData.totals} pendingOfflineCount={shiftData.pendingOfflineCount}
+      onOpenActions={() => setActions(true)}
+      totals={shiftData.totals} pendingOfflineCount={shiftData.pendingOfflineCount} pendingOfflineError={shiftData.pendingOfflineError}
     />
-    <RouteAdvisoryBanners currentSpeedKmh={gpsData.currentSpeedKmh} isOverspeeding={gpsData.isOverspeeding} corridorDeviationMeters={gpsData.corridorDeviationMeters} thermalState={{ enabled: false }} approachingStop={null} />
+    <RouteAdvisoryBanners currentSpeedKmh={gpsData.currentSpeedKmh} isOverspeeding={gpsData.isOverspeeding} thermalState={{ enabled: false }} approachingStop={null} />
   </ScrollView>;
 
   return <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.background }}>
     <View style={{ flex: 1 }}>
-      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} viewportInsets={{ top: dashboardHeight, bottom: bottomNavigationHeight }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} canOperate={canOperate} onHail={(id, action) => shiftData.handleHail(id, action)} />
+      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} tripDirection={tripCycleState?.activeTrip.direction ?? "SOUTHBOUND"} viewportInsets={{ top: dashboardHeight, bottom: bottomNavigationHeight + (routeDeviationActive ? 88 : 0) + (combinedError ? 60 : 0) }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} canOperate={canOperate} onHail={(id, action) => shiftData.handleHail(id, action)} />
       <View renderToHardwareTextureAndroid onLayout={event => setDashboardHeight(event.nativeEvent.layout.height)} style={{ pointerEvents: "box-none", position: "absolute", top: 0, left: 0, right: 0, maxHeight: dashboardMaxHeight, zIndex: 10, elevation: 10 }}>
         {dashboardContent}
       </View>
+      {routeDeviationActive ? <View pointerEvents="none" style={{ position: "absolute", left: 16, right: 16, bottom: bottomNavigationHeight + 16 + (combinedError ? 60 : 0), zIndex: 14, elevation: 14 }}><RouteDeviationNotice distanceMeters={gpsData.corridorDeviationMeters} /></View> : null}
       {combinedError ? <View accessibilityRole="alert" style={{ position: "absolute", bottom: bottomNavigationHeight + 16, left: 16, right: 16, padding: 12, borderRadius: 8, backgroundColor: isLofi ? "#FEF2F2" : "#450A0A", zIndex: 15 }}><Text style={{ color: isLofi ? "#B91C1C" : "#FECACA", fontSize: 12 }}>{combinedError}</Text></View> : null}
     </View>
     <ModalShell visible={actions} title="Conductor actions" onClose={() => setActions(false)}>
       <Text style={styles.subtitle}>Unit {shift.unitNumber} · {shift.conductorName}</Text>
-      <Pressable onPress={() => openAction(() => setSos(true))} style={[styles.button, { backgroundColor: "#B91C1C" }]}><Text style={styles.buttonText}>Emergency SOS</Text></Pressable>
-      <Pressable onPress={() => openAction(() => setIncidentModalOpen(true))} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Log Incident</Text></Pressable>
       <Pressable onPress={() => openAction(() => setTripModalOpen(true))} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Trip Logbook</Text></Pressable>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Vehicle location</Text>
@@ -140,10 +160,8 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
         <Pressable onPress={() => void Linking.openSettings().catch(() => Alert.alert("Open device Settings", "Open ChatCo's permissions in device Settings to manage location access."))} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Device permissions</Text></Pressable>
       </View>
     </ModalShell>
-    <TransactionHistoryModal visible={history} shiftId={shift.shiftId} transactions={shiftData.transactions} tripCycleState={tripCycleState} onClose={() => setHistory(false)} />
     {shiftData.breakConfirmOpen ? <BreakConfirmModal visible isOnBreak={shiftData.isOnBreak} breakPending={shiftData.breakPending} error={shiftData.error} onClose={() => shiftData.setBreakConfirmOpen(false)} onConfirm={shiftData.updateBreak} /> : null}
-    <SosConfirmModal isOpen={sos} onClose={() => setSos(false)} />
-    <IncidentReportModal visible={incidentModalOpen} onClose={() => setIncidentModalOpen(false)} unitNumber={shift.unitNumber} shiftId={shift.shiftId} />
+    {directionModalOpen && tripCycleState ? <TripDirectionModal direction={tripCycleState.activeTrip.direction} onClose={() => setDirectionModalOpen(false)} onSave={handleSaveDirection} /> : null}
     {tripCycleState ? <TripLogbookModal visible={tripModalOpen} onClose={() => setTripModalOpen(false)} state={tripCycleState} transactions={shiftData.transactions} onAdvanceTrip={() => void handleAdvanceTrip()} onSwitchDirection={() => void handleSwitchDirection()} onUndoTurnaround={() => void handleUndoTurnaround()} /> : null}
   </SafeAreaView>;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../core/api/chatco-api";
 import type { Driver, Shift, Unit } from "../../core/domain/types";
@@ -171,8 +171,8 @@ export function VerificationScreen({
 
   return (
     <>
-      <ScreenShell>
-        <View style={{ paddingBottom: 32 }}>
+      <ScreenShell scrollable={false} contentStyle={{ paddingBottom: 24 }}>
+        <View style={{ paddingBottom: 8, flex: 1, minHeight: 0 }}>
           <View
             style={{
               flexDirection: "row",
@@ -226,7 +226,7 @@ export function VerificationScreen({
               : "Choose the driver you will be assisting for today’s shift."}
           />
 
-          <View style={{ gap: 8, marginTop: 12, marginBottom: 4 }}>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 12, marginBottom: 4 }}>
             {onViewMetrics ? (
               <Pressable
                 accessibilityRole="button"
@@ -234,47 +234,46 @@ export function VerificationScreen({
                 accessibilityHint="Opens your conductor metrics."
                 hitSlop={4}
                 onPress={onViewMetrics}
-                style={[styles.secondaryButton, { minHeight: 44, borderRadius: 10, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                style={[styles.secondaryButton, { flex: 1, minHeight: 48, borderRadius: 10, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }]}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <Ionicons name="bar-chart-outline" size={18} color={colors.muted} />
-                  <Text style={[styles.subtitle, { marginTop: 0, fontSize: 13 }]}>View all-time performance</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+                <Ionicons name="bar-chart-outline" size={17} color={colors.muted} />
+                <Text numberOfLines={2} style={[styles.subtitle, { marginTop: 0, fontSize: 11, flexShrink: 1 }]}>All-time performance</Text>
               </Pressable>
             ) : null}
             {onViewSettings ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Account settings and photo"
+                accessibilityLabel="Account settings"
                 accessibilityHint="Opens your account settings."
                 hitSlop={4}
                 onPress={onViewSettings}
-                style={[styles.secondaryButton, { minHeight: 44, borderRadius: 10, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                style={[styles.secondaryButton, { flex: 1, minHeight: 48, borderRadius: 10, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }]}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <Ionicons name="settings-outline" size={18} color={colors.muted} />
-                  <Text style={[styles.subtitle, { marginTop: 0, fontSize: 13 }]}>Account settings and photo</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+                <Ionicons name="settings-outline" size={17} color={colors.muted} />
+                <Text numberOfLines={1} style={[styles.subtitle, { marginTop: 0, fontSize: 11, flexShrink: 1 }]}>Account settings</Text>
               </Pressable>
             ) : null}
           </View>
 
           {step === "select-unit" ? (
             <>
-              <OfflineDepotNotice isOfflineDepot={isOfflineDepot} />
+              <OfflineDepotNotice isOfflineDepot={isOfflineDepot} onRetry={() => void load()} />
               {selectionError ? (
                 <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 12, marginVertical: 10 }}>
                   {selectionError}
                 </Text>
               ) : null}
               {units.length > 0 ? (
-                <View style={{ gap: 8, marginTop: 12 }}>
+                <ScrollView
+                  style={{ flex: 1, minHeight: 0, marginTop: 12 }}
+                  contentContainerStyle={{ gap: 8, paddingBottom: 8 }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator
+                >
                   {units.map(item => (
                     <AssignmentCard key={item.id} item={item} onSelect={() => handleSelectUnit(item)} />
                   ))}
-                </View>
+                </ScrollView>
               ) : (
                 <View style={[styles.card, { padding: 20, alignItems: "center", marginTop: 12 }]}>
                   <Text style={{ color: colors.text, fontWeight: "700", textAlign: "center" }}>No units available</Text>
@@ -314,11 +313,17 @@ export function VerificationScreen({
                 </Text>
               ) : null}
               {drivers.length > 0 ? (
-                <View style={{ gap: 8 }}>
+                <ScrollView
+                  style={{ flex: 1, minHeight: 0 }}
+                  contentContainerStyle={{ gap: 8, paddingBottom: 8 }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator
+                  nestedScrollEnabled
+                >
                   {drivers.map(item => (
                     <AssignmentCard key={item.id} item={item} onSelect={() => handleSelectDriver(item)} />
                   ))}
-                </View>
+                </ScrollView>
               ) : (
                 <View style={[styles.card, { padding: 20, alignItems: "center" }]}>
                   <Text style={{ color: colors.text, fontWeight: "700", textAlign: "center" }}>No drivers available</Text>

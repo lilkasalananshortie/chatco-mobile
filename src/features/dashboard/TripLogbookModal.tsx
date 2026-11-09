@@ -39,7 +39,7 @@ export function TripLogbookModal({
   onSwitchDirection,
   onUndoTurnaround,
 }: TripLogbookModalProps) {
-  const { colors, isLofi, styles } = useAppTheme();
+  const { colors, isLofi, isLowFidelity, styles } = useAppTheme();
 
   const activeStats = useMemo(
     () => computeTripStats(state.activeTrip, transactions),
@@ -78,7 +78,7 @@ export function TripLogbookModal({
     };
   }, [state.completedTrips.length, completedTripsWithStats, activeStats]);
 
-  const modalStyles = useMemo(() => createTripLogbookStyles(colors, isLofi), [colors, isLofi]);
+  const modalStyles = useMemo(() => createTripLogbookStyles(colors, isLofi, isLowFidelity), [colors, isLofi, isLowFidelity]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -86,7 +86,7 @@ export function TripLogbookModal({
         <View style={modalStyles.sheet}>
           {/* Header */}
           <View style={modalStyles.headerRow}>
-            <View>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={modalStyles.title}>Trip Cycle Logbook</Text>
               <Text style={modalStyles.subtitle}>Automated Terminal Turnaround & "Ikot" Tracker</Text>
             </View>
@@ -96,8 +96,10 @@ export function TripLogbookModal({
                 onClose();
               }}
               style={modalStyles.closeButton}
+              accessibilityRole="button"
+              accessibilityLabel="Close trip logbook"
             >
-              <Ionicons name="close" size={18} color={colors.text} />
+              <Ionicons name="close" size={20} color={colors.muted} />
             </Pressable>
           </View>
 

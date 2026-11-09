@@ -38,6 +38,7 @@ export const mapShift = (s: any): Shift => ({
   latestDeviceRecoveryAt: s.latest_device_recovery?.created_at ?? null,
   isOnBreak: Boolean(s.is_on_break),
   breakStartedAt: s.break_started_at ?? null,
+  tripDirection: s.trip_direction === "REVERSE" ? "REVERSE" : s.trip_direction === "FORWARD" ? "FORWARD" : undefined,
 });
 
 export const mapTransaction = (t: any): Transaction => ({

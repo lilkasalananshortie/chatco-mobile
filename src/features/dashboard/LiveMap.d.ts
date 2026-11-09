@@ -9,6 +9,7 @@ export interface LiveMapProps {
   fill?: boolean;
   routeCoordinates?: Array<[number, number]>;
   routeSource?: "backend" | "fallback";
+  tripDirection?: "SOUTHBOUND" | "NORTHBOUND";
   viewportInsets?: { top: number; bottom: number };
   capacity?: Capacity;
   isOnBreak?: boolean;

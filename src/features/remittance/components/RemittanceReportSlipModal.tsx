@@ -36,11 +36,11 @@ export interface RemittanceReportSlipModalProps {
 }
 
 export function RemittanceReportSlipModal({ selected, onClose, shift }: RemittanceReportSlipModalProps) {
-  const { colors, isLofi, styles } = useReportTheme();
+  const { colors, isLofi, styles , isLowFidelity } = useReportTheme();
   const total = selected ? (Number(selected.cash_total) || 0) + (Number(selected.gcash_total) || 0) : 0;
 
   return (
-    <Modal visible={selected !== null} transparent animationType={isLofi ? "none" : "fade"} onRequestClose={onClose}>
+    <Modal visible={selected !== null} transparent animationType={isLowFidelity ? "none" : "fade"} onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 16 }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close official report" onPress={onClose} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
         <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 448, maxHeight: "94%", backgroundColor: colors.dialog, borderWidth: 1, borderColor: colors.hairline, borderRadius: 12, overflow: "hidden" }}>

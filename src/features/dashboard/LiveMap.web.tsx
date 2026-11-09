@@ -5,7 +5,7 @@ import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from
 import "./leaflet-base.css";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { LiveMapProps } from "./LiveMap";
-import { HAIL_MARKER_HTML, vehicleMarkerHtml, markerPresentation } from "./map-presentation";
+import { HAIL_MARKER_HTML, JEEPNEY_PATH, vehicleMarkerHtml, markerPresentation } from "./map-presentation";
 
 const CARTO_API_KEY =
   process.env.EXPO_PUBLIC_CARTO_API_KEY ||
@@ -109,7 +109,7 @@ function distanceMeters(a: [number, number], b: [number, number]) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, viewportInsets, capacity = "AVAILABLE", isOnBreak = false, canOperate = false, onHail }: LiveMapProps) {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, viewportInsets, tripDirection = "SOUTHBOUND", capacity = "AVAILABLE", isOnBreak = false, canOperate = false, onHail }: LiveMapProps) {
   const { colors, isLofi } = useAppTheme();
   const [tilesLoading, setTilesLoading] = useState(true);
   const initialTilesReady = useRef(false);
@@ -128,6 +128,8 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const visibleHails = hails.filter(hail =>
     distanceMeters(vehiclePosition, [hail.latitude, hail.longitude]) <= RADIUS_METERS
   );
+  const unitStatus = markerPresentation(capacity, isOnBreak);
+  const routeLabel = tripDirection === "SOUTHBOUND" ? "Calumpit → Meycauayan" : "Meycauayan → Calumpit";
 
   const cartoBase = isLofi
     ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
@@ -139,11 +141,11 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
 
   const vehicleIcon = useMemo(() => L.divIcon({
     className: "chatco-vehicle-marker",
-    html: vehicleMarkerHtml(capacity, isOnBreak, isLofi ? colors.surface : "#071A2E"),
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-    popupAnchor: [0, -25],
-  }), [capacity, colors.surface, isLofi, isOnBreak]);
+    html: vehicleMarkerHtml(capacity, isOnBreak, isLofi ? colors.surface : "#071A2E", tripDirection, routeCoords, vehiclePosition),
+    iconSize: [86, 80],
+    iconAnchor: [43, 40],
+    popupAnchor: [0, -50],
+  }), [capacity, colors.surface, isLofi, isOnBreak, routeCoords, tripDirection, vehiclePosition[0], vehiclePosition[1]]);
 
   const hailingIcon = useMemo(() => L.divIcon({
     className: "chatco-hail-marker",
@@ -203,9 +205,16 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         <Circle center={vehiclePosition} radius={RADIUS_METERS} pathOptions={{ color: isLofi ? "#071A2E" : "#FFFFFF", fillColor: isLofi ? "#071A2E" : "#FFFFFF", fillOpacity: 0.05, weight: 1.5, opacity: 0.3, dashArray: "8 4" }} />
         <Marker position={vehiclePosition} icon={vehicleIcon}>
           <Popup>
-            <div className="chatco-popup">
-              <strong>{unitNumber}</strong><p>Your unit</p>
-              <p>{markerPresentation(capacity, isOnBreak).label}</p>
+            <div style={{ width: 260, maxWidth: "calc(100vw - 72px)", color: colors.text }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 14px 12px", borderBottom: `1px solid ${colors.border}` }}>
+                <svg width="34" height="34" viewBox="0 0 24 24" fill={colors.primaryLight} aria-hidden="true"><path d={JEEPNEY_PATH} /></svg>
+                <div style={{ minWidth: 0 }}><div style={{ color: colors.muted, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>YOUR UNIT</div><strong style={{ display: "block", marginTop: 2, color: colors.text, fontSize: 16, overflowWrap: "anywhere" }}>{unitNumber}</strong></div>
+              </div>
+              <div style={{ display: "grid", gap: 10, padding: "13px 14px 15px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 12 }}><span style={{ color: colors.muted }}>Status</span><strong style={{ color: unitStatus.color, textAlign: "right" }}>{unitStatus.label}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 12 }}><span style={{ color: colors.muted }}>Route</span><strong style={{ color: colors.text, textAlign: "right" }}>{routeLabel}</strong></div>
+                {isOnBreak ? <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 12 }}><span style={{ color: colors.muted }}>Capacity</span><strong style={{ color: colors.text, textAlign: "right" }}>{capacity.replace("_", " ")}</strong></div> : null}
+              </div>
             </div>
           </Popup>
         </Marker>
@@ -239,9 +248,9 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         .chatco-vehicle-dot{width:44px;height:44px;background:#071A2E;border-radius:50%;border:2.5px solid #1A5FB4;display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(0,0,0,.5),0 0 8px #1A5FB440}
         .chatco-hail-dot{position:relative;width:20px;height:20px;background:#FF6D3A;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(255,109,58,.6)}
         .chatco-hail-dot span{position:absolute;inset:-8px;background:rgba(255,109,58,.3);border-radius:50%;animation:chatco-pulse 2s infinite}
-        .chatco-map-shell .leaflet-popup-content-wrapper{background:white;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
-        .chatco-map-shell .leaflet-popup-content{margin:12px 16px;color:#071A2E;line-height:1.4;min-width:180px}
-        .chatco-map-shell .leaflet-popup-tip{background:white}.chatco-popup strong{color:#1A5FB4}.chatco-popup span{float:right;font-size:9px;text-transform:uppercase}.chatco-popup p{margin:5px 0 0;font-size:12px;color:#6b7280}
+        .chatco-map-shell .leaflet-popup-content-wrapper{background:${colors.surface};border:1px solid ${colors.border};border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.3)}
+        .chatco-map-shell .leaflet-popup-content{margin:0;color:${colors.text};line-height:1.5;min-width:0}
+        .chatco-map-shell .leaflet-popup-tip{background:${colors.surface}}
         @keyframes chatco-pulse{0%{transform:scale(1);opacity:1}100%{transform:scale(2.5);opacity:0}}@keyframes chatco-spin{to{transform:rotate(360deg)}}
       `}</style>
     </div>

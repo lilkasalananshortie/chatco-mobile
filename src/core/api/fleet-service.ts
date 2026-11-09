@@ -6,7 +6,6 @@ import type {
   Remittance,
   RouteGeometry,
   Shift,
-  SosAlert,
 } from "../domain/types";
 import { post, request } from "./api-client";
 import { mapShift } from "./api-mappers";
@@ -116,11 +115,6 @@ export const fleetService = {
     });
   },
 
-  sos: async (lat: number, lng: number, note?: string): Promise<SosAlert> => {
-    const d = await post<any>("/mobile/conductor/sos", { lat, lng, note });
-    return { id: String(d.id), status: d.status };
-  },
-
   announcements: async (remindersOnly = false): Promise<Announcement[]> => {
     const query = remindersOnly ? "?unread_only=1&notifications_only=1&types=REMITTANCE_REMINDER&per_page=10" : "";
     const d = await request<any>(`/mobile/conductor/announcements${query}`);
@@ -138,11 +132,6 @@ export const fleetService = {
   },
 
   markAnnouncementRead: (id: string) => post(`/mobile/conductor/announcements/${encodeURIComponent(id)}/read`),
-
-  sosStatus: async (id: string): Promise<SosAlert> => {
-    const d = await request<any>(`/mobile/conductor/sos/${encodeURIComponent(id)}`);
-    return { id: String(d.id), status: d.status };
-  },
 
   ratings: async (shiftId: string): Promise<Rating[]> =>
     normalizeRatings(await request<any[]>(`/mobile/conductor/ratings?shift_id=${encodeURIComponent(shiftId)}`), shiftId),

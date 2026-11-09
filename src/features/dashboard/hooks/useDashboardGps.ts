@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import * as Location from "expo-location";
-import { api } from "../../../core/api/chatco-api";
+import * as TaskManager from "expo-task-manager";
+import { api, NetworkError } from "../../../core/api/chatco-api";
 import type { Shift } from "../../../core/domain/types";
 import { ROUTE_POINTS } from "../route-data";
 import { LOCATION_TASK_NAME } from "../location-task";
@@ -54,6 +55,7 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
       if (active && Number.isFinite(value) && value > 0) speedLimit.current = value;
     };
     const load = async () => {
+      if (!active || AppState.currentState === "background" || AppState.currentState === "inactive") return;
       try {
         const settings = await fleetService.safetySettings();
         apply(Number(settings.speed_limit_kmh));
@@ -71,19 +73,23 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
     let active = true;
     setRouteCoordinates(ROUTE_POINTS.map(point => [point[0], point[1]]));
     setRouteSource("fallback");
-    const loadRoute = () =>
+    const loadRoute = () => {
+      if (!active || AppState.currentState === "background" || AppState.currentState === "inactive") return;
       void api
         .routeGeometry(shift.routeId)
         .then((route) => {
           if (!active) return;
           if (route.coordinates && route.coordinates.length > 1) {
-            setRouteCoordinates(route.coordinates);
+            setRouteCoordinates(previous => previous.length === route.coordinates.length
+              && previous.every((point, index) => point[0] === route.coordinates[index]?.[0] && point[1] === route.coordinates[index]?.[1])
+              ? previous : route.coordinates);
           }
           setRouteSource(route.source ?? (route.coordinates?.length > 1 ? "backend" : "fallback"));
         })
         .catch(() => {
           if (active) setRouteSource("fallback");
         });
+    };
     loadRoute();
     const routeTimer = setInterval(loadRoute, 60000);
     const subscription = AppState.addEventListener("change", (state) => {
@@ -96,7 +102,7 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
       clearInterval(routeTimer);
       subscription.remove();
     };
-  }, [refreshKey, shift.routeId]);
+  }, [shift.routeId]);
 
   // GPS watch position
   useEffect(() => {
@@ -164,13 +170,22 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
                 new Date(location.timestamp).toISOString()
               )
               .then(() => { if (!cancelled) { setLastUploadAt(Date.now()); setGpsError(""); } })
-              .catch(() => { if (!cancelled) setGpsError("The last vehicle location update failed. Check your connection and active operating device. Updates will retry when GPS provides another fix."); })
+              .catch((cause) => {
+                if (!cancelled && !(cause instanceof NetworkError)) {
+                  setGpsError("The last vehicle location update failed. Check your active operating device. Updates will retry when GPS provides another fix.");
+                }
+              })
               .finally(() => { uploadPending = false; });
           }
         );
         if (cancelled) { subscription.remove(); return; }
         if (Platform.OS === "web") return;
         try {
+          if (!await TaskManager.isAvailableAsync()) {
+            if (!cancelled) setBackgroundWarning("Background tracking requires a development or installed app build. Keep ChatCo open for vehicle updates.");
+            return;
+          }
+          if (cancelled) return;
           const background = await Location.requestBackgroundPermissionsAsync();
           if (cancelled) return;
           if (background.status !== "granted") {

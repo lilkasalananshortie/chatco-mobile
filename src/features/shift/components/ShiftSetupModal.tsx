@@ -49,7 +49,7 @@ export function ShiftSetupModal({
       <View style={{ backgroundColor: colors.surface2, borderColor: colors.border, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginTop: 12 }}>
         <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "600" }}>
           {isOfflineDepot
-            ? "Starting duty offline. Shift will be saved locally and submitted when the connection returns."
+            ? "Connect to ChatCo to verify the approved assignment and start this shift."
             : "Action cannot be undone without admin assistance."}
         </Text>
       </View>
@@ -67,11 +67,11 @@ export function ShiftSetupModal({
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          disabled={busy}
+          disabled={busy || isOfflineDepot}
           onPress={onConfirm}
-          style={[styles.button, { flex: 1, minHeight: 44, backgroundColor: colors.primary }, busy && { opacity: 0.55 }]}
+          style={[styles.button, { flex: 1, minHeight: 44, backgroundColor: colors.primary }, (busy || isOfflineDepot) && { opacity: 0.55 }]}
         >
-          <Text style={styles.buttonText}>{busy ? "Starting…" : isOfflineDepot ? "Start Shift (Offline)" : "Start Shift"}</Text>
+          <Text style={styles.buttonText}>{busy ? "Starting…" : isOfflineDepot ? "Connect to Start" : "Start Shift"}</Text>
         </Pressable>
       </View>
     </ModalShell>

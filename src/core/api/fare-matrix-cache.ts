@@ -39,7 +39,7 @@ export function normalizePublishedFares(raw: any, requestedRoute?: string): Fare
   return { points, config, routeId: raw.route?.id ?? raw.routeId ?? requestedRoute };
 }
 export async function savePublishedFares(matrix: FareMatrix, routeId?: string, at = Date.now()): Promise<void> {
-  await appStorage.setItem(PREFIX + (routeId ?? "active"), JSON.stringify({ version: 4, savedAt: at, matrix }));
+  await appStorage.setItem(PREFIX + (routeId ?? "active"), JSON.stringify({ version: 4, savedAt: at, matrix }), { strict: true });
 }
 export async function cachedPublishedFares(routeId?: string, at = Date.now()): Promise<FareMatrix | null> {
   const stored = await appStorage.getItem(PREFIX + (routeId ?? "active"));
@@ -49,6 +49,6 @@ export async function cachedPublishedFares(routeId?: string, at = Date.now()): P
     if (data.version !== 4 || !Number.isFinite(data.savedAt) || data.savedAt > at || at - data.savedAt > FARE_CACHE_MAX_AGE_MS) return null;
     if (routeId && data.matrix?.routeId !== routeId) return null;
     const matrix = normalizePublishedFares(data.matrix, routeId);
-    return { ...matrix, isCached: true, loadedAt: data.savedAt };
+    return { ...matrix, isCached: true, cachePersisted: true, loadedAt: data.savedAt };
   } catch { return null; } // Never replace corrupted cache or invent fare points.
 }

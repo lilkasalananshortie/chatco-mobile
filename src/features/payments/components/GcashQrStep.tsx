@@ -32,7 +32,7 @@ export function GcashQrStep({
   stopPolling,
   setStep,
 }: GcashQrStepProps) {
-  const { colors, isLofi } = usePaymentTheme();
+  const { colors, isLofi , isLowFidelity } = usePaymentTheme();
   const { width: screenWidth } = useWindowDimensions();
   const isConfirming = gcashStatus === "processing";
   const isExpiringSoon = qrSecondsLeft !== null && qrSecondsLeft <= 30;
@@ -88,7 +88,7 @@ export function GcashQrStep({
             </View>
           ) : (
             <>
-              <View style={{ alignSelf: "center", alignItems: "center", justifyContent: "center", padding: 16, borderRadius: 12, backgroundColor: "#FFFFFF", borderWidth: isLofi ? 1 : 0, borderColor: isLofi ? border : "transparent" }}>
+              <View style={{ alignSelf: "center", alignItems: "center", justifyContent: "center", padding: 16, borderRadius: 12, backgroundColor: "#FFFFFF", borderWidth: isLowFidelity ? 1 : 0, borderColor: isLofi ? border : "transparent" }}>
                 <QRCode
                   value={gcashInitiation.qrToken}
                   size={qrSize}

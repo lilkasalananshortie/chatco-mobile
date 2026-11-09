@@ -217,13 +217,13 @@ export function RemittanceHistorySection({
                       </View>
                       <View style={{ flexDirection: "row", gap: 7 }}>
                         {[
-                          { label: "GCash", value: money(record.gcash_total), color: colors.primary },
-                          { label: "Cash", value: money(record.cash_total), color: colors.success },
-                          { label: "Cashless", value: money(record.total_cashless), color: colors.text },
+                          { label: "GCash", value: money(record.gcash_total) },
+                          { label: "Cash", value: money(record.cash_total) },
+                          { label: "Cashless", value: money(record.total_cashless) },
                         ].map((stat) => (
-                          <View key={stat.label} style={{ flex: 1, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.03)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8 }}>
+                          <View key={stat.label} style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8 }}>
                             <Text style={{ color: colors.muted, fontSize: 8, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>{stat.label}</Text>
-                            <Text numberOfLines={1} style={{ color: stat.color, fontSize: 14, lineHeight: 20, fontWeight: "800", marginTop: 2 }}>{stat.value}</Text>
+                            <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: "800", marginTop: 2 }}>{stat.value}</Text>
                           </View>
                         ))}
                       </View>
@@ -236,12 +236,12 @@ export function RemittanceHistorySection({
                         </View>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
                           <Pressable accessibilityRole="button" accessibilityLabel="View official report" onPress={() => onView(record)} style={{ minHeight: 36, flexDirection: "row", alignItems: "center", gap: 4 }}>
-                            <Ionicons name="document-text-outline" size={15} color={colors.primary} />
-                            <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "700" }}>View</Text>
+                            <Ionicons name="document-text-outline" size={15} color={colors.muted} />
+                            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700" }}>View</Text>
                           </Pressable>
                           <Pressable accessibilityRole="button" accessibilityLabel="Print official report" onPress={() => onPrint(record)} style={{ minHeight: 36, flexDirection: "row", alignItems: "center", gap: 4 }}>
-                            <Ionicons name="print-outline" size={15} color={colors.success} />
-                            <Text style={{ color: colors.success, fontSize: 10, fontWeight: "700" }}>Print</Text>
+                            <Ionicons name="print-outline" size={15} color={colors.muted} />
+                            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700" }}>Print</Text>
                           </Pressable>
                         </View>
                       </View>

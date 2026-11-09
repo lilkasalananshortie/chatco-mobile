@@ -6,7 +6,6 @@ import { api } from "../../core/api/chatco-api";
 import { appStorage } from "../../core/storage/app-storage";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { ScreenShell } from "../../shared/ui";
-import { SosConfirmModal } from "../../shared/ui/SosConfirmModal";
 import type { ConductorProfile, Remittance, Shift, Transaction, User } from "../../core/domain/types";
 import { createSettingsStyles } from "./settings-styles";
 import { PersonalDetailsCard, ProfileCard } from "./components/ProfileCard";
@@ -29,8 +28,8 @@ export function SettingsScreen({
   onShiftUpdated?: (shift: Shift | null) => void;
   onLogout: () => void;
 }) {
-  const { colors, isLofi, setLofi } = useAppTheme();
-  const styles = useMemo(() => createSettingsStyles(colors, isLofi), [colors, isLofi]);
+  const { colors, isLofi, isLight, isLowFidelity, setLight, setLowFidelity } = useAppTheme();
+  const styles = useMemo(() => createSettingsStyles(colors, isLight, isLowFidelity), [colors, isLight, isLowFidelity]);
 
   const [profile, setProfile] = useState<ConductorProfile | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -59,7 +58,6 @@ export function SettingsScreen({
   const [history, setHistory] = useState<Remittance[]>([]);
   const [scanSound, setScanSound] = useState(true);
   const [logoutCheckStatus, setLogoutCheckStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [showSOS, setShowSOS] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -260,7 +258,7 @@ export function SettingsScreen({
   };
 
   return (
-    <ScreenShell>
+    <ScreenShell contentStyle={{ paddingHorizontal: 16, paddingTop: 10 }}>
       {/* Page Header */}
       <View style={styles.header}>
         <View style={styles.headerTitleGroup}>
@@ -269,9 +267,9 @@ export function SettingsScreen({
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Toggle Lofi mode"
-          accessibilityState={{ checked: isLofi }}
-          onPress={() => void setLofi(!isLofi)}
+          accessibilityLabel="Light mode"
+          accessibilityState={{ checked: isLight }}
+          onPress={() => void setLight(!isLight)}
           style={[
             styles.themeToggle,
             isLofi ? styles.themeToggleLight : styles.themeToggleDark,
@@ -299,8 +297,8 @@ export function SettingsScreen({
         styles={styles}
         scanSound={scanSound}
         onToggleScanSound={() => void toggleSound()}
-        isLofi={isLofi}
-        onToggleLofi={() => void setLofi(!isLofi)}
+        isLofi={isLowFidelity}
+        onToggleLofi={() => void setLowFidelity(!isLowFidelity)}
       />
 
       {/* Bluetooth Belt Printer */}
@@ -321,10 +319,10 @@ export function SettingsScreen({
 
       {/* Account & Session */}
       <AccountSessionSection
+        isLowFidelity={isLowFidelity}
         styles={styles}
         colors={colors}
         isLofi={isLofi}
-        onOpenSOS={() => setShowSOS(true)}
         onClearCache={handleClearCache}
         logoutLocked={logoutLocked}
         logoutCheckStatus={logoutCheckStatus}
@@ -335,8 +333,6 @@ export function SettingsScreen({
         onConfirmLogout={() => void confirmLogout()}
       />
 
-      {/* SOS Modal */}
-      <SosConfirmModal isOpen={showSOS} onClose={() => setShowSOS(false)} />
     </ScreenShell>
   );
 }

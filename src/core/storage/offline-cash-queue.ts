@@ -129,6 +129,14 @@ export async function pendingCashCount(shiftId?: string): Promise<number> {
     .reduce((total, item) => total + item.localTransactions.length, 0);
 }
 
+/** Returns the latest server-side sync rejection for the selected authorized shift. */
+export async function pendingCashSyncError(shiftId?: string): Promise<string | null> {
+  const items = await getPendingCash();
+  return items
+    .filter(item => (!shiftId || item.shiftId === shiftId) && Boolean(item.lastError))
+    .sort((a, b) => (b.lastAttemptAt ?? b.createdAt) - (a.lastAttemptAt ?? a.createdAt))[0]?.lastError ?? null;
+}
+
 const SEQ_KEY_PREFIX = "chatco_tkt_seq_";
 
 /**
@@ -145,49 +153,5 @@ export async function getNextOfflineTicketSequence(shiftId: string, count = 1): 
     const next = current + Math.max(1, count);
     await appStorage.setItem(key, String(next), { strict: true });
     return start;
-  });
-}
-
-/**
- * When a provisional offline shift is reconciled with an official server shift,
- * this reassigns all queued pending items and sequence state to the official shift ID.
- */
-export async function reassignPendingShiftId(oldShiftId: string, newShiftId: string): Promise<number> {
-  if (!oldShiftId || !newShiftId || oldShiftId === newShiftId) return 0;
-  return serialized(async () => {
-    // 1. Migrate sequence key
-    const oldSeqKey = `${SEQ_KEY_PREFIX}${oldShiftId}`;
-    const newSeqKey = `${SEQ_KEY_PREFIX}${newShiftId}`;
-    const seq = await appStorage.getItem(oldSeqKey, { strict: true });
-    if (seq) {
-      const existingNewSeq = await appStorage.getItem(newSeqKey, { strict: true });
-      if (!existingNewSeq) {
-        await appStorage.setItem(newSeqKey, seq, { strict: true });
-      }
-      await appStorage.removeItem(oldSeqKey, { strict: true });
-    }
-
-    // 2. Re-point pending queue items
-    const current = await readQueue();
-    let updatedCount = 0;
-    const next = current.map(item => {
-      if (item.shiftId === oldShiftId) {
-        updatedCount += 1;
-        return {
-          ...item,
-          shiftId: newShiftId,
-          payload: {
-            ...item.payload,
-            shift_id: newShiftId,
-          },
-        };
-      }
-      return item;
-    });
-
-    if (updatedCount > 0) {
-      await appStorage.setItem(KEY, JSON.stringify(next), { strict: true });
-    }
-    return updatedCount;
   });
 }

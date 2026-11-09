@@ -38,7 +38,6 @@ ChatCo Mobile is the conductor-facing terminal device for the ChatCo transportat
 - End-of-day remittance reporting
 - Commuter ratings and performance metrics
 - ESC/POS thermal receipt printing
-- SOS emergency alerts
 
 ---
 
@@ -107,7 +106,6 @@ chatco-mobile/
     │   └── ui/
     │       ├── index.tsx          # Loading, Header, ScreenShell, ModalShell, BottomNav components
     │       ├── SlideToConfirm.tsx # Drag-to-confirm slider (used for break end, trip start)
-    │       └── SosConfirmModal.tsx # 3-second hold-to-confirm SOS alert modal
     │
     └── types/
         └── styles.d.ts            # CSS module type declaration (for Leaflet import)
@@ -147,7 +145,6 @@ App.tsx (session + screen orchestration)
 - Live sync indicator (pending offline cash count)
 - Shift earnings totals (Cash, GCash)
 - Transaction history modal (paginated)
-- SOS emergency alert button (3-second hold to confirm)
 - Voice stop announcer (Filipino/English via expo-speech)
 - No-look audio cues (6 sound categories via Web Audio API)
 - Trip cycle tracker (Calumpit ↔ Meycauayan with turnaround logging)

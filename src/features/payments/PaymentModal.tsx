@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Modal, Platform, Text, View, useWindowDimensions } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Modal, Text, View, useWindowDimensions } from "react-native";
 import type { Shift } from "../../core/domain/types";
 import { usePaymentTheme } from "../../core/theme/payment-theme";
 import { createPaymentStyles } from "./payment-styles";
@@ -12,6 +12,8 @@ import { GcashQrStep } from "./components/GcashQrStep";
 import { PaymentProcessingStep } from "./components/PaymentProcessingStep";
 import { PaymentSuccessStep } from "./components/PaymentSuccessStep";
 import { PaymentFailedStep } from "./components/PaymentFailedStep";
+import { TransactionHistoryModal } from "../dashboard/TransactionHistoryModal";
+import { loadTripCycleState, type TripCycleState } from "../../core/utils/trip-cycle-tracker";
 
 export interface PaymentModalProps {
   visible: boolean;
@@ -19,6 +21,7 @@ export interface PaymentModalProps {
   isOnline: boolean;
   onClose: () => void;
   onSaved: () => void;
+  blockedReason?: string | null;
 }
 
 export function PaymentModal({
@@ -27,15 +30,14 @@ export function PaymentModal({
   isOnline,
   onClose,
   onSaved,
+  blockedReason,
 }: PaymentModalProps) {
-  const { colors, isLofi } = usePaymentTheme();
+  const { colors, isLofi, isLowFidelity } = usePaymentTheme();
   const { width } = useWindowDimensions();
   const centeredPanel = width >= 640;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const panelProgress = useRef(new Animated.Value(1)).current;
-  const [panelHeight, setPanelHeight] = useState(0);
-  const useNativeDriver = Platform.OS !== "web";
-  const styles = useMemo(() => createPaymentStyles(colors, isLofi), [colors, isLofi]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyTrips, setHistoryTrips] = useState<TripCycleState | null>(null);
+  const styles = useMemo(() => createPaymentStyles(colors, isLofi, isLowFidelity), [colors, isLofi, isLowFidelity]);
 
   const flow = usePaymentFlow({
     visible,
@@ -48,31 +50,27 @@ export function PaymentModal({
   });
 
   useEffect(() => {
-    if (!visible || flow.step === "select" || panelHeight <= 0) return;
-    backdropOpacity.setValue(0);
-    panelProgress.setValue(1);
-    const animation = Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver,
-      }),
-      Animated.timing(panelProgress, {
-        toValue: 0,
-        duration: 320,
-        easing: Easing.bezier(0.16, 1, 0.3, 1),
-        useNativeDriver,
-      }),
-    ]);
-    animation.start();
-    return () => animation.stop();
-  }, [visible, flow.step, panelHeight, backdropOpacity, panelProgress, useNativeDriver]);
+    if (!visible) setShowHistory(false);
+  }, [visible]);
+
+  useEffect(() => {
+    if (visible && blockedReason && flow.step !== "method") onClose();
+  }, [visible, blockedReason, flow.step, onClose]);
+
+  useEffect(() => {
+    if (!visible || !showHistory) return;
+    let active = true;
+    setHistoryTrips(null);
+    void loadTripCycleState(shift.shiftId, shift.timeIn).then(state => { if (active) setHistoryTrips(state); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [visible, showHistory, shift.shiftId, shift.timeIn]);
 
   if (!visible) return null;
+  if (showHistory) return <TransactionHistoryModal visible shiftId={shift.shiftId} tripCycleState={historyTrips} onClose={() => { setShowHistory(false); onClose(); }} />;
+  const displayStep = flow.step === "qr_code" && !flow.gcashInitiation ? "method" : flow.step;
 
   // STEP: select (TRUE FULLSCREEN LOCATION PICKER 1:1 WITH WEB)
-  if (flow.step === "select") {
+  if (displayStep === "select") {
     return (
       <LocationPickerStep
         visible={visible}
@@ -117,23 +115,25 @@ export function PaymentModal({
 
   // MODAL OVERLAY FOR OTHER STEPS
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={flow.handleClose}>
-      <Animated.View style={[styles.modalBackdrop, flow.step === "method" && !centeredPanel ? { padding: 0, alignItems: "stretch" } : null, { justifyContent: centeredPanel || flow.step === "qr_code" ? "center" : "flex-end", backgroundColor: flow.step === "qr_code" ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.6)", opacity: backdropOpacity }]}>
-        {flow.fareNotice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.text, backgroundColor: colors.surface, padding: 12, marginBottom: 8 }}>{flow.fareNotice}</Text> : null}
-        <Animated.View
-          onLayout={(event) => {
-            const nextHeight = event.nativeEvent.layout.height;
-            setPanelHeight(current => Math.abs(current - nextHeight) > 1 ? nextHeight : current);
-          }}
-          style={{ width: "100%", alignItems: "center", opacity: panelProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateY: panelProgress.interpolate({ inputRange: [0, 1], outputRange: [0, panelHeight] }) }] }}
-        >
-        {flow.step === "method" ? (
+    <Modal visible={visible} transparent animationType={isLowFidelity ? "none" : "fade"} onRequestClose={flow.handleClose}>
+      <View style={[styles.modalBackdrop, displayStep === "method" && !centeredPanel ? { padding: 0, alignItems: "stretch" } : null, { justifyContent: centeredPanel || displayStep === "qr_code" ? "center" : "flex-end", backgroundColor: displayStep === "qr_code" ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.6)" }]}>
+        {displayStep !== "method" && flow.fareNotice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.text, backgroundColor: colors.surface, padding: 12, marginBottom: 8 }}>{flow.fareNotice}</Text> : null}
+        <View style={{ width: "100%", alignItems: "center" }}>
+        {displayStep === "method" ? (
           <MethodSelectionStep
             styles={styles}
             fullBottomSheet={!centeredPanel}
             isOnline={isOnline}
+            fareReady={flow.fareReady}
+            fareLoading={flow.fareLoading}
+            fareLoadFailed={flow.fareLoadFailed}
+            fareNotice={flow.fareNotice}
+            onRetryFareLoad={flow.retryFareLoad}
+            blockedReason={blockedReason}
+            onShowHistory={() => { flow.stopPolling(); setShowHistory(true); }}
             onSelectMethod={(method) => {
-              if (!flow.fareReady) return;
+              if (blockedReason || !flow.fareReady) return;
+              flow.stopPolling();
               flow.setSelectedMethod(method);
               flow.setStep("select");
             }}
@@ -141,7 +141,7 @@ export function PaymentModal({
           />
         ) : null}
 
-        {flow.step === "passengers" ? (
+        {displayStep === "passengers" ? (
           <PassengerGroupStep
             styles={styles}
             selectedMethod={flow.selectedMethod}
@@ -159,28 +159,19 @@ export function PaymentModal({
           />
         ) : null}
 
-        {flow.step === "confirm" ? (
+        {displayStep === "confirm" ? (
           <PaymentConfirmationStep
-            styles={styles}
             selectedMethod={flow.selectedMethod}
-            pickupPoint={flow.pickupPoint}
-            pickupLandmark={flow.pickupLandmark}
-            dropoffPoint={flow.dropoffPoint}
-            dropoffLandmark={flow.dropoffLandmark}
-            commuterType={flow.commuterType}
             isGroupMode={flow.isGroupMode}
-            groupPassengerCount={flow.groupPassengerCount}
             groupTotalFare={flow.groupTotalFare}
-            groupDiscount={flow.groupDiscount}
-            groupPassengers={flow.groupPassengers}
             fareInfo={flow.fareInfo}
             isInitiatingGcash={flow.isInitiatingGcash}
             handleConfirmPayment={flow.handleConfirmPayment}
-            setStep={flow.setStep}
+            onClose={flow.handleClose}
           />
         ) : null}
 
-        {flow.step === "qr_code" && flow.gcashInitiation ? (
+        {displayStep === "qr_code" && flow.gcashInitiation ? (
           <GcashQrStep
             styles={styles}
             gcashInitiation={flow.gcashInitiation}
@@ -196,11 +187,11 @@ export function PaymentModal({
           />
         ) : null}
 
-        {flow.step === "processing" ? (
+        {displayStep === "processing" ? (
           <PaymentProcessingStep styles={styles} selectedMethod={flow.selectedMethod} />
         ) : null}
 
-        {flow.step === "success" ? (
+        {displayStep === "success" ? (
           <PaymentSuccessStep
             styles={styles}
             selectedMethod={flow.selectedMethod}
@@ -231,7 +222,7 @@ export function PaymentModal({
           />
         ) : null}
 
-        {flow.step === "failed" ? (
+        {displayStep === "failed" ? (
           <PaymentFailedStep
             styles={styles}
             gcashError={flow.gcashError}
@@ -241,8 +232,8 @@ export function PaymentModal({
             setStep={flow.setStep}
           />
         ) : null}
-        </Animated.View>
-      </Animated.View>
+        </View>
+      </View>
     </Modal>
   );
 }

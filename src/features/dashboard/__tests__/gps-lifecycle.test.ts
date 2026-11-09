@@ -1,15 +1,18 @@
 /// <reference types="jest" />
 import { useDashboardGps } from "../hooks/useDashboardGps";
 import * as Location from "expo-location";
+import * as TaskManager from "expo-task-manager";
 import { api } from "../../../core/api/chatco-api";
+import { NetworkError } from "../../../core/api/chatco-api";
 import { evaluateSpeedWarning, getDistanceToCorridorMeters } from "../../../core/utils/corridor-guard";
 let mockEffects: Array<() => any> = [];
 let mockSetters: jest.Mock[] = [];
 jest.mock("react", () => ({ useState: (value: any) => { const setter = jest.fn(); mockSetters.push(setter); return [typeof value === "function" ? value() : value, setter]; }, useRef: (value: any) => ({ current: value }), useEffect: (fn: () => any) => mockEffects.push(fn) }));
 jest.mock("react-native", () => ({ Platform: { OS: "android" }, AppState: { addEventListener: jest.fn() } }));
 jest.mock("expo-location", () => ({ requestForegroundPermissionsAsync: jest.fn(), requestBackgroundPermissionsAsync: jest.fn(), watchPositionAsync: jest.fn(), startLocationUpdatesAsync: jest.fn(), stopLocationUpdatesAsync: jest.fn(), hasStartedLocationUpdatesAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
+jest.mock("expo-task-manager", () => ({ isAvailableAsync: jest.fn().mockResolvedValue(true) }));
 jest.mock("../location-task", () => ({ LOCATION_TASK_NAME: "test-location" }));
-jest.mock("../../../core/api/chatco-api", () => ({ api: { location: jest.fn().mockResolvedValue({}) } }));
+jest.mock("../../../core/api/chatco-api", () => ({ NetworkError: class NetworkError extends Error {}, api: { location: jest.fn().mockResolvedValue({}) } }));
 jest.mock("../../../core/api/fleet-service", () => ({ fleetService: {} }));
 jest.mock("../../../core/storage/app-storage", () => ({ appStorage: {} }));
 jest.mock("../../../core/utils/corridor-guard", () => ({ evaluateSpeedWarning: jest.fn(), getDistanceToCorridorMeters: jest.fn() }));
@@ -18,6 +21,7 @@ const settle = async () => { for (let i = 0; i < 18; i++) await Promise.resolve(
 function start() { useDashboardGps({ shift: { shiftId: "shift" } as any, canOperate: true, refreshKey: 0 }); return mockEffects[2]!(); }
 beforeEach(() => {
   jest.clearAllMocks(); mockEffects = []; mockSetters = [];
+  (TaskManager.isAvailableAsync as jest.Mock).mockResolvedValue(true);
   (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: "granted" });
   (Location.requestBackgroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: "denied" });
   (api.location as jest.Mock).mockResolvedValue({});
@@ -59,6 +63,17 @@ test("background denial keeps foreground watcher and explains the limitation", a
   expect(mockSetters[7]).toHaveBeenLastCalledWith(expect.stringContaining("Keep ChatCo open"));
   expect(remove).not.toHaveBeenCalled(); cleanup();
 });
+
+test("Expo Go keeps foreground tracking without requesting unsupported background permission", async () => {
+  (TaskManager.isAvailableAsync as jest.Mock).mockResolvedValue(false);
+  const remove = jest.fn(); (Location.watchPositionAsync as jest.Mock).mockResolvedValue({ remove });
+  const cleanup = start(); await settle();
+  expect(Location.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+  expect(Location.startLocationUpdatesAsync).not.toHaveBeenCalled();
+  expect(remove).not.toHaveBeenCalled();
+  expect(mockSetters[7]).toHaveBeenLastCalledWith(expect.stringContaining("requires a development or installed app build"));
+  cleanup();
+});
 const fix = { coords: { latitude: 14.8, longitude: 120.8, speed: 0, heading: 0, accuracy: 5 }, timestamp: 10000 };
 test("GPS fixes are not reported as uploaded until the backend confirms, and requests do not overlap", async () => {
   let finish!: () => void;
@@ -83,6 +98,14 @@ test("failed upload is visible and a later fix retries without falsifying succes
   sample(fix); await settle();
   expect(api.location).toHaveBeenCalledTimes(2);
   expect(mockSetters[4]).toHaveBeenLastCalledWith(""); cleanup();
+});
+test("temporary network loss does not show a GPS failure banner", async () => {
+  (api.location as jest.Mock).mockRejectedValueOnce(new NetworkError("offline"));
+  (Location.watchPositionAsync as jest.Mock).mockResolvedValue({ remove: jest.fn() });
+  const cleanup = start(); await settle();
+  (Location.watchPositionAsync as jest.Mock).mock.calls[0][1](fix); await settle();
+  expect(mockSetters[4]).not.toHaveBeenCalledWith(expect.stringContaining("update failed"));
+  cleanup();
 });
 test("upload response after shift cleanup cannot update status", async () => {
   let finish!: () => void; (api.location as jest.Mock).mockReturnValue(new Promise<void>(resolve => { finish = resolve; }));

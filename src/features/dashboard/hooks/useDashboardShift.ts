@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { transactionSummary } from "../../../core/domain/transaction-summary";
-import { api } from "../../../core/api/chatco-api";
+import { api, NetworkError } from "../../../core/api/chatco-api";
 import type { Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../../core/domain/types";
 import { appHaptics } from "../../../core/utils/haptics";
 import { audioCues } from "../../../core/utils/audio-cues";
@@ -31,6 +31,7 @@ export function useDashboardShift({
   const [breakConfirmOpen, setBreakConfirmOpen] = useState(false);
   const [hails, setHails] = useState<HailRequest[]>([]);
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+  const [pendingOfflineError, setPendingOfflineError] = useState("");
   const [syncState, setSyncState] = useState<"idle" | "syncing" | "error">(api.getSyncState());
   const [deviceId, setDeviceId] = useState<string>("");
   const [deviceBusy, setDeviceBusy] = useState(false);
@@ -48,13 +49,20 @@ export function useDashboardShift({
     if (operationalRefreshInFlight.current) return operationalRefreshInFlight.current;
     const request = (async () => {
       try {
-        const [records, pendingCount, earningsData] = await Promise.all([
+        const [records, pendingCount, syncError, earningsData] = await Promise.all([
           api.transactions(shift.shiftId),
           api.pendingCashCount(shift.shiftId),
-          isOnline ? api.earnings(shift.shiftId) : Promise.resolve(null),
+          api.pendingCashSyncError(shift.shiftId),
+          isOnline
+            ? api.earnings(shift.shiftId).catch(cause => {
+                if (cause instanceof NetworkError) return null;
+                throw cause;
+              })
+            : Promise.resolve(null),
         ]);
         setTransactions(records);
         setPendingOfflineCount(pendingCount);
+        setPendingOfflineError(syncError ?? "");
         if (earningsData) setEarnings(earningsData);
         setError("");
       } catch (cause) {
@@ -70,16 +78,13 @@ export function useDashboardShift({
   const triggerSync = useCallback(async () => {
     if (syncState === "syncing" || !isOnline) return;
     try {
-      if (shift.isProvisional) {
-        await api.reconcileProvisionalShift().catch(() => null);
-      }
       const synced = await api.syncPendingCashTransactions();
       if (synced > 0) {
         audioCues.playSyncSound();
       }
       await refreshOperationalData();
     } catch {}
-  }, [isOnline, refreshOperationalData, shift.isProvisional, syncState]);
+  }, [isOnline, refreshOperationalData, syncState]);
 
   const prevOnline = useRef(isOnline);
   useEffect(() => {
@@ -90,11 +95,11 @@ export function useDashboardShift({
   }, [isOnline, triggerSync]);
 
   useEffect(() => {
-    return api.addSyncListener((state, count) => {
+    return api.addSyncListener((state) => {
       setSyncState(state);
-      setPendingOfflineCount(count);
+      if (state === "idle") void refreshOperationalData();
     });
-  }, []);
+  }, [refreshOperationalData]);
 
   useEffect(() => {
     void refreshOperationalData();
@@ -111,13 +116,22 @@ export function useDashboardShift({
   }, [shift.isOnBreak]);
 
   useEffect(() => {
-    const load = () => void api.hails().then(setHails).catch(() => undefined);
+    let active = true;
+    let running = false;
+    const load = async () => {
+      if (!active || running || AppState.currentState === "background" || AppState.currentState === "inactive") return;
+      running = true;
+      try { const records = await api.hails(); if (active) setHails(records); }
+      catch { /* Keep the last known hails during an outage. */ }
+      finally { running = false; }
+    };
     load();
     const timer = setInterval(load, 10000);
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") load();
     });
     return () => {
+      active = false;
       clearInterval(timer);
       subscription.remove();
     };
@@ -245,6 +259,7 @@ export function useDashboardShift({
     setBreakConfirmOpen,
     hails,
     pendingOfflineCount,
+    pendingOfflineError,
     syncState,
     deviceId,
     deviceBusy,

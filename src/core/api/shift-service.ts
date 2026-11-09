@@ -98,21 +98,14 @@ export const shiftService = {
           await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
           return mapShift(data);
         }
-        const provisionalRaw = await appStorage.getItem(PROVISIONAL_SHIFT_KEY);
-        if (provisionalRaw) {
-          try {
-            return JSON.parse(provisionalRaw) as Shift;
-          } catch {}
-        }
+        // A legacy local provisional shift is not server authorization.
+        await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
         return null;
       } catch (cause) {
         if (cause instanceof NetworkError) {
-          const provisionalRaw = await appStorage.getItem(PROVISIONAL_SHIFT_KEY);
-          if (provisionalRaw) {
-            try {
-              return JSON.parse(provisionalRaw) as Shift;
-            } catch {}
-          }
+          // Never restore a locally invented shift when the backend cannot
+          // confirm the conductor's active shift.
+          await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
         }
         throw cause;
       }
@@ -157,29 +150,19 @@ export const shiftService = {
       return mapShift(official);
     } catch (cause) {
       if (cause instanceof NetworkError) {
-        // Create provisional shift for offline depot start
-        const provisionalShiftId = `PROV-${Date.now().toString(36).toUpperCase()}-${deviceId.slice(-4).toUpperCase()}`;
-        const provisionalShift: Shift = {
-          shiftId: provisionalShiftId,
-          conductorName: "Conductor",
-          unitNumber: unit.unitNumber,
-          route: unit.route,
-          routeId: unit.routeId,
-          driverName: driver.name,
-          timeIn: new Date().toISOString(),
-          timeOut: null,
-          isActive: true,
-          operatingDeviceId: deviceId,
-          operatingDeviceType: CONDUCTOR_DEVICE_TYPE,
-          isProvisional: true,
-          provisionalPayload: {
-            unitId: unit.id,
-            driverId: driver.id,
-            routeId: unit.routeId,
-          },
-        };
-        await appStorage.setItem(PROVISIONAL_SHIFT_KEY, JSON.stringify(provisionalShift));
-        return provisionalShift;
+        // A timed-out start may have reached the server. Resolve that
+        // ambiguous result from the authoritative active-shift endpoint;
+        // never manufacture a local shift or retry the start blindly.
+        try {
+          const active = await request<any | null>("/mobile/conductor/shift");
+          if (active) {
+            await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
+            return mapShift(active);
+          }
+        } catch {
+          // Preserve the original start error when status cannot be checked.
+        }
+        await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
       }
       throw cause;
     }
@@ -193,6 +176,14 @@ export const shiftService = {
       device_type: CONDUCTOR_DEVICE_TYPE,
     });
     return mapShift(data?.data ?? data);
+  },
+
+  updateTripDirection: async (direction: "FORWARD" | "REVERSE"): Promise<void> => {
+    await post("/mobile/conductor/trip-direction", {
+      trip_direction: direction,
+      device_id: await getConductorDeviceId(),
+      device_type: CONDUCTOR_DEVICE_TYPE,
+    });
   },
 
   releaseShiftDevice: async (shiftId: string): Promise<Shift> => {

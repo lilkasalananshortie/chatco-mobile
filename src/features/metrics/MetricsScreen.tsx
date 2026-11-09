@@ -8,7 +8,7 @@ import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { Rating, Shift } from "../../core/domain/types";
 
 function StarRating({ score, size = 16 }: { score: number; size?: number }) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi , isLowFidelity } = useAppTheme();
   return (
     <View style={{ flexDirection: "row", gap: 2 }}>
       {[1, 2, 3, 4, 5].map((i) => (
@@ -24,7 +24,7 @@ function StarRating({ score, size = 16 }: { score: number; size?: number }) {
 }
 
 export function MetricsScreen({ onBack }: { shift?: Shift | null; onBack?: () => void }) {
-  const { colors, isLofi, styles } = useAppTheme();
+  const { colors, isLofi, styles , isLowFidelity } = useAppTheme();
   const { width } = useWindowDimensions();
   const wide = width >= 600;
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof api.ratingsSummary>> | null>(null);
@@ -151,8 +151,8 @@ export function MetricsScreen({ onBack }: { shift?: Shift | null; onBack?: () =>
                       <Text style={{ color: colors.text, fontSize: 12, fontWeight: "500" }}>{star}</Text>
                       <Ionicons name="star" size={12} color={isLofi ? colors.warning : "#FBBF24"} />
                     </View>
-                    <View style={{ flex: 1, height: 8, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.06)", borderRadius: isLofi ? 2 : 999, overflow: "hidden" }}>
-                      <View style={{ width: `${barWidth}%`, height: "100%", backgroundColor: colors.primary, borderRadius: isLofi ? 2 : 999 }} />
+                    <View style={{ flex: 1, height: 8, backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.06)", borderRadius: isLowFidelity ? 2 : 999, overflow: "hidden" }}>
+                      <View style={{ width: `${barWidth}%`, height: "100%", backgroundColor: colors.primary, borderRadius: isLowFidelity ? 2 : 999 }} />
                     </View>
                     <Text style={{ width: 32, textAlign: "right", color: colors.text, fontSize: 12, fontVariant: ["tabular-nums"] }}>{count.toLocaleString()}</Text>
                     <Text style={{ width: 34, textAlign: "right", color: colors.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{pct}%</Text>

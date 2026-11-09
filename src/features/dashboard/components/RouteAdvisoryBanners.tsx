@@ -2,13 +2,12 @@ import React from "react";
 import { Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
-import { SPEED_LIMIT_KMH, CORRIDOR_DEVIATION_THRESHOLD_METERS } from "../../../core/utils/corridor-guard";
+import { SPEED_LIMIT_KMH } from "../../../core/utils/corridor-guard";
 import type { ThermalGuardState } from "../../../core/utils/thermal-guard";
 
 interface RouteAdvisoryBannersProps {
   currentSpeedKmh: number;
   isOverspeeding: boolean;
-  corridorDeviationMeters: number;
   thermalState?: Partial<ThermalGuardState>;
   approachingStop?: string | null;
 }
@@ -16,11 +15,10 @@ interface RouteAdvisoryBannersProps {
 export function RouteAdvisoryBanners({
   currentSpeedKmh,
   isOverspeeding,
-  corridorDeviationMeters,
   thermalState,
   approachingStop,
 }: RouteAdvisoryBannersProps) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi , isLowFidelity } = useAppTheme();
 
   return (
     <>
@@ -34,7 +32,7 @@ export function RouteAdvisoryBanners({
             backgroundColor: isLofi ? "#FEE2E2" : "rgba(239, 68, 68, 0.2)",
             borderColor: isLofi ? "#DC2626" : "rgba(248, 113, 113, 0.6)",
             borderWidth: 1.5,
-            borderRadius: isLofi ? 4 : 12,
+            borderRadius: isLowFidelity ? 4 : 12,
             padding: 10,
             marginBottom: 10,
           }}
@@ -51,33 +49,6 @@ export function RouteAdvisoryBanners({
         </View>
       ) : null}
 
-      {/* Route Corridor Deviation Warning Banner */}
-      {corridorDeviationMeters > CORRIDOR_DEVIATION_THRESHOLD_METERS ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            backgroundColor: isLofi ? "#FEF3C7" : "rgba(245, 158, 11, 0.18)",
-            borderColor: isLofi ? "#D97706" : "rgba(251, 191, 36, 0.5)",
-            borderWidth: 1.5,
-            borderRadius: isLofi ? 4 : 12,
-            padding: 10,
-            marginBottom: 10,
-          }}
-        >
-          <Ionicons name="navigate-circle-outline" size={22} color={isLofi ? "#B45309" : "#FBBF24"} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", color: isLofi ? "#92400E" : "#FDE68A" }}>
-              ROUTE DEVIATION ({corridorDeviationMeters}m OFF CORRIDOR)
-            </Text>
-            <Text style={{ fontSize: 11, color: isLofi ? "#78350F" : "#FEF3C7", marginTop: 2 }}>
-              Vehicle has moved outside the authorized franchise corridor.
-            </Text>
-          </View>
-        </View>
-      ) : null}
-
       {/* Tropical Sun & Battery Thermal Advisory Banner */}
       {thermalState?.enabled && thermalState.thermalWarningMessage ? (
         <View
@@ -88,7 +59,7 @@ export function RouteAdvisoryBanners({
             backgroundColor: isLofi ? "#FEF3C7" : "rgba(245, 158, 11, 0.18)",
             borderColor: isLofi ? "#D97706" : "rgba(251, 191, 36, 0.4)",
             borderWidth: 1.5,
-            borderRadius: isLofi ? 4 : 12,
+            borderRadius: isLowFidelity ? 4 : 12,
             padding: 10,
             marginBottom: 10,
           }}
@@ -115,7 +86,7 @@ export function RouteAdvisoryBanners({
             backgroundColor: isLofi ? "#EFF6FF" : "rgba(37, 99, 235, 0.18)",
             borderColor: isLofi ? "#2563EB" : "rgba(59, 130, 246, 0.45)",
             borderWidth: 1.5,
-            borderRadius: isLofi ? 3 : 12,
+            borderRadius: isLowFidelity ? 3 : 12,
             padding: 10,
             marginBottom: 10,
           }}

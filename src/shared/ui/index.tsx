@@ -9,7 +9,9 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  type StyleProp,
   View,
+  type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -48,13 +50,21 @@ export function VerificationBackButton({ onPress }: { onPress: () => void }) {
   </Pressable>;
 }
 
-export function ScreenShell({ children }: { children: ReactNode }) {
+export function ScreenShell({ children, scrollable = true, contentStyle }: {
+  children: ReactNode;
+  scrollable?: boolean;
+  contentStyle?: StyleProp<ViewStyle>;
+}) {
   const { styles } = useAppTheme();
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {children}
-      </ScrollView>
+      {scrollable ? (
+        <ScrollView contentContainerStyle={[styles.content, contentStyle]} keyboardShouldPersistTaps="handled">
+          {children}
+        </ScrollView>
+      ) : (
+        <View style={[styles.content, { flex: 1 }, contentStyle]}>{children}</View>
+      )}
     </SafeAreaView>
   );
 }
@@ -62,9 +72,9 @@ export function ScreenShell({ children }: { children: ReactNode }) {
 export function ModalShell({ visible, title, children, onClose }: {
   visible: boolean; title: string; children: ReactNode; onClose: () => void;
 }) {
-  const { colors, isLofi, styles } = useAppTheme();
+  const { colors, isLofi, styles , isLowFidelity } = useAppTheme();
   return (
-    <Modal visible={visible} animationType={isLofi ? "none" : "slide"} transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={isLowFidelity ? "none" : "slide"} transparent onRequestClose={onClose}>
       <View style={[local.backdrop, { backgroundColor: colors.overlay }]}>
         <SafeAreaView style={[local.sheet, {
           backgroundColor: colors.surface,
@@ -73,9 +83,9 @@ export function ModalShell({ visible, title, children, onClose }: {
           borderTopRightRadius: 20,
         }]}>
           <View style={[local.sheetHeader, { borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { fontSize: 18 }]}>{title}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Close ${title}`} onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.muted} />
+            <Text style={[styles.cardTitle, { fontSize: 18, flex: 1, minWidth: 0 }]}>{title}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Close ${title}`} onPress={onClose} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="close" size={20} color={colors.muted} />
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
@@ -97,12 +107,12 @@ const tabs: { id: Screen; label: string; icon: "home" | "file" | "chart" | "sett
 export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = false }: {
   current: Screen; onNavigate: (screen: Screen) => void; onPayment: () => void; isPaymentDisabled?: boolean;
 }) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi , isLowFidelity } = useAppTheme();
   const insets = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "android" ? Math.max(insets.bottom, 24) : insets.bottom;
   return (
-    <View style={[local.navSafe, { bottom: bottomOffset, backgroundColor: colors.background }]}>
-      <View style={[local.nav, { borderColor: colors.border }]}>
+    <View style={[local.navSafe, { bottom: bottomOffset + 8 }]}>
+      <View style={[local.nav, { borderColor: colors.border, backgroundColor: colors.background }]}>
         {tabs.slice(0, 2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
         <Pressable
           style={[local.payWrap, isPaymentDisabled && { opacity: 0.55 }]}
@@ -116,7 +126,7 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
           }]}>
             <ConductorIcon
               name="cash"
-              size={20}
+              size={24}
               color={isPaymentDisabled ? colors.muted : "#fff"}
             />
           </View>
@@ -133,14 +143,14 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
 function NavItem({ label, icon, active, onPress }: {
   label: string; icon: "home" | "file" | "chart" | "settings"; active: boolean; onPress: () => void;
 }) {
-  const { colors, isLofi } = useAppTheme();
+  const { colors, isLofi , isLowFidelity } = useAppTheme();
   return (
-    <Pressable style={local.navItem} onPress={onPress} accessibilityLabel={label}>
+    <Pressable style={local.navItem} onPress={onPress} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={label}>
       <View style={[local.navIcon, {
         backgroundColor: active ? colors.primary : "transparent",
-        borderRadius: 18,
+        borderRadius: 20,
       }]}>
-        <ConductorIcon name={icon} size={17} color={active ? "#FFFFFF" : isLofi ? "#9CA3AF" : "rgba(255,255,255,0.4)"} />
+        <ConductorIcon name={icon} size={22} color={active ? "#FFFFFF" : isLofi ? "#9CA3AF" : "rgba(255,255,255,0.4)"} />
       </View>
       <Text style={[local.navLabel, { color: active ? isLofi ? "#1A5FB4" : "#FFFFFF" : isLofi ? "#9CA3AF" : "rgba(255,255,255,0.3)" }]}>{label}</Text>
     </Pressable>
@@ -153,10 +163,10 @@ const local = StyleSheet.create({
   sheet: { maxHeight: "91%", borderTopWidth: 1 },
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 19, borderBottomWidth: 1 },
   close: { fontSize: 20, paddingHorizontal: 8, paddingVertical: 4 },
-  navSafe: { position: "absolute", bottom: 0, left: 0, right: 0 },
-  nav: { height: 64, paddingHorizontal: 16, paddingVertical: 4, borderTopWidth: 1, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-around" },
-  navItem: { flex: 1, alignItems: "center", paddingVertical: 4 },
-  navIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  navSafe: { position: "absolute", bottom: 0, left: 12, right: 12 },
+  nav: { height: 64, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderRadius: 20, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-around" },
+  navItem: { flex: 1, alignItems: "center", paddingVertical: 2 },
+  navIcon: { width: 40, height: 40, aspectRatio: 1, flexShrink: 0, overflow: "hidden", alignItems: "center", justifyContent: "center" },
   navLabel: { fontSize: 10, lineHeight: 10, marginTop: 2, fontWeight: "500" },
   payWrap: { flex: 1, alignItems: "center", marginTop: -28, marginBottom: 2 },
   payButton: { width: 60, height: 60, borderWidth: 4, alignItems: "center", justifyContent: "center" },

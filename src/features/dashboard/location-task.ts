@@ -9,7 +9,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   const locations = (data as { locations?: Location.LocationObject[] }).locations ?? [];
   const location = locations.at(-1);
   if (!location) return;
-  void api.location(
+  await api.location(
     location.coords.latitude,
     location.coords.longitude,
     location.coords.speed,

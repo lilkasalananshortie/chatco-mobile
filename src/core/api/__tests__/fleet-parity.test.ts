@@ -1,8 +1,15 @@
 /// <reference types="jest" />
-jest.mock("../api-client", () => ({ request: jest.fn(), post: jest.fn(), NetworkError: class extends Error {} }));
-jest.mock("../../storage/device-id", () => ({ getConductorDeviceId: jest.fn(), CONDUCTOR_DEVICE_TYPE: "MOBILE" }));
-jest.mock("../../storage/app-storage", () => ({ appStorage: { getItem: jest.fn(), setItem: jest.fn() } }));
+jest.mock("../api-client", () => ({
+  request: jest.fn(), post: jest.fn(), NetworkError: class extends Error {},
+  PROVISIONAL_SHIFT_KEY: "chatco_provisional_shift",
+}));
+jest.mock("../../storage/device-id", () => ({ getConductorDeviceId: jest.fn().mockResolvedValue("mobile-device-12345678"), CONDUCTOR_DEVICE_TYPE: "MOBILE" }));
+jest.mock("../../storage/app-storage", () => ({ appStorage: {
+  getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn().mockResolvedValue(undefined),
+} }));
 import { post, request } from "../api-client";
+import { NetworkError } from "../api-client";
+import { appStorage } from "../../storage/app-storage";
 import { fleetService } from "../fleet-service";
 import { paymentService } from "../payment-service";
 import { shiftService } from "../shift-service";
@@ -48,6 +55,38 @@ test("conductor profile photo posts multipart to the mobile endpoint", async () 
 test("an upload without a server-confirmed URL fails visibly", async () => {
   (post as jest.Mock).mockResolvedValue({});
   await expect(shiftService.uploadProfilePhoto(new FormData())).rejects.toThrow("did not confirm");
+});
+
+test("offline shift start never creates a local active shift", async () => {
+  (post as jest.Mock).mockRejectedValue(new NetworkError("offline"));
+  (request as jest.Mock).mockResolvedValue(null);
+  await expect(shiftService.startShift(
+    { id: "unit", unitNumber: "U1", plateNumber: "P1", route: "R", status: "available" },
+    { id: "driver", name: "Driver", status: "available" },
+  )).rejects.toThrow("offline");
+  expect(appStorage.setItem).not.toHaveBeenCalled();
+  expect(request).toHaveBeenCalledWith("/mobile/conductor/shift");
+});
+
+test("a lost shift-start response resolves only from the backend active-shift endpoint", async () => {
+  (post as jest.Mock).mockRejectedValue(new NetworkError("response timed out"));
+  (request as jest.Mock).mockResolvedValue({
+    shift_id: "SHF-SERVER", status: "ACTIVE", time_in: "2026-11-06T08:00:00Z",
+    conductor_name: "Conductor", unit_number: "U1", driver_name: "Driver",
+  });
+  const shift = await shiftService.startShift(
+    { id: "unit", unitNumber: "U1", plateNumber: "P1", route: "R", status: "available" },
+    { id: "driver", name: "Driver", status: "available" },
+  );
+  expect(shift.shiftId).toBe("SHF-SERVER");
+  expect(shift.isActive).toBe(true);
+  expect(appStorage.setItem).not.toHaveBeenCalled();
+});
+
+test("active shift lookup ignores and clears legacy local provisional shifts", async () => {
+  (request as jest.Mock).mockResolvedValue(null);
+  expect(await shiftService.activeShift()).toBeNull();
+  expect(appStorage.removeItem).toHaveBeenCalledWith("chatco_provisional_shift");
 });
 
 test("dashboard totals exclude all unsettled statuses and retain offline cash", () => {

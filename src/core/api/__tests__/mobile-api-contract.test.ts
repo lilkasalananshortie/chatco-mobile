@@ -46,6 +46,31 @@ test("mobile requests retain bearer authentication and unwrap the existing envel
     expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer session-token" }) }));
 });
 
+test("a timed-out request reports a network timeout without a red console error", async () => {
+  jest.useFakeTimers();
+  const errorLog = jest.spyOn(console, "error").mockImplementation(() => undefined);
+  jest.spyOn(globalThis, "fetch").mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("signal is aborted without reason"), { name: "AbortError" })));
+  }));
+  try {
+    const pending = client.request("/mobile/conductor/transactions?shift_id=shift-1");
+    const assertion = expect(pending).rejects.toThrow("did not respond within 15s");
+    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(client.REQUEST_TIMEOUT_MS);
+    await assertion;
+    expect(errorLog).not.toHaveBeenCalled();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test("an unrelated abort is not mislabeled as a server timeout", async () => {
+  jest.spyOn(console, "error").mockImplementation(() => undefined);
+  jest.spyOn(globalThis, "fetch").mockRejectedValue(Object.assign(new Error("cancelled"), { name: "AbortError" }));
+  await expect(client.request("/mobile/user")).rejects.toThrow("request was cancelled");
+  expect(console.error).not.toHaveBeenCalled();
+});
+
 test("invalid mobile login does not revoke an existing local session", async () => {
   jest.spyOn(globalThis, "fetch").mockResolvedValue({
     ok: false, status: 401, json: async () => ({ message: "Invalid credentials" }),

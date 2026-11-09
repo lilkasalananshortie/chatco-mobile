@@ -4,6 +4,7 @@ import type { useAppTheme } from "../../core/theme/ThemeProvider";
 export function createTripLogbookStyles(
   colors: ReturnType<typeof useAppTheme>["colors"],
   isLofi: boolean,
+  isLowFidelity = false,
 ) {
   return StyleSheet.create({
     overlay: {
@@ -13,10 +14,10 @@ export function createTripLogbookStyles(
     },
     sheet: {
       backgroundColor: colors.surface,
-      borderTopLeftRadius: isLofi ? 4 : 24,
-      borderTopRightRadius: isLofi ? 4 : 24,
+      borderTopLeftRadius: isLowFidelity ? 4 : 24,
+      borderTopRightRadius: isLowFidelity ? 4 : 24,
       maxHeight: "90%",
-      borderTopWidth: isLofi ? 2 : 1,
+      borderTopWidth: isLowFidelity ? 2 : 1,
       borderColor: colors.border,
       paddingTop: 16,
       paddingBottom: 28,
@@ -39,12 +40,10 @@ export function createTripLogbookStyles(
       marginTop: 2,
     },
     closeButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 44,
+      height: 44,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: isLofi ? colors.surface2 : "rgba(255, 255, 255, 0.08)",
     },
     summaryGrid: {
       flexDirection: "row",
@@ -56,7 +55,7 @@ export function createTripLogbookStyles(
       backgroundColor: isLofi ? colors.surface2 : "rgba(255, 255, 255, 0.04)",
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       padding: 10,
     },
     summaryCardLabel: {
@@ -80,7 +79,7 @@ export function createTripLogbookStyles(
       backgroundColor: isLofi ? "#ECFDF5" : "rgba(16, 185, 129, 0.08)",
       borderWidth: 1.5,
       borderColor: isLofi ? colors.success : "rgba(16, 185, 129, 0.35)",
-      borderRadius: isLofi ? 4 : 16,
+      borderRadius: isLowFidelity ? 4 : 16,
       padding: 14,
       marginBottom: 18,
     },
@@ -124,7 +123,7 @@ export function createTripLogbookStyles(
     statsRow: {
       flexDirection: "row",
       backgroundColor: isLofi ? colors.surface : "rgba(0, 0, 0, 0.25)",
-      borderRadius: isLofi ? 2 : 10,
+      borderRadius: isLowFidelity ? 2 : 10,
       padding: 10,
       marginBottom: 12,
     },
@@ -156,7 +155,7 @@ export function createTripLogbookStyles(
       gap: 6,
       backgroundColor: isLofi ? colors.primary : "#1A5FB4",
       paddingVertical: 12,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
     },
     advanceButtonText: {
       color: "#FFFFFF",
@@ -173,7 +172,7 @@ export function createTripLogbookStyles(
       borderColor: colors.border,
       backgroundColor: isLofi ? colors.surface2 : "rgba(255, 255, 255, 0.06)",
       paddingVertical: 12,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
     },
     switchButtonText: {
       color: colors.text,
@@ -192,7 +191,7 @@ export function createTripLogbookStyles(
       backgroundColor: isLofi ? colors.surface2 : "rgba(255, 255, 255, 0.03)",
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       padding: 12,
       marginBottom: 10,
     },

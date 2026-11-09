@@ -1,14 +1,14 @@
 import { Platform, StyleSheet } from "react-native";
 import type { useAppTheme } from "../../../core/theme/ThemeProvider";
 
-export function createConfirmationStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean) {
+export function createConfirmationStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean, isLowFidelity = false) {
   return StyleSheet.create({
     confirmDetailsBox: {
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.02)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
       padding: 14,
-      borderRadius: isLofi ? 4 : 14,
+      borderRadius: isLowFidelity ? 4 : 14,
       gap: 8,
     },
     confirmRow: {
@@ -32,7 +32,7 @@ export function createConfirmationStyles(colors: ReturnType<typeof useAppTheme>[
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      borderTopWidth: isLofi ? 1.5 : 1,
+      borderTopWidth: isLowFidelity ? 1.5 : 1,
       borderTopColor: colors.border,
       paddingTop: 10,
       marginTop: 4,
@@ -49,10 +49,10 @@ export function createConfirmationStyles(colors: ReturnType<typeof useAppTheme>[
     },
     gcashNoticeBox: {
       backgroundColor: isLofi ? colors.surface2 : "rgba(26, 95, 180, 0.12)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: isLofi ? colors.primary : "rgba(26, 95, 180, 0.25)",
       padding: 12,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       gap: 4,
     },
     noticeHeaderRow: {
@@ -72,10 +72,10 @@ export function createConfirmationStyles(colors: ReturnType<typeof useAppTheme>[
     },
     cashNoticeBox: {
       backgroundColor: isLofi ? colors.surface2 : "rgba(16, 185, 129, 0.1)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: isLofi ? colors.success : "rgba(16, 185, 129, 0.2)",
       padding: 12,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       gap: 4,
     },
     cashNoticeTitle: {
@@ -98,9 +98,9 @@ export function createConfirmationStyles(colors: ReturnType<typeof useAppTheme>[
     },
     voucherTextInput: {
       backgroundColor: isLofi ? colors.surface : "rgba(255,255,255,0.05)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
-      borderRadius: isLofi ? 4 : 8,
+      borderRadius: isLowFidelity ? 4 : 8,
       paddingHorizontal: 12,
       paddingVertical: 10,
       fontSize: 14,
@@ -119,11 +119,11 @@ export function createConfirmationStyles(colors: ReturnType<typeof useAppTheme>[
     },
     btnSecondary: {
       flex: 1,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
       backgroundColor: isLofi ? colors.surface2 : "transparent",
       paddingVertical: 13,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -136,7 +136,7 @@ export function createConfirmationStyles(colors: ReturnType<typeof useAppTheme>[
       flex: 1,
       backgroundColor: colors.primary,
       paddingVertical: 13,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       alignItems: "center",
       justifyContent: "center",
     },

@@ -126,8 +126,12 @@ export const paymentService = {
     try {
       const raw = await request<any>(`/mobile/fare-matrix${routeId ? `?route_id=${encodeURIComponent(routeId)}` : ""}`);
       const matrix = normalizePublishedFares(raw, routeId);
-      try { await savePublishedFares(matrix, routeId); } catch { /* Fresh server data remains usable if caching fails. */ }
-      return { ...matrix, isCached: false, loadedAt: Date.now() };
+      let cachePersisted = false;
+      try {
+        await savePublishedFares(matrix, routeId);
+        cachePersisted = true;
+      } catch { /* Keep online fares usable, but report that offline readiness was not saved. */ }
+      return { ...matrix, isCached: false, cachePersisted, loadedAt: Date.now() };
     } catch (error) {
       if (!(error instanceof NetworkError)) throw error;
       const cached = await cachedPublishedFares(routeId);

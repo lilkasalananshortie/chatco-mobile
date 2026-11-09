@@ -70,9 +70,10 @@ test("expired, future and malformed cache cannot authorize estimated fares", asy
 });
 test("fare fetch requests the shift route and saves only published values", async () => {
   (request as jest.Mock).mockResolvedValue(raw);
-  expect((await paymentService.fareMatrix("route")).isCached).toBe(false);
+  expect(await paymentService.fareMatrix("route")).toMatchObject({ isCached: false, cachePersisted: true });
   expect(request).toHaveBeenCalledWith("/mobile/fare-matrix?route_id=route");
   expect(appStorage.setItem).toHaveBeenCalledTimes(1);
+  expect(appStorage.setItem).toHaveBeenCalledWith(expect.stringContaining("chatco_published_fares_v4:route"), expect.any(String), { strict: true });
 });
 
 test("old fare caches are not reused after the pricing-rule upgrade", async () => {
@@ -100,7 +101,7 @@ test("no recent cache produces a clear error, never fictional stop data", async 
 test("cache write failure does not discard fresh server fares", async () => {
   (request as jest.Mock).mockResolvedValue(raw);
   (appStorage.setItem as jest.Mock).mockRejectedValue(new Error("Storage full"));
-  expect((await paymentService.fareMatrix()).points).toHaveLength(2);
+  expect(await paymentService.fareMatrix()).toMatchObject({ points: expect.any(Array), cachePersisted: false });
 });
 test.each([[false, false], [true, false], [false, true], [true, true]])("receipt options QR=%s manual=%s retain independent values", async (qr, code) => {
   (request as jest.Mock).mockResolvedValue({ receipt_show_qr_code: String(qr), receipt_show_manual_code: String(code) });

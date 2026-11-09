@@ -94,7 +94,9 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 20000);
+    const timer = setInterval(() => {
+      if (AppState.currentState !== "background" && AppState.currentState !== "inactive") void load();
+    }, 20000);
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") void load();
     });
@@ -105,8 +107,8 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
   }, [load, refreshKey]);
 
   useEffect(() => {
-    if (!historyLoaded && !historyLoading && !historyError) void loadHistory();
-  }, [historyLoaded, historyLoading, historyError, loadHistory]);
+    if (historyExpanded && !historyLoaded && !historyLoading && !historyError) void loadHistory();
+  }, [historyExpanded, historyLoaded, historyLoading, historyError, loadHistory]);
 
   useEffect(() => {
     if (!success) return;
@@ -131,8 +133,6 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
     () => transactions.reduce((sum, transaction) => sum + (transaction.totalPassengers ?? 1), 0),
     [transactions],
   );
-  const cashCount = useMemo(() => transactions.filter((transaction) => transaction.paymentMethod === "Cash").length, [transactions]);
-  const voucherCount = useMemo(() => transactions.filter((transaction) => transaction.paymentMethod === "Voucher").length, [transactions]);
 
   const canRemit = transactions.length > 0;
 
@@ -221,8 +221,8 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
     <ReportPage onBack={onBack}>
 
       <View style={[styles.card, { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 }]}>
-        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isLofi ? colors.surface2 : "rgba(26,95,180,0.15)", alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "800" }}>{(shift.driverName || "D")[0]?.toUpperCase()}</Text>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="person-outline" size={18} color="#FFFFFF" />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: "700" }}>{shift.driverName}</Text>
@@ -234,38 +234,32 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
         totalAmount={accountableTotals.all}
         totalPassengers={totalPassengers}
         transactionCount={transactions.length}
-        transactions={transactions}
-        accountableTotals={accountableTotals}
-        voucherTotal={totals.voucher}
-        cashCount={cashCount}
-        voucherCount={voucherCount}
+        shiftTimeIn={shift.timeIn}
       />
 
-      <View style={[styles.card, { backgroundColor: isLofi ? colors.surface : "rgba(26,95,180,0.08)", borderColor: isLofi ? colors.border : "rgba(26,95,180,0.2)", gap: 12 }]}>
-        <Text style={[styles.label, { color: isLofi ? "#4B5563" : "rgba(98,160,234,0.6)" }]}>Collection Summary</Text>
+      <View style={[styles.card, { gap: 12 }]}>
+        <Text style={styles.label}>Collection Summary</Text>
         <View style={{ flexDirection: "row", gap: 12 }}>
           {[
-            { label: "GCash", amount: accountableTotals.gcash, color: isLofi ? colors.text : "#60A5FA" },
-            { label: "Cash", amount: accountableTotals.cash, color: colors.success },
+            { label: "GCash", amount: accountableTotals.gcash },
+            { label: "Cash", amount: accountableTotals.cash },
           ].map((item) => (
-            <View key={item.label} style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: isLofi ? colors.border : "rgba(255,255,255,0.05)" }}>
-              <Text style={[styles.label, { color: isLofi ? "#4B5563" : item.label === "GCash" ? "rgba(96,165,250,0.6)" : "rgba(52,211,153,0.6)", fontWeight: "600" }]}>{item.label}</Text>
-              <Text style={{ color: item.color, fontSize: 18, lineHeight: 28, fontWeight: "800", marginTop: 2 }}>{money(item.amount)}</Text>
+            <View key={item.label} style={{ flex: 1, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={[styles.label, { fontWeight: "600" }]}>{item.label}</Text>
+              <Text style={{ color: colors.text, fontSize: 18, lineHeight: 28, fontWeight: "800", marginTop: 2 }}>{money(item.amount)}</Text>
             </View>
           ))}
         </View>
         <View style={{ height: 1, backgroundColor: colors.border }} />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={[styles.label, { color: colors.secondary, fontSize: 12, lineHeight: 16 }]}>Grand Total</Text>
-          <Text style={{ color: colors.primary, fontSize: 24, lineHeight: 32, fontWeight: "800" }}>{money(accountableTotals.all)}</Text>
+          <Text style={{ color: colors.text, fontSize: 24, lineHeight: 32, fontWeight: "800" }}>{money(accountableTotals.all)}</Text>
         </View>
       </View>
 
       <View style={{ gap: 12 }}>
-        <View style={[styles.card, { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, backgroundColor: isLofi ? "#F9FAFB" : "rgba(255,255,255,0.03)" }]}>
-          <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: isLofi ? "#F3F4F6" : "rgba(26,95,180,0.15)", alignItems: "center", justifyContent: "center" }}>
-            <ConductorIcon name="globe" size={16} color={colors.primary} />
-          </View>
+        <View style={[styles.card, { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, backgroundColor: colors.surface2 }]}>
+          <ConductorIcon name="globe" size={18} color={colors.primaryLight} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.secondary, fontSize: 12, lineHeight: 16, fontWeight: "600" }}>Remittance to Admin</Text>
             <Text style={{ color: isLofi ? "#6B7280" : "rgba(255,255,255,0.3)", fontSize: 10, lineHeight: 15, marginTop: 2 }}>All recorded transactions will be submitted to admin</Text>

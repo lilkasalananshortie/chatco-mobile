@@ -28,7 +28,7 @@ export function DeviceOwnershipBanner({
   claimDevice,
   releaseDevice,
 }: DeviceOwnershipBannerProps) {
-  const { colors, styles, isLofi } = useAppTheme();
+  const { colors, styles, isLofi , isLowFidelity } = useAppTheme();
 
   if (isOperatingDevice && canOperate) {
     return null;
@@ -40,7 +40,7 @@ export function DeviceOwnershipBanner({
         backgroundColor: colors.surface,
         borderColor: colors.border,
         borderWidth: 1.5,
-        borderRadius: isLofi ? 4 : 14,
+        borderRadius: isLowFidelity ? 4 : 14,
         padding: 14,
         marginBottom: 12,
       }}

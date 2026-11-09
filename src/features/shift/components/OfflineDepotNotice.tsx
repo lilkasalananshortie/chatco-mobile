@@ -1,14 +1,14 @@
 import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { Remittance } from "../../../core/domain/types";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
 
 export interface OfflineDepotNoticeProps {
   isOfflineDepot: boolean;
+  onRetry: () => void;
 }
 
-export function OfflineDepotNotice({ isOfflineDepot }: OfflineDepotNoticeProps) {
-  const { colors, isLofi, styles } = useAppTheme();
+export function OfflineDepotNotice({ isOfflineDepot, onRetry }: OfflineDepotNoticeProps) {
+  const { colors, isLofi, styles , isLowFidelity } = useAppTheme();
 
   if (!isOfflineDepot) return null;
 
@@ -17,10 +17,10 @@ export function OfflineDepotNotice({ isOfflineDepot }: OfflineDepotNoticeProps) 
       style={[
         styles.card,
         {
-          borderColor: isLofi ? "#D97706" : "rgba(245, 158, 11, 0.35)",
-          backgroundColor: isLofi ? "#FEF3C7" : "rgba(245, 158, 11, 0.08)",
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
           marginTop: 10,
-          borderRadius: isLofi ? 3 : 14,
+          borderRadius: isLowFidelity ? 3 : 14,
           padding: 12,
           flexDirection: "row",
           alignItems: "center",
@@ -28,22 +28,24 @@ export function OfflineDepotNotice({ isOfflineDepot }: OfflineDepotNoticeProps) 
         },
       ]}
     >
-      <Ionicons name="cloud-offline-outline" size={20} color={isLofi ? "#B45309" : "#FBBF24"} />
+      <Ionicons name="cloud-offline-outline" size={20} color={colors.muted} />
       <View style={{ flex: 1 }}>
-        <Text style={{ color: isLofi ? "#92400E" : "#FBBF24", fontSize: 12, fontWeight: "800" }}>
-          Offline Depot Mode (Cached Assignments)
+        <Text style={{ color: colors.text, fontSize: 12, fontWeight: "800" }}>
+          Connection required to start a shift
         </Text>
         <Text
           style={{
-            color: isLofi ? "#78350F" : colors.muted,
+            color: colors.muted,
             fontSize: 11,
             marginTop: 2,
             lineHeight: 15,
           }}
         >
-          Duty can be started locally without internet. Cash ticketing is immediately functional and
-          will auto-sync once connected.
+          Cached assignments cannot authorize a shift. Reconnect to verify the assignment with ChatCo.
         </Text>
+        <Pressable accessibilityRole="button" onPress={onRetry} style={{ alignSelf: "flex-start", marginTop: 8 }}>
+          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>Retry connection</Text>
+        </Pressable>
       </View>
     </View>
   );

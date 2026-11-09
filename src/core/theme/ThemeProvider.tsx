@@ -8,9 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { Platform, StyleSheet } from "react-native";
-import { appStorage } from "../storage/app-storage";
-
-const MODE_KEY = "chatco_ui_mode";
+import { appearanceSettings } from "./appearance-settings";
 
 const standardColors = {
   background: "#050F1A",
@@ -27,7 +25,7 @@ const standardColors = {
   overlay: "rgba(0,0,0,0.68)",
 };
 
-const lofiColors = {
+const lightColors = {
   background: "#F7F8FA",
   surface: "#FFFFFF",
   surface2: "#F1F5F9",
@@ -42,7 +40,7 @@ const lofiColors = {
   overlay: "rgba(5,25,48,0.42)",
 };
 
-function makeStyles(colors: typeof standardColors, isLofi: boolean) {
+function makeStyles(colors: typeof standardColors, isLowFidelity: boolean) {
   const radius = 14;
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
@@ -69,7 +67,7 @@ function makeStyles(colors: typeof standardColors, isLofi: boolean) {
       borderRadius: radius,
       padding: 17,
       marginTop: 14,
-      ...(isLofi ? {} : Platform.OS === "web"
+      ...(isLowFidelity ? {} : Platform.OS === "web"
         ? { boxShadow: "0 7px 18px rgba(0,0,0,0.16)" }
         : {
             shadowColor: "#000",
@@ -107,13 +105,13 @@ function makeStyles(colors: typeof standardColors, isLofi: boolean) {
       alignItems: "center",
       justifyContent: "center",
       marginTop: 12,
-      borderWidth: isLofi ? 1.5 : 0,
+      borderWidth: isLowFidelity ? 1.5 : 0,
       borderColor: colors.border,
     },
     buttonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 14 },
     secondaryButton: {
       backgroundColor: colors.surface2,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
     },
     secondaryButtonText: { color: colors.text },
@@ -123,36 +121,49 @@ function makeStyles(colors: typeof standardColors, isLofi: boolean) {
 
 type ThemeContextValue = {
   colors: typeof standardColors;
+  /** Legacy light-palette alias. Use isLowFidelity for simplified styling. */
   isLofi: boolean;
+  isLight: boolean;
+  isLowFidelity: boolean;
   ready: boolean;
-  setLofi: (value: boolean) => Promise<void>;
+  setLight: (value: boolean) => Promise<void>;
+  setLowFidelity: (value: boolean) => Promise<void>;
   styles: ReturnType<typeof makeStyles>;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [isLofi, setIsLofiState] = useState(false);
+  const [isLight, setIsLight] = useState(false);
+  const [isLowFidelity, setIsLowFidelity] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    void appStorage.getItem(MODE_KEY)
-      // Read the previous appearance key without changing existing users' choice.
-      .then(value => setIsLofiState(value === "lofi" || value === "light"))
-      .catch(() => setIsLofiState(false))
+    void appearanceSettings.load()
+      .then(value => { setIsLight(value.isLight); setIsLowFidelity(value.isLowFidelity); })
+      .catch(() => { setIsLight(false); setIsLowFidelity(false); })
       .finally(() => setReady(true));
   }, []);
-  const setLofi = useCallback(async (value: boolean) => {
-    await appStorage.setItem(MODE_KEY, value ? "lofi" : "dark");
-    setIsLofiState(value);
+  const setLight = useCallback(async (value: boolean) => {
+    await appearanceSettings.setLight(value);
+    setIsLight(value);
   }, []);
-  const colors = isLofi ? lofiColors : standardColors;
+  const setLowFidelity = useCallback(async (value: boolean) => {
+    await appearanceSettings.setLowFidelity(value);
+    setIsLowFidelity(value);
+  }, []);
+  const colors = isLight ? lightColors : standardColors;
   const value = useMemo(() => ({
     colors,
-    isLofi,
+    // Compatibility alias for existing light/dark color checks. Geometry and
+    // motion use isLowFidelity so the light palette never enables Lo-Fi.
+    isLofi: isLight,
+    isLight,
+    isLowFidelity,
     ready,
-    setLofi,
-    styles: makeStyles(colors, isLofi),
-  }), [colors, isLofi, ready, setLofi]);
+    setLight,
+    setLowFidelity,
+    styles: makeStyles(colors, isLowFidelity),
+  }), [colors, isLight, isLowFidelity, ready, setLight, setLowFidelity]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

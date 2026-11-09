@@ -1,15 +1,11 @@
-import { appStorage } from "../storage/app-storage";
 import {
   getPendingCash,
   pendingCashCount,
-  reassignPendingShiftId,
   removePendingCash,
   updatePendingCash,
 } from "../storage/offline-cash-queue";
 import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
-import type { Shift } from "../domain/types";
-import { NetworkError, post, request, PROVISIONAL_SHIFT_KEY } from "./api-client";
-import { mapShift } from "./api-mappers";
+import { NetworkError, post } from "./api-client";
 import { cashSyncOutcome } from "./cash-sync-result";
 
 export type SyncState = "idle" | "syncing" | "error";
@@ -36,72 +32,28 @@ export function notifySyncState(state: SyncState, count: number) {
   }
 }
 
-/**
- * Reconciles a provisional offline shift with the official backend once online.
- * Promotes the local shift to the server, and reassigns all queued pending items.
- */
-export async function reconcileProvisionalShift(): Promise<Shift | null> {
-  const provisionalRaw = await appStorage.getItem(PROVISIONAL_SHIFT_KEY);
-  if (!provisionalRaw) return null;
-
-  try {
-    const provisional = JSON.parse(provisionalRaw) as Shift;
-    if (!provisional.isProvisional || !provisional.provisionalPayload) {
-      await appStorage.removeItem(PROVISIONAL_SHIFT_KEY);
-      return null;
-    }
-    const deviceId = await getConductorDeviceId();
-    const response = await post<any>("/mobile/conductor/shifts/start", {
-      vehicle_id: provisional.provisionalPayload.unitId,
-      driver_id: provisional.provisionalPayload.driverId,
-      route_id: provisional.provisionalPayload.routeId ?? null,
-      device_id: deviceId,
-      device_type: CONDUCTOR_DEVICE_TYPE,
-    });
-    const officialShift = mapShift(response);
-
-    // Reassign queued pending cash transactions to the official shift ID
-    await reassignPendingShiftId(provisional.shiftId, officialShift.shiftId);
-    await appStorage.removeItem(PROVISIONAL_SHIFT_KEY);
-    return officialShift;
-  } catch (cause) {
-    if (cause instanceof NetworkError) return null;
-    // If backend reports shift conflict / already started, fetch active shift to resolve
-    try {
-      const active = await request<any | null>("/mobile/conductor/shift");
-      if (active) {
-        const officialShift = mapShift(active);
-        const provisional = JSON.parse(provisionalRaw) as Shift;
-        await reassignPendingShiftId(provisional.shiftId, officialShift.shiftId);
-        await appStorage.removeItem(PROVISIONAL_SHIFT_KEY);
-        return officialShift;
-      }
-    } catch {}
-    return null;
-  }
-}
-
 /** Retry durable offline cash writes in order. */
 let syncInFlight: Promise<number> | null = null;
 
 export async function syncPendingCashTransactions(): Promise<number> {
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
-    let pending = await getPendingCash();
+    const pending = await getPendingCash();
+    // Empty-queue timers must not trigger syncing/idle notifications and a
+    // dashboard transaction + earnings reload every twenty seconds.
+    if (pending.length === 0) return 0;
     notifySyncState("syncing", pending.length);
 
     try {
-      // 1. Reconcile provisional shift if exists
-      await reconcileProvisionalShift().catch(() => null);
-
-      // Re-read queue after provisional shift reassignment
-      pending = await getPendingCash();
       const currentDeviceId = await getConductorDeviceId();
       let synced = 0;
 
-      // Filter eligible items for current device
+      // Legacy provisional tickets have no backend-authorized originating
+      // shift. Keep them for recovery, but never reassign or submit them.
       const eligibleItems = pending.filter(
-        (item) => !item.deviceId || item.deviceId === currentDeviceId
+        (item) => Boolean(item.shiftId)
+          && !item.shiftId.startsWith("PROV-")
+          && (!item.deviceId || item.deviceId === currentDeviceId)
       );
 
       if (eligibleItems.length > 0) {

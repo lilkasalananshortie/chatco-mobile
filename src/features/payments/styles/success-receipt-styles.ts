@@ -1,14 +1,14 @@
 import { Platform, StyleSheet } from "react-native";
 import type { useAppTheme } from "../../../core/theme/ThemeProvider";
 
-export function createSuccessReceiptStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean) {
+export function createSuccessReceiptStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean, isLowFidelity = false) {
   return StyleSheet.create({
     successCheckCircle: {
       width: 56,
       height: 56,
-      borderRadius: isLofi ? 4 : 28,
+      borderRadius: isLowFidelity ? 4 : 28,
       backgroundColor: isLofi ? colors.surface2 : "rgba(16, 185, 129, 0.12)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: isLofi ? colors.success : "rgba(16, 185, 129, 0.25)",
       alignItems: "center",
       justifyContent: "center",
@@ -28,9 +28,9 @@ export function createSuccessReceiptStyles(colors: ReturnType<typeof useAppTheme
     successSummaryCard: {
       width: "100%",
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.03)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
-      borderRadius: isLofi ? 4 : 14,
+      borderRadius: isLowFidelity ? 4 : 14,
       padding: 14,
       gap: 8,
       marginBottom: 12,
@@ -41,9 +41,9 @@ export function createSuccessReceiptStyles(colors: ReturnType<typeof useAppTheme
       justifyContent: "space-between",
       width: "100%",
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.04)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       padding: 12,
       marginBottom: 12,
     },
@@ -64,11 +64,11 @@ export function createSuccessReceiptStyles(colors: ReturnType<typeof useAppTheme
     },
     printReceiptButton: {
       width: "100%",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.08)",
       paddingVertical: 12,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 10,
@@ -83,9 +83,9 @@ export function createSuccessReceiptStyles(colors: ReturnType<typeof useAppTheme
     failedCheckCircle: {
       width: 56,
       height: 56,
-      borderRadius: isLofi ? 4 : 28,
+      borderRadius: isLowFidelity ? 4 : 28,
       backgroundColor: isLofi ? colors.surface2 : "rgba(239, 68, 68, 0.12)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: isLofi ? colors.danger : "rgba(239, 68, 68, 0.25)",
       alignItems: "center",
       justifyContent: "center",

@@ -20,7 +20,7 @@ import { RemittanceOverview } from "./src/features/remittance/RemittanceOverview
 import { BrandFonts } from "./src/shared/ui/BrandFonts";
 import { SettingsScreen } from "./src/features/settings/SettingsScreen";
 import { VerificationScreen } from "./src/features/shift/VerificationScreen";
-import { audioCues, loadScanSoundSetting } from "./src/core/utils/audio-cues";
+import { audioCues, initAudioCues, loadScanSoundSetting, preloadAudioCues } from "./src/core/utils/audio-cues";
 import type { Screen, Shift, User } from "./src/core/domain/types";
 
 export default function App() {
@@ -97,7 +97,9 @@ function AppRoot() {
 
   useEffect(() => {
     void api.getDeviceId().then(setDeviceId);
+    void initAudioCues();
     void loadScanSoundSetting();
+    preloadAudioCues();
   }, []);
 
   // A 401 ends authentication; a 403/device ownership change remains view-only.
@@ -119,7 +121,7 @@ function AppRoot() {
     let running = false;
     let baseline: string | null = null;
     const refresh = async () => {
-      if (!active || running) return;
+      if (!active || running || AppState.currentState === "background" || AppState.currentState === "inactive") return;
       running = true;
       try {
         const token = await appStorage.getItem(TOKEN_KEY);
@@ -172,16 +174,11 @@ function AppRoot() {
   useEffect(() => {
     if (!user || user.must_change_password) return;
     let active = true;
+    let running = false;
     const revalidate = async () => {
+      if (!active || running || AppState.currentState === "background" || AppState.currentState === "inactive") return;
+      running = true;
       try {
-        if (shift?.isProvisional) {
-          const promoted = await api.reconcileProvisionalShift().catch(() => null);
-          if (!active) return;
-          if (promoted) {
-            setShift(promoted);
-            return;
-          }
-        }
         const current = await api.activeShift();
         if (!active) return;
         if (!current) {
@@ -197,6 +194,8 @@ function AppRoot() {
         }
       } catch {
         // Keep the current operational state during a temporary network outage.
+      } finally {
+        running = false;
       }
     };
     const timer = setInterval(() => void revalidate(), 30000);
@@ -208,27 +207,20 @@ function AppRoot() {
       clearInterval(timer);
       subscription.remove();
     };
-  }, [shift?.isProvisional, user]);
+  }, [user]);
 
   useEffect(() => {
     if (!user || user.must_change_password) return;
     let active = true;
     let running = false;
     const flush = async () => {
-      if (running) return;
+      if (!active || running || AppState.currentState === "background" || AppState.currentState === "inactive") return;
       running = true;
       try {
         const online = await api.checkConnectivity();
         if (!active) return;
         setIsOnline(online);
         if (!online) return;
-
-        if (shift?.isProvisional) {
-          const promoted = await api.reconcileProvisionalShift().catch(() => null);
-          if (active && promoted) {
-            setShift(promoted);
-          }
-        }
 
         const synced = await syncPendingCashTransactions();
         if (active && synced > 0) setRefreshKey(key => key + 1);
@@ -253,7 +245,6 @@ function AppRoot() {
   const isOperatingDevice = ownsShift;
   const canOperate = Boolean(shift?.isActive && !shift.timeOut && isOperatingDevice);
   const isViewOnlyDevice = Boolean(shift && !ownsShift);
-  const isPaymentDisabled = Boolean(shift?.isOnBreak) || !canOperate;
 
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
@@ -317,33 +308,21 @@ function AppRoot() {
           current={screen}
           onNavigate={setScreen}
           onPayment={() => {
-            if (!shift || !shift.isActive || Boolean(shift.timeOut)) {
-              Alert.alert(
-                "Shift Ended",
-                "The shift has already ended; no new transactions can be recorded."
-              );
-              return;
-            }
-            if (Boolean(shift?.isOnBreak)) {
-              Alert.alert("Shift on Break", "Cannot collect payments while on an active break. Resume duty first.");
-              return;
-            }
-            if (isViewOnlyDevice) {
-              Alert.alert(
-                "View-Only Mode",
-                shift?.operatingDeviceId
-                  ? "This shift is active on another device. Sync and release that device before collecting fares here."
-                  : "This shift has been released. Claim it on this device before collecting fares."
-              );
-              return;
-            }
+            if (!shift) return;
             setPayment(true);
           }}
-          isPaymentDisabled={isPaymentDisabled}
+          isPaymentDisabled={!shift}
         />
         {shift ? (
           <PaymentModal
-            visible={payment && canOperate && !isPaymentDisabled}
+            visible={payment}
+            blockedReason={!shift.isActive || shift.timeOut
+              ? "This shift has ended. You can still view Payment History."
+              : shift.isOnBreak
+                ? "Resume duty to collect payments. Payment History is still available."
+                : isViewOnlyDevice
+                  ? "Claim this shift on this device to collect fares. Payment History is still available."
+                  : null}
             shift={shift}
             isOnline={isOnline}
             onClose={() => setPayment(false)}

@@ -2,6 +2,7 @@ import {
   enqueuePendingCash,
   getNextOfflineTicketSequence,
   pendingCashCount,
+  pendingCashSyncError,
   pendingCashForShift,
 } from "../storage/offline-cash-queue";
 import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
@@ -12,6 +13,7 @@ import { isValidUuid } from "./payment-service";
 
 export const transactionService = {
   pendingCashCount: (shiftId?: string) => pendingCashCount(shiftId),
+  pendingCashSyncError: (shiftId?: string) => pendingCashSyncError(shiftId),
 
   transactions: async (shiftId: string) => {
     const pending = await pendingCashForShift(shiftId);
@@ -139,6 +141,7 @@ export const transactionService = {
         transactionId: ticketId,
         paymentMethod: "Cash",
         finalAmount: input.amount,
+        offlinePending: true,
         from: input.from,
         to: input.to,
         timestamp: Date.now(),
@@ -232,6 +235,7 @@ export const transactionService = {
             transactionId: `TKT-${cleanUnit}-${String(currentTicketSeq).padStart(4, "0")}`,
             paymentMethod: "Cash" as const,
             finalAmount: passenger.passenger_type === "REGULAR" ? input.regularFare : input.discountedFare,
+            offlinePending: true,
             from: input.from,
             to: input.to,
             timestamp: Date.now(),

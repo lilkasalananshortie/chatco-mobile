@@ -1,7 +1,7 @@
 import { Platform, StyleSheet } from "react-native";
 import type { useAppTheme } from "../../../core/theme/ThemeProvider";
 
-export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean) {
+export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["colors"], isLofi: boolean, isLowFidelity = false) {
   return StyleSheet.create({
     fullscreenContainer: {
       flex: 1,
@@ -13,7 +13,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       justifyContent: "space-between",
       paddingHorizontal: 16,
       paddingVertical: 12,
-      borderBottomWidth: isLofi ? 1.5 : 1,
+      borderBottomWidth: isLowFidelity ? 1.5 : 1,
       borderBottomColor: colors.border,
       backgroundColor: colors.surface,
     },
@@ -22,22 +22,25 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       alignItems: "center",
       gap: 8,
       flex: 1,
+      minWidth: 0,
     },
     topBarTitle: {
+      flexShrink: 1,
       fontSize: 17,
       fontWeight: "700",
       color: colors.text,
     },
     topBarRight: {
+      flexShrink: 0,
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
     },
     methodBadge: {
-      paddingHorizontal: 10,
+      paddingHorizontal: 6,
       paddingVertical: 4,
-      borderRadius: isLofi ? 4 : 999,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderRadius: 4,
+      borderWidth: 0,
     },
     methodBadgeBlue: {
       backgroundColor: isLofi ? colors.surface2 : "rgba(59, 130, 246, 0.15)",
@@ -61,12 +64,9 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     methodBadgeTextGreen: { color: isLofi ? colors.success : "#34D399" },
     methodBadgeTextViolet: { color: isLofi ? "#6D28D9" : "#A78BFA" },
     iconButton: {
-      width: 36,
-      height: 36,
-      borderRadius: isLofi ? 4 : 10,
-      backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)",
-      borderWidth: isLofi ? 1.5 : 1,
-      borderColor: colors.border,
+      flexShrink: 0,
+      width: 44,
+      height: 44,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -76,15 +76,15 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       paddingHorizontal: 16,
       paddingVertical: 12,
       backgroundColor: colors.surface,
-      borderBottomWidth: isLofi ? 1.5 : 1,
+      borderBottomWidth: isLowFidelity ? 1.5 : 1,
       borderBottomColor: colors.border,
     },
     cardWrapper: {
       position: "relative",
     },
     locationCard: {
-      borderRadius: isLofi ? 4 : 12,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderRadius: isLowFidelity ? 4 : 12,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       padding: 12,
       paddingRight: 38,
     },
@@ -133,7 +133,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     brgyPill: {
       paddingHorizontal: 8,
       paddingVertical: 2,
-      borderRadius: isLofi ? 3 : 999,
+      borderRadius: 4,
       marginLeft: 8,
     },
     brgyPillText: {
@@ -142,14 +142,10 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     },
     clearButton: {
       position: "absolute",
-      right: 10,
-      top: 14,
-      width: 24,
-      height: 24,
-      borderRadius: isLofi ? 3 : 12,
-      backgroundColor: isLofi ? colors.surface : "rgba(255,255,255,0.08)",
-      borderWidth: isLofi ? 1.5 : 1,
-      borderColor: colors.border,
+      right: 8,
+      top: 12,
+      width: 28,
+      height: 28,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -158,12 +154,8 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       marginVertical: 4,
     },
     swapButton: {
-      width: 28,
-      height: 28,
-      borderRadius: isLofi ? 4 : 14,
-      backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)",
-      borderWidth: isLofi ? 1.5 : 1,
-      borderColor: colors.border,
+      width: 36,
+      height: 36,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -172,11 +164,11 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       alignItems: "center",
       gap: 8,
       backgroundColor: isLofi ? colors.surface2 : "rgba(139, 92, 246, 0.1)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: isLofi ? "#6D28D9" : "rgba(139, 92, 246, 0.2)",
       paddingHorizontal: 12,
       paddingVertical: 8,
-      borderRadius: isLofi ? 4 : 8,
+      borderRadius: isLowFidelity ? 4 : 8,
       marginTop: 8,
     },
     sameBarangayNoticeText: {
@@ -203,15 +195,15 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     segmentedControl: {
       flexDirection: "row",
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)",
-      borderRadius: isLofi ? 4 : 8,
+      borderRadius: isLowFidelity ? 4 : 8,
       padding: 2,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
     },
     segmentButton: {
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: isLofi ? 3 : 6,
+      borderRadius: isLowFidelity ? 3 : 6,
     },
     segmentButtonActive: {
       backgroundColor: colors.primary,
@@ -238,9 +230,9 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     commuterChip: {
       paddingHorizontal: 10,
       paddingVertical: 6,
-      borderRadius: isLofi ? 4 : 8,
+      borderRadius: isLowFidelity ? 4 : 8,
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)",
-      borderWidth: isLofi ? 1.5 : 0,
+      borderWidth: isLowFidelity ? 1.5 : 0,
       borderColor: isLofi ? colors.border : "transparent",
     },
     commuterChipActive: {
@@ -273,8 +265,8 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: colors.surface,
-      borderRadius: isLofi ? 4 : 12,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderRadius: isLowFidelity ? 4 : 12,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
       paddingHorizontal: 12,
       height: 42,
@@ -291,8 +283,8 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: isLofi ? colors.surface2 : "rgba(255, 255, 255, 0.08)",
-      borderRadius: isLofi ? 4 : 10,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderRadius: isLowFidelity ? 4 : 10,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
       paddingHorizontal: 12,
       height: 44,
@@ -331,8 +323,8 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       alignItems: "center",
       justifyContent: "space-between",
       padding: 12,
-      borderRadius: isLofi ? 4 : 12,
-      borderWidth: isLofi ? 1.5 : 1,
+      borderRadius: isLowFidelity ? 4 : 12,
+      borderWidth: isLowFidelity ? 1.5 : 1,
     },
     pointItemLeft: {
       flexDirection: "row",
@@ -387,7 +379,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     statusTag: {
       paddingHorizontal: 6,
       paddingVertical: 3,
-      borderRadius: isLofi ? 2 : 4,
+      borderRadius: isLowFidelity ? 2 : 4,
     },
     statusTagText: {
       fontSize: 9,
@@ -397,9 +389,9 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     expandChevronButton: {
       width: 28,
       height: 28,
-      borderRadius: isLofi ? 3 : 8,
+      borderRadius: isLowFidelity ? 3 : 8,
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
       alignItems: "center",
       justifyContent: "center",
@@ -410,7 +402,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       marginLeft: 40,
       marginTop: 6,
       paddingLeft: 8,
-      borderLeftWidth: isLofi ? 2 : 1,
+      borderLeftWidth: isLowFidelity ? 2 : 1,
       borderLeftColor: colors.border,
       gap: 6,
     },
@@ -428,9 +420,9 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       gap: 8,
       paddingHorizontal: 8,
       paddingVertical: 6,
-      borderRadius: isLofi ? 3 : 6,
+      borderRadius: isLowFidelity ? 3 : 6,
       backgroundColor: isLofi ? colors.surface2 : "rgba(245, 158, 11, 0.05)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: isLofi ? colors.warning : "rgba(245, 158, 11, 0.15)",
     },
     usePointAreaText: {
@@ -444,7 +436,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       gap: 8,
       paddingHorizontal: 8,
       paddingVertical: 6,
-      borderRadius: isLofi ? 3 : 6,
+      borderRadius: isLowFidelity ? 3 : 6,
       backgroundColor: isLofi ? colors.surface : "rgba(255,255,255,0.02)",
       borderWidth: 1,
       borderColor: "transparent",
@@ -457,7 +449,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     substopTag: {
       paddingHorizontal: 5,
       paddingVertical: 2,
-      borderRadius: isLofi ? 2 : 4,
+      borderRadius: isLowFidelity ? 2 : 4,
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.08)",
     },
     substopTagText: {
@@ -468,7 +460,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
 
     // Bottom Action Bar
     bottomBarContainer: {
-      borderTopWidth: isLofi ? 1.5 : 1,
+      borderTopWidth: isLowFidelity ? 1.5 : 1,
       borderTopColor: colors.border,
       backgroundColor: colors.surface,
       paddingHorizontal: 16,
@@ -494,11 +486,11 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     },
     fareExplanationBox: {
       backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.03)",
-      borderWidth: isLofi ? 1.5 : 1,
+      borderWidth: isLowFidelity ? 1.5 : 1,
       borderColor: colors.border,
       paddingHorizontal: 10,
       paddingVertical: 6,
-      borderRadius: isLofi ? 3 : 8,
+      borderRadius: isLowFidelity ? 3 : 8,
       marginBottom: 10,
     },
     fareExplanationText: {
@@ -535,7 +527,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     cashActionButton: {
       backgroundColor: colors.success,
       paddingVertical: 14,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -547,7 +539,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     gcashActionButton: {
       backgroundColor: colors.primary,
       paddingVertical: 14,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -559,7 +551,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     voucherActionButton: {
       backgroundColor: isLofi ? "#6D28D9" : "#7C3AED",
       paddingVertical: 14,
-      borderRadius: isLofi ? 4 : 12,
+      borderRadius: isLowFidelity ? 4 : 12,
       alignItems: "center",
       justifyContent: "center",
     },

@@ -15,18 +15,21 @@ export interface DashboardHeaderCardProps {
   isOnBreak: boolean;
   breakPending: boolean;
   onOpenBreakConfirm: () => void;
+  tripDestination: string;
+  onOpenDirection: () => void;
+  directionReady: boolean;
   capacity: Capacity;
   onUpdateCapacity: (cap: Capacity) => void;
-  onOpenHistory: () => void;
   onOpenActions?: () => void;
   totals: { total: number; cash: number; gcash: number; voucher?: number };
   pendingOfflineCount: number;
+  pendingOfflineError?: string;
 }
 
 const peso = (amount: number) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 
 /** Native translation of conductor/dashboard/mobile-dashboard-card.tsx. */
-export function DashboardHeaderCard({ profilePictureUrl, shift, dashStyles: s, isLofi, canOperate, isOnBreak, breakPending, onOpenBreakConfirm, capacity, onUpdateCapacity, onOpenHistory, onOpenActions, totals, pendingOfflineCount }: DashboardHeaderCardProps) {
+export function DashboardHeaderCard({ profilePictureUrl, shift, dashStyles: s, isLofi, canOperate, isOnBreak, breakPending, onOpenBreakConfirm, tripDestination, onOpenDirection, directionReady, capacity, onUpdateCapacity, onOpenActions, totals, pendingOfflineCount, pendingOfflineError }: DashboardHeaderCardProps) {
   const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
   const text = isLofi ? "#111827" : "#FFFFFF";
@@ -46,10 +49,16 @@ export function DashboardHeaderCard({ profilePictureUrl, shift, dashStyles: s, i
       </Pressable>
     </View>
     {expanded ? <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 12 }}>
-      <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate || breakPending }} disabled={!canOperate || breakPending} onPress={onOpenBreakConfirm} style={[s.breakButton, (!canOperate || breakPending) && { opacity: 0.6 }]}>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+      <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate || breakPending }} disabled={!canOperate || breakPending} onPress={onOpenBreakConfirm} style={[s.breakButton, { flex: 1, paddingHorizontal: 8 }, (!canOperate || breakPending) && { opacity: 0.6 }]}>
         <ConductorIcon name={isOnBreak ? "play" : "pause"} size={14} color={isLofi ? "#6B7280" : "rgba(255,255,255,0.6)"} strokeWidth={2.25} />
         <Text style={s.breakButtonText}>{breakPending ? "Updating..." : isOnBreak ? "Resume Duty" : "Take a Break"}</Text>
       </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Trip direction: to ${tripDestination}`} disabled={!canOperate || !directionReady} onPress={onOpenDirection} style={[s.breakButton, { flex: 1, paddingHorizontal: 8 }, (!canOperate || !directionReady) && { opacity: 0.6 }]}>
+        <Ionicons name="git-compare-outline" size={14} color={muted} />
+        <Text numberOfLines={1} adjustsFontSizeToFit style={[s.breakButtonText, { fontSize: 12 }]}>To {tripDestination}</Text>
+      </Pressable>
+      </View>
       <View style={s.statusHistoryRow}>
         <View style={s.statusBox}>
           <View style={s.statusIndicatorRow}>
@@ -66,10 +75,6 @@ export function DashboardHeaderCard({ profilePictureUrl, shift, dashStyles: s, i
             })}
           </View>
         </View>
-        <Pressable accessibilityRole="button" onPress={onOpenHistory} style={s.historyButton}>
-          <ConductorIcon name="history" size={14} color={isLofi ? "#374151" : "rgba(255,255,255,0.7)"} strokeWidth={1.5} />
-          <Text style={s.historyButtonText}>History</Text>
-        </Pressable>
       </View>
       <View style={s.totalCollectedCard}>
         <View style={s.totalCollectedTop}>
@@ -83,7 +88,10 @@ export function DashboardHeaderCard({ profilePictureUrl, shift, dashStyles: s, i
           </View>)}
         </View>
       </View>
-      {pendingOfflineCount > 0 ? <Text style={{ color: muted, fontSize: 10 }}>{pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync</Text> : null}
+      {pendingOfflineCount > 0 ? <View style={{ gap: 3 }}>
+        <Text style={{ color: muted, fontSize: 10 }}>{pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync</Text>
+        {pendingOfflineError ? <Text accessibilityRole="alert" style={{ color: isLofi ? "#B91C1C" : "#FECACA", fontSize: 10 }}>Sync needs attention: {pendingOfflineError}</Text> : null}
+      </View> : null}
     </View> : null}
     <Pressable accessibilityRole="button" accessibilityState={{ expanded }} accessibilityLabel={expanded ? "Collapse dashboard card" : "Expand dashboard card"} onPress={() => setExpanded(value => !value)} style={s.collapseButton}>
       <ConductorIcon name={expanded ? "down" : "up"} size={16} color={isLofi ? "#9CA3AF" : "rgba(255,255,255,0.3)"} strokeWidth={2} />

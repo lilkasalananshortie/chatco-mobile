@@ -32,15 +32,15 @@ export function ProfileCard({ styles, user, shift, profile, photoBusy, photoErro
                   style={{ width: "100%", height: "100%", borderRadius: 15 }}
                 />
               ) : (
-                <Ionicons name="person-outline" size={38} color="#FFFFFF" />
+                <Ionicons name="person-outline" size={32} color="#FFFFFF" />
               )}
               <View pointerEvents="none" style={styles.profilePhotoCameraBadge}>
-                <Ionicons name="camera-outline" size={14} color="#071A2E" />
+                <Ionicons name="camera-outline" size={12} color="#071A2E" />
               </View>
             </Pressable>
             {onChangePhoto ? (
               <Pressable accessibilityRole="button" disabled={photoBusy} onPress={onChangePhoto} style={styles.profilePhotoAction}>
-                <Text style={{ color: styles.profileEyebrow.color, fontSize: 11, fontWeight: "600" }}>{photoBusy ? "Uploading…" : "Change photo"}</Text>
+                <Text numberOfLines={1} style={{ color: styles.profileEyebrow.color, fontSize: 9, fontWeight: "600" }}>{photoBusy ? "Uploading…" : "Change photo"}</Text>
               </Pressable>
             ) : null}
           </View>

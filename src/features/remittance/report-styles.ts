@@ -4,10 +4,15 @@ import { useAppTheme } from "../../core/theme/ThemeProvider";
 
 /** Values copied from the web end-of-day page and APP_DIALOG styles. */
 export function useReportTheme() {
-  const { isLofi, colors: appColors } = useAppTheme();
+  const { isLofi, isLowFidelity, colors: appColors } = useAppTheme();
   return useMemo(() => {
     const colors = {
       ...appColors,
+      background: isLofi ? appColors.background : "#050F1A",
+      surface: isLofi ? appColors.surface : "#071A2E",
+      surface2: isLofi ? appColors.surface2 : "#0A2038",
+      border: isLofi ? appColors.border : "rgba(255,255,255,0.06)",
+      muted: isLofi ? appColors.muted : "rgba(255,255,255,0.4)",
       action: appColors.primary,
       subtle: isLofi ? appColors.muted : "rgba(255,255,255,0.25)",
       secondary: isLofi ? "#374151" : "rgba(255,255,255,0.7)",
@@ -30,6 +35,6 @@ export function useReportTheme() {
       secondaryButtonText: { color: colors.text, fontWeight: "600" },
       error: { color: colors.danger, fontSize: 12, lineHeight: 18, textAlign: "center" },
     });
-    return { colors, styles, isLofi };
-  }, [appColors, isLofi]);
+    return { colors, styles, isLofi, isLowFidelity };
+  }, [appColors, isLofi, isLowFidelity]);
 }

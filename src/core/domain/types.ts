@@ -38,17 +38,18 @@ export interface Shift {
   isActive: boolean;
   isOnBreak?: boolean;
   breakStartedAt?: string | null;
+  tripDirection?: "FORWARD" | "REVERSE";
   operatingDeviceId?: string | null;
   operatingDeviceType?: "WEB" | "MOBILE" | null;
   latestDeviceRecoveryAt?: string | null;
-  isProvisional?: boolean;
-  provisionalPayload?: { unitId: string; driverId: string; routeId?: string };
 }
 
 export interface Transaction {
   transactionId: string;
   paymentMethod: "Cash" | "GCash" | "Voucher";
   finalAmount: number;
+  /** True only while this cash receipt exists locally and awaits server acknowledgement. */
+  offlinePending?: boolean;
   from: string;
   to: string;
   timestamp: number;
@@ -187,17 +188,14 @@ export interface FareConfig {
 export interface FareMatrix {
   routeId?: string;
   isCached?: boolean;
+  /** Whether a fresh server matrix was durably saved for later offline use. */
+  cachePersisted?: boolean;
   loadedAt?: number;
   points: FarePoint[];
   config: FareConfig;
 }
 
 export type CommuterType = "REGULAR" | "STUDENT" | "SENIOR_CITIZEN" | "PWD" | "SENIOR";
-
-export interface SosAlert {
-  id: string;
-  status: "ACTIVE" | "ACKNOWLEDGED" | "RESOLVED";
-}
 
 export interface Announcement {
   id: string;

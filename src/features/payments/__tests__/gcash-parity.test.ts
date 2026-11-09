@@ -24,10 +24,10 @@ jest.mock("../../../core/utils/haptics", () => ({ appHaptics: { success: jest.fn
 jest.mock("../../../core/storage/app-storage", () => ({ appStorage: { getItem: jest.fn(), setItem: jest.fn() } }));
 const setStep = jest.fn(); const receipts = jest.fn(); const saved = jest.fn();
 const point = { id: "a", pointNumber: 1, name: "A", code: "A", landmarks: [], regularFare: 17, discountedFare: 13.6 };
-function render(online = true) {
+function render(online = true, step: "method" | "confirm" = "confirm") {
   mockCursor = 0; mockRefCursor = 0;
   return useGcashPayment({
-    visible: true, step: "confirm", setStep, isOnline: online, onSaved: saved, triggerSuccessAlert: jest.fn(),
+    visible: true, step, setStep, isOnline: online, onSaved: saved, triggerSuccessAlert: jest.fn(),
     pickupPoint: point, pickupLandmark: null, dropoffPoint: { ...point, id: "b", name: "B", pointNumber: 2 }, dropoffLandmark: null,
     isGroupMode: true, setIsGroupMode: jest.fn(), groupTotalFare: 34, fareConfig: { baseBarangayCount: 4, baseFareRegular: 17, baseFareDiscounted: 13.6, succeedingFareRegular: 2.25, succeedingFareDiscounted: 1.8, totalPoints: 2 },
     groupPassengers: [{ type: "REGULAR", quantity: 2 }], setSelectedMethod: jest.fn(), setReceiptTransactions: receipts,
@@ -145,4 +145,16 @@ test("reopening an old PROCESSING payment preserves its status instead of making
   jest.advanceTimersByTime(11000); await flush();
   expect(setStep).not.toHaveBeenCalledWith("failed");
   expect(api.initiateGcash).not.toHaveBeenCalled();
+});
+
+test("a late pending GCash check cannot replace a payment flow the conductor already chose", async () => {
+  let finish!: (value: any) => void;
+  (api.pendingGcash as jest.Mock).mockReturnValue(new Promise(done => { finish = done; }));
+  const flow = render(true, "method");
+  mockEffects[1]!();
+  flow.stopPolling();
+  finish({ transactionId: "old-qr", status: "pending", amount: 17, expiresAt: new Date(Date.now() + 300000).toISOString() });
+  await flush();
+  expect(setStep).not.toHaveBeenCalledWith("qr_code");
+  expect(render().gcashInitiation).toBeNull();
 });

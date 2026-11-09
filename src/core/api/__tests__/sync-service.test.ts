@@ -3,16 +3,26 @@ jest.mock("../../storage/app-storage", () => ({ appStorage: { getItem: jest.fn()
 jest.mock("../../storage/device-id", () => ({ CONDUCTOR_DEVICE_TYPE: "MOBILE", getConductorDeviceId: jest.fn().mockResolvedValue("mobile-test-device") }));
 jest.mock("../../storage/offline-cash-queue", () => ({
   getPendingCash: jest.fn(), pendingCashCount: jest.fn().mockResolvedValue(0),
-  reassignPendingShiftId: jest.fn(), removePendingCash: jest.fn(), updatePendingCash: jest.fn(),
+  removePendingCash: jest.fn(), updatePendingCash: jest.fn(),
 }));
-jest.mock("../api-client", () => ({ NetworkError: class extends Error {}, post: jest.fn(), request: jest.fn(), PROVISIONAL_SHIFT_KEY: "provisional" }));
+jest.mock("../api-client", () => ({ NetworkError: class extends Error {}, post: jest.fn() }));
 jest.mock("../api-mappers", () => ({ mapShift: jest.fn() }));
 
 import { post } from "../api-client";
 import { getPendingCash, removePendingCash, updatePendingCash } from "../../storage/offline-cash-queue";
-import { syncPendingCashTransactions } from "../sync-service";
+import { addSyncListener, syncPendingCashTransactions } from "../sync-service";
 
 describe("durable cash sync against the backend batch contract", () => {
+  test("an empty queue does not broadcast sync events or make requests", async () => {
+    jest.mocked(getPendingCash).mockResolvedValue([]);
+    const listener = jest.fn();
+    const remove = addSyncListener(listener);
+    try {
+      expect(await syncPendingCashTransactions()).toBe(0);
+      expect(listener).not.toHaveBeenCalled();
+      expect(post).not.toHaveBeenCalled();
+    } finally { remove(); }
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     jest.mocked(getPendingCash).mockResolvedValue(["one", "two"].map(key => ({
@@ -55,5 +65,27 @@ describe("durable cash sync against the backend batch contract", () => {
     expect(post).toHaveBeenCalledWith("/mobile/conductor/transactions/sync", {
       transactions: expect.arrayContaining([expect.objectContaining({ shift_id: "SHF-ORIGINAL", idempotency_key: "one" })]),
     });
+  });
+
+  test("legacy provisional cash remains saved and is never submitted or reassigned", async () => {
+    jest.mocked(getPendingCash).mockResolvedValue([
+      {
+        id: "pending-official", idempotencyKey: "official", shiftId: "SHF-ORIGINAL", kind: "single",
+        payload: { idempotency_key: "official", shift_id: "SHF-ORIGINAL" },
+        localTransactions: [{}] as any, createdAt: Date.now(), deviceId: "mobile-test-device",
+      },
+      {
+        id: "pending-provisional", idempotencyKey: "legacy", shiftId: "PROV-OLD", kind: "single",
+        payload: { idempotency_key: "legacy", shift_id: "PROV-OLD" },
+        localTransactions: [{}] as any, createdAt: Date.now(), deviceId: "mobile-test-device",
+      },
+    ]);
+    jest.mocked(post).mockResolvedValue({ items: [{ idempotency_key: "official", status: "synced" }] });
+    await syncPendingCashTransactions();
+    expect(post).toHaveBeenCalledWith("/mobile/conductor/transactions/sync", {
+      transactions: [expect.objectContaining({ idempotency_key: "official", shift_id: "SHF-ORIGINAL" })],
+    });
+    expect(removePendingCash).toHaveBeenCalledWith("pending-official");
+    expect(removePendingCash).not.toHaveBeenCalledWith("pending-provisional");
   });
 });

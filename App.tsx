@@ -134,6 +134,10 @@ function AppRoot() {
   }), []);
 
   useEffect(() => setShiftEndedHandler(() => {
+    // A concurrent GPS/status request can observe the shift ending while the
+    // remittance response is still finishing. Keep the report mounted until it
+    // has confirmed success or shown its error.
+    if (remitting.current) return;
     setPayment(false);
     setShift(null);
     setOutstanding(null);

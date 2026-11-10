@@ -173,7 +173,7 @@ export function RemittanceHistorySection({
         <Animated.View style={{ transform: [{ rotate: expansion.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }) }] }}><Ionicons name="chevron-down" size={19} color={colors.muted} /></Animated.View>
       </Pressable>
 
-      <Animated.View pointerEvents={expanded ? "auto" : "none"} accessibilityElementsHidden={!expanded} importantForAccessibility={expanded ? "auto" : "no-hide-descendants"} style={{ overflow: "hidden", height: expansion.interpolate({ inputRange: [0, 1], outputRange: [0, contentHeight] }), opacity: expansion }}>
+      <Animated.View pointerEvents={expanded ? "auto" : "none"} accessibilityElementsHidden={!expanded} importantForAccessibility={expanded ? "auto" : "no-hide-descendants"} style={{ overflow: "hidden", height: expanded && contentHeight === 0 ? undefined : expansion.interpolate({ inputRange: [0, 1], outputRange: [0, contentHeight] }), opacity: expansion }}>
         <View onLayout={event => setContentHeight(event.nativeEvent.layout.height)} style={{ gap: 12 }}>
           <View style={{ gap: 4 }}>
             <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "600" }}>Period</Text>

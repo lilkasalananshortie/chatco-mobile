@@ -16,6 +16,7 @@ export interface LocationBottomBarProps {
   pickupDotColor: string;
   dropoffDotColor: string;
   isGroupMode: boolean;
+  activeGcashTransaction?: boolean;
   fareInfo: FareInfo | null;
   setStep: (step: Step) => void;
 }
@@ -30,6 +31,7 @@ export function LocationBottomBar({
   pickupDotColor,
   dropoffDotColor,
   isGroupMode,
+  activeGcashTransaction = false,
   fareInfo,
   setStep,
 }: LocationBottomBarProps) {
@@ -39,8 +41,17 @@ export function LocationBottomBar({
 
   return (
     <>
+      {isGCash && activeGcashTransaction ? (
+        <View style={styles.bottomBarContainer}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Review active transaction"
+            onPress={() => setStep("qr_code")} style={styles.gcashActionButton}>
+            <Text style={styles.gcashActionButtonText}>Review Transaction</Text>
+          </Pressable>
+          <Text style={styles.bottomHintText}>The existing QR payment is still active.</Text>
+        </View>
+      ) : null}
       {/* GCash mode: Route confirmation ONLY, NO fare displayed */}
-      {isGCash && bothLocationsSelected ? (
+      {isGCash && !activeGcashTransaction && bothLocationsSelected ? (
         <View style={styles.bottomBarContainer}>
           <View style={styles.routeConfirmRow}>
             <View style={styles.routePointInline}>
@@ -138,7 +149,7 @@ export function LocationBottomBar({
       ) : null}
 
       {/* Hint when neither selected */}
-      {(!isGCash && !fareInfo) || (isGCash && !bothLocationsSelected) ? (
+      {(!isGCash && !fareInfo) || (isGCash && !activeGcashTransaction && !bothLocationsSelected) ? (
         <View style={styles.bottomBarContainer}>
           <Text style={styles.bottomPlaceholderText}>
             {isGCash

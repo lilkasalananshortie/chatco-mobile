@@ -114,7 +114,7 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
   const paymentPress = useAnimatedToggle(paymentPressed, 200, isLowFidelity || reduceMotion);
   return (
     <View style={[local.navSafe, { bottom: 8 }]}>
-      <View style={[local.nav, { borderColor: colors.border, backgroundColor: colors.background }]}>
+      <View style={[local.nav, { borderColor: colors.border, backgroundColor: colors.surface2 }]}>
         {tabs.slice(0, 2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
         <Pressable
           style={[local.payWrap, isPaymentDisabled && { opacity: 0.55 }]}

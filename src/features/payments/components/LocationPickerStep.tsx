@@ -31,6 +31,7 @@ export interface LocationPickerStepProps {
   filteredPoints: FarePoint[];
   fareInfo: FareInfo | null;
   isGroupMode: boolean;
+  activeGcashTransaction?: boolean;
   setIsGroupMode: (group: boolean) => void;
   commuterType: CommuterType;
   setCommuterType: (type: CommuterType) => void;
@@ -71,6 +72,7 @@ export function LocationPickerStep({
   filteredPoints,
   fareInfo,
   isGroupMode,
+  activeGcashTransaction,
   setIsGroupMode,
   commuterType,
   setCommuterType,
@@ -183,6 +185,7 @@ export function LocationPickerStep({
         <LocationBottomBar
           styles={styles}
           selectedMethod={selectedMethod}
+          activeGcashTransaction={activeGcashTransaction}
           pickupPoint={pickupPoint}
           dropoffPoint={dropoffPoint}
           pickupLandmark={pickupLandmark}

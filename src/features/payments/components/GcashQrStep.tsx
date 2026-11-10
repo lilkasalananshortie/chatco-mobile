@@ -17,7 +17,6 @@ export interface GcashQrStepProps {
   qrSecondsLeft: number | null;
   isCancellingGcash: boolean;
   handleCancelGcash: () => void;
-  stopPolling: () => void;
   setStep: (step: Step) => void;
 }
 
@@ -31,7 +30,6 @@ export function GcashQrStep({
   qrSecondsLeft,
   isCancellingGcash,
   handleCancelGcash,
-  stopPolling,
   setStep,
 }: GcashQrStepProps) {
   const { colors, isLofi , isLowFidelity } = usePaymentTheme();
@@ -143,7 +141,7 @@ export function GcashQrStep({
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              onPress={() => { stopPolling(); setStep("select"); }}
+              onPress={() => setStep("select")}
               style={{ flex: 1, minHeight: 46, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: border, borderRadius: 12, backgroundColor: isLofi ? "#FFFFFF" : "#131C2E" }}
             >
               <Text style={{ color: isLofi ? "#374151" : "rgba(255,255,255,0.8)", fontSize: 14, fontWeight: "600" }}>Back</Text>

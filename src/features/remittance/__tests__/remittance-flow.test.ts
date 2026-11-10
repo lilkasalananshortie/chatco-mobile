@@ -76,6 +76,13 @@ test("today uses fresh earnings and displays the captured server totals", async 
   await mount(); await confirm(); expect(api.remit).toHaveBeenCalledWith(shift, 40, 20);
   expect(render().find(e => e.type === "Success").props.accountableTotals.all).toBe(970);
 });
+test("a successful remittance with partial response totals still finishes rather than becoming a retryable failure", async () => {
+  (api.remit as jest.Mock).mockResolvedValue({ remittance: {} });
+  await mount(); await confirm();
+  expect(render().find(e => e.type === "Success").props).toMatchObject({ visible: true, accountableTotals: { cash: 40, gcash: 20, all: 60 } });
+  expect(submitting).not.toHaveBeenLastCalledWith(false);
+  expect(api.remit).toHaveBeenCalledTimes(1);
+});
 test.each([false, true])("Done and the three-second timer complete only once (late=%s)", async late => {
   await mount(late); await confirm(late); const nodes = render(late); const cleanup = mockEffects[4]!();
   nodes.find(e => e.type === "Success").props.onClose(); jest.advanceTimersByTime(3000);

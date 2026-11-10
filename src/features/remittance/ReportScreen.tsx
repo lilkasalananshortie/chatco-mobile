@@ -218,7 +218,13 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
       if (await api.pendingCashCount(shift.shiftId) > 0) throw new Error("Cash transactions still need to sync. Reconnect and retry.");
       const result = await api.remit(shift, snapshot.cash, snapshot.gcash);
       completed.current = true;
-      const captured = result.remittance ? remittanceTotals(result.remittance) : snapshot;
+      // The server has committed the remittance. A missing or partial totals
+      // payload must not turn that success into a retryable error.
+      let captured = snapshot;
+      if (result?.remittance) {
+        try { captured = remittanceTotals(result.remittance); }
+        catch { /* Use the freshly verified totals above. */ }
+      }
       setSubmittedTotals({ cash: captured.cash, gcash: captured.gcash, all: captured.all });
       setConfirm(false);
       setSuccess(true);

@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Text } from "../../../shared/ui/BrandText";
+import { Text, TextInput } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import { appHaptics } from "../../../core/utils/haptics";
@@ -98,48 +98,38 @@ export function PassengerGroupStep({
         </Text>
       </View>
 
-      <ScrollView style={{ height: Math.min(288, Math.max(96, availableHeight - 280)), flexShrink: 1 }} contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, paddingHorizontal: 16, paddingVertical: 16 }}>
+      <ScrollView style={{ height: Math.min(352, Math.max(120, availableHeight - 260)), flexShrink: 1 }} contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingVertical: 16 }} keyboardShouldPersistTaps="always">
+        <Text style={{ color: mainText, fontSize: 13, fontWeight: "700" }}>{isGCashGroup ? "Companion passenger types" : "Passenger types"}</Text>
         {passengerTypes.map(({ type, label }) => {
           const count = groupCounts[type];
           const fare = type === "REGULAR" ? fareInfo?.regularFare ?? 0 : fareInfo?.discountedFare ?? 0;
-          const showFare = !isGCashGroup || count > 0;
-          const active = count > 0;
           return (
-            <View key={type} style={{ width: "48%", minHeight: 104, position: "relative" }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Add ${label}, ${count} added`}
-                disabled={count >= 50}
-                onPress={() => {
-                  appHaptics.medium();
-                  setGroupCounts(current => ({ ...current, [type]: Math.min(50, current[type] + 1) }));
-                }}
-                style={{ minHeight: 104, justifyContent: "space-between", padding: 14, paddingRight: 42, borderWidth: 1, borderRadius: 12, borderColor: active ? (isLofi ? "#1A5FB4" : "rgba(98,160,234,0.45)") : border, backgroundColor: active ? (isLofi ? "#F0F7FF" : "rgba(26,95,180,0.14)") : (isLofi ? "#F9FAFB" : "rgba(255,255,255,0.03)") }}
-              >
-                <View>
-                  <Text style={{ color: mainText, fontSize: 14, fontWeight: "600" }}>{label}</Text>
-                  {showFare ? <Text style={{ marginTop: 2, color: mutedText, fontSize: 11, fontVariant: ["tabular-nums"] }}>{formatCurrency(fare)}</Text> : null}
-                </View>
-                <Text style={{ color: active ? mainText : mutedText, fontSize: 28, lineHeight: 32, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{count}</Text>
+            <View key={type} style={{ minHeight: 64, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, borderColor: count ? (isLofi ? "#1A5FB4" : "rgba(98,160,234,0.45)") : border, backgroundColor: count ? (isLofi ? "#F0F7FF" : "rgba(26,95,180,0.14)") : (isLofi ? "#F9FAFB" : "rgba(255,255,255,0.03)") }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: mainText, fontSize: 14, fontWeight: "600" }}>{label}</Text>
+                <Text style={{ color: mutedText, fontSize: 11 }}>{formatCurrency(fare)} each</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${label}`} disabled={count === 0}
+                onPress={() => { appHaptics.medium(); setGroupCounts(current => ({ ...current, [type]: Math.max(0, current[type] - 1) })); }}
+                style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: border, borderRadius: 8, opacity: count === 0 ? 0.4 : 1 }}>
+                <Ionicons name="remove" size={20} color={mainText} />
               </Pressable>
-              {count > 0 ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${label}`}
-                  onPress={() => {
-                    appHaptics.medium();
-                    setGroupCounts(current => ({ ...current, [type]: Math.max(0, current[type] - 1) }));
-                  }}
-                  style={{ position: "absolute", top: 8, right: 8, width: 32, height: 32, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: border, borderRadius: 8, backgroundColor: surface }}
-                >
-                  <Ionicons name="remove" size={16} color={isLofi ? "#374151" : "rgba(255,255,255,0.75)"} />
-                </Pressable>
-              ) : null}
+              <TextInput accessibilityLabel={`Number of ${label} passengers`} keyboardType="number-pad" selectTextOnFocus maxLength={2}
+                value={String(count)} onChangeText={value => {
+                  if (!/^\d{0,2}$/.test(value)) return;
+                  setGroupCounts(current => ({ ...current, [type]: Math.min(50, Number(value) || 0) }));
+                }}
+                style={{ width: 42, height: 44, color: mainText, textAlign: "center", fontSize: 18, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
+              <Pressable accessibilityRole="button" accessibilityLabel={`Add ${label}, ${count} added`} disabled={count >= 50}
+                onPress={() => { appHaptics.medium(); setGroupCounts(current => ({ ...current, [type]: Math.min(50, current[type] + 1) })); }}
+                style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: "#1A5FB4", opacity: count >= 50 ? 0.4 : 1 }}>
+                <Ionicons name="add" size={20} color="#FFFFFF" />
+              </Pressable>
             </View>
           );
         })}
         <Text style={{ width: "100%", color: mutedText, fontSize: 11 }}>
-          Tap a tile to add one. Use the minus button to remove one.
+          Enter a quantity or use the plus and minus buttons.
         </Text>
       </ScrollView>
 

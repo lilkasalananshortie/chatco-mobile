@@ -130,6 +130,7 @@ export function PaymentModal({
         filteredPoints={flow.filteredPoints}
         fareInfo={flow.fareInfo}
         isGroupMode={flow.isGroupMode}
+        activeGcashTransaction={Boolean(flow.gcashInitiation && flow.selectedMethod === "GCash")}
         setIsGroupMode={flow.setIsGroupMode}
         commuterType={flow.commuterType}
         setCommuterType={flow.setCommuterType}
@@ -143,7 +144,7 @@ export function PaymentModal({
         clearPickup={flow.clearPickup}
         clearDropoff={flow.clearDropoff}
         swapLocations={flow.swapLocations}
-        onBack={flow.handleBackToMethods}
+        onBack={flow.gcashInitiation ? () => flow.setStep("qr_code") : flow.handleBackToMethods}
         handleClose={requestClose}
         setStep={flow.setStep}
       />
@@ -226,7 +227,6 @@ export function PaymentModal({
             qrSecondsLeft={flow.qrSecondsLeft}
             isCancellingGcash={flow.isCancellingGcash}
             handleCancelGcash={flow.handleCancelGcash}
-            stopPolling={flow.stopPolling}
             setStep={flow.setStep}
           />
         ) : null}

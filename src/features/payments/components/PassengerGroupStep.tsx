@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
@@ -47,6 +48,9 @@ export function PassengerGroupStep({
   setStep,
 }: PassengerGroupStepProps) {
   const { colors, isLofi } = usePaymentTheme();
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const availableHeight = Math.max(280, height - insets.top - insets.bottom - 32);
   const isGCashGroup = selectedMethod === "GCash";
   const showFareSummary = !isGCashGroup || groupEnteredCount > 0;
   const groupNoun = isGCashGroup
@@ -64,7 +68,7 @@ export function PassengerGroupStep({
   const actionDisabled = groupEnteredCount === 0 || !pickupPoint || !dropoffPoint || isInitiatingGcash;
 
   return (
-    <View style={[styles.modalCard, { maxWidth: 448, maxHeight: "100%", borderRadius: 16, borderWidth: 1, borderColor: border, overflow: "hidden", backgroundColor: surface }]}>
+    <View style={[styles.modalCard, { maxWidth: 448, maxHeight: availableHeight, borderRadius: 16, borderWidth: 1, borderColor: border, overflow: "hidden", backgroundColor: surface }]}>
       <View style={{ flexShrink: 0, paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: border }}>
         <Text style={{ color: mainText, fontSize: 18, fontWeight: "700" }}>Passenger Group</Text>
         <Text style={{ marginTop: 4, color: mutedText, fontSize: 12 }}>
@@ -94,7 +98,7 @@ export function PassengerGroupStep({
         </Text>
       </View>
 
-      <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, paddingHorizontal: 16, paddingVertical: 16 }}>
+      <ScrollView style={{ height: Math.min(288, Math.max(96, availableHeight - 280)), flexShrink: 1 }} contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, paddingHorizontal: 16, paddingVertical: 16 }}>
         {passengerTypes.map(({ type, label }) => {
           const count = groupCounts[type];
           const fare = type === "REGULAR" ? fareInfo?.regularFare ?? 0 : fareInfo?.discountedFare ?? 0;

@@ -14,7 +14,12 @@ export function LoginScreen({ onLogin }: { onLogin: (user: User) => void | Promi
   const { colors, isLofi , isLowFidelity } = useAppTheme();
   const { height } = useWindowDimensions();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
   const compact = keyboardVisible || height < 760;
+  // Some Android keyboards overlay the app instead of resizing its window.
+  // Only reserve the covered area when the window still extends beneath it.
+  const keyboardInset = Platform.OS === "android" && keyboardTop !== null
+    ? Math.max(0, height - keyboardTop) : 0;
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,8 +35,14 @@ export function LoginScreen({ onLogin }: { onLogin: (user: User) => void | Promi
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
-    const shown = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
-    const hidden = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    const shown = Keyboard.addListener("keyboardDidShow", event => {
+      setKeyboardTop(event.endCoordinates.screenY);
+      setKeyboardVisible(true);
+    });
+    const hidden = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardTop(null);
+      setKeyboardVisible(false);
+    });
     return () => { shown.remove(); hidden.remove(); };
   }, []);
   const submit = async () => {
@@ -47,7 +58,7 @@ export function LoginScreen({ onLogin }: { onLogin: (user: User) => void | Promi
   return (
     <View style={[s.screen, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={[s.contentFrame, { paddingVertical: compact ? 8 : 24 }]}>
+        <View style={[s.contentFrame, { paddingTop: compact ? 8 : 24, paddingBottom: (compact ? 8 : 24) + keyboardInset }]}>
           <View style={s.content}>
             {!keyboardVisible ? <>
               <View style={s.brandRow}>

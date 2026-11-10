@@ -8,7 +8,7 @@ let mockIndex = 0, mockRefIndex = 0, mockHeight = 800, mockLight = false;
 jest.mock("react", () => ({ ...jest.requireActual("react"),
   useState: (value: any) => { const i = mockIndex++; if (!(i in mockStates)) mockStates[i] = value; return [mockStates[i], (next: any) => { mockStates[i] = typeof next === "function" ? next(mockStates[i]) : next; }]; },
   useRef: (value: any) => { const i = mockRefIndex++; return mockRefs[i] ?? (mockRefs[i] = { current: value }); },
-  useEffect: (fn: () => any) => { if (!mockCleanups.length) mockCleanups.push(fn()); },
+  useEffect: (fn: () => any) => { if (mockCleanups.length < 2) mockCleanups.push(fn()); },
 }));
 jest.mock("react-native", () => ({ ActivityIndicator: "Spinner", Animated: { View: "AnimatedView" }, Keyboard: { dismiss: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })) }, KeyboardAvoidingView: "KeyboardView", Platform: { OS: "android" }, Pressable: "Button", ScrollView: "Scroll", StyleSheet: { create: (styles: any) => styles }, Text: "Text", TextInput: "Input", useWindowDimensions: () => ({ height: mockHeight }), View: "View" }));
 jest.mock("../../../shared/ui/useAnimatedFeedback", () => ({ useAnimatedColor: (color: string) => color }));
@@ -88,4 +88,19 @@ test.each([false, true])("small-screen login fits without a scrolling container 
   expect(nodes.some(node => node.type === "Scroll")).toBe(false);
   expect(nodes.some(node => node.props.children === "Welcome back. Sign in to get on the road.")).toBe(false);
   expect(field("Password").props.autoComplete).toBe("current-password");
+});
+
+test("Android keyboard overlay moves the form above the keyboard without double spacing a resized window", () => {
+  render();
+  const shown = (Keyboard.addListener as jest.Mock).mock.calls.find(([name]) => name === "keyboardDidShow")?.[1];
+  const hidden = (Keyboard.addListener as jest.Mock).mock.calls.find(([name]) => name === "keyboardDidHide")?.[1];
+  const framePadding = () => render().find(node => node.type === "View" && Array.isArray(node.props.style)
+    && node.props.style[0]?.justifyContent === "center")?.props.style[1].paddingBottom;
+
+  shown({ endCoordinates: { screenY: 500 } });
+  expect(framePadding()).toBe(308);
+  mockHeight = 490;
+  expect(framePadding()).toBe(8);
+  hidden();
+  expect(framePadding()).toBe(8);
 });

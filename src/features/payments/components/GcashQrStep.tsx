@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "../../../shared/ui/BrandText";
 import QRCode from "react-native-qrcode-svg";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
@@ -34,12 +35,15 @@ export function GcashQrStep({
   setStep,
 }: GcashQrStepProps) {
   const { colors, isLofi , isLowFidelity } = usePaymentTheme();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const availableHeight = Math.max(280, screenHeight - insets.top - insets.bottom - 32);
   const isConfirming = gcashStatus === "processing";
   const isExpiringSoon = qrSecondsLeft !== null && qrSecondsLeft <= 30;
   const isStatusWarning = gcashStatus === "expired" || (isConfirming && gcashInitiation.confirmationDelayed);
   const routeFrom = pickupPoint?.name ?? gcashInitiation.from ?? null;
   const routeTo = dropoffPoint?.name ?? gcashInitiation.to ?? null;
+  const qrToken = typeof gcashInitiation.qrToken === "string" ? gcashInitiation.qrToken.trim() : "";
   const qrSize = Math.max(160, Math.min(232, screenWidth - 104));
   const countdownLabel = qrSecondsLeft !== null
     ? `${Math.floor(qrSecondsLeft / 60)}:${String(qrSecondsLeft % 60).padStart(2, "0")}`
@@ -58,8 +62,8 @@ export function GcashQrStep({
   const readout = isLofi ? "#F9FAFB" : "#050F1A";
 
   return (
-    <View style={[styles.qrCard, { maxWidth: 384, maxHeight: "100%", flexShrink: 1, flexDirection: "column", padding: 0, alignItems: "stretch", borderRadius: 16, borderColor: border, backgroundColor: panel, overflow: "hidden" }]}>
-      <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 20 }}>
+    <View style={[styles.qrCard, { maxWidth: 384, maxHeight: availableHeight, flexShrink: 1, flexDirection: "column", padding: 0, alignItems: "stretch", borderRadius: 16, borderColor: border, backgroundColor: panel, overflow: "hidden" }]}>
+      <ScrollView style={{ height: Math.min(600, availableHeight), flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 }}>
           <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
             <Text style={{ color: isLofi ? "#6B7280" : "rgba(255,255,255,0.4)", fontSize: 10, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" }}>
@@ -87,11 +91,11 @@ export function GcashQrStep({
                   : "GCash is confirming it now, so it can't be cancelled."}
               </Text>
             </View>
-          ) : (
+          ) : qrToken ? (
             <>
               <View style={{ alignSelf: "center", alignItems: "center", justifyContent: "center", padding: 16, borderRadius: 12, backgroundColor: "#FFFFFF", borderWidth: isLowFidelity ? 1 : 0, borderColor: isLofi ? border : "transparent" }}>
                 <QRCode
-                  value={gcashInitiation.qrToken}
+                  value={qrToken}
                   size={qrSize}
                   backgroundColor="#FFFFFF"
                   color="#071A2E"
@@ -103,6 +107,10 @@ export function GcashQrStep({
                 Commuter scans this with the CHATCO app to pay through GCash.
               </Text>
             </>
+          ) : (
+            <Text accessibilityRole="alert" style={{ color: text, fontSize: 13, lineHeight: 20 }}>
+              The payment was created, but no QR code was returned. Cancel this payment and try again.
+            </Text>
           )}
         </View>
 

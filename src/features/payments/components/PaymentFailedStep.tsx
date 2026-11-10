@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
@@ -22,10 +23,13 @@ export function PaymentFailedStep({
   setStep,
 }: PaymentFailedStepProps) {
   const { colors, isLofi } = usePaymentTheme();
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const availableHeight = Math.max(260, height - insets.top - insets.bottom - 32);
 
   return (
-    <View style={[styles.modalCard, { maxWidth: 384, maxHeight: "100%", flexShrink: 1 }]}>
-      <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ padding: 24, alignItems: "center" }}>
+    <View style={[styles.modalCard, { maxWidth: 384, maxHeight: availableHeight, flexShrink: 1 }]}>
+      <ScrollView style={{ height: Math.min(300, availableHeight), flexShrink: 1 }} contentContainerStyle={{ padding: 24, alignItems: "center" }}>
         <View style={styles.failedCheckCircle}>
           <Ionicons name="close" size={32} color={isLofi ? colors.danger : "#F87171"} />
         </View>

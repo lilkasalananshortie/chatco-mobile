@@ -102,6 +102,7 @@ test("offline mode cannot initiate GCash", async () => {
   await render(false).handleInitiateGcash();
   expect(api.initiateGcash).not.toHaveBeenCalled();
   expect(render(false).gcashError).toContain("offline");
+  expect(setStep).toHaveBeenCalledWith("failed");
 });
 test("late initiation response cannot reopen a closed flow", async () => {
   let resolve!: (value: any) => void;

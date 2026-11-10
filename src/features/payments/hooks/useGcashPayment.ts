@@ -214,9 +214,14 @@ export function useGcashPayment({
     if (initiatingRef.current) return;
     if (!isOnline) {
       setGcashError("GCash is unavailable while offline. Use cash and it will sync when you reconnect.");
+      setStep("failed");
       return;
     }
-    if (!pickupPoint || !dropoffPoint) return;
+    if (!pickupPoint || !dropoffPoint) {
+      setGcashError("Select both pickup and drop-off locations before generating a QR code.");
+      setStep("failed");
+      return;
+    }
 
     initiatingRef.current = true;
     const generation = pollGeneration.current;

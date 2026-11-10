@@ -8,7 +8,7 @@ import type { Remittance, Shift, ShiftEarnings, Transaction } from "../../core/d
 import { useReportTheme } from "./report-styles";
 import { ReportPage } from "./ReportPage";
 import { thermalPrinter } from "../../core/utils/thermal-printer";
-import { money, officialReportText } from "./remittance-helpers";
+import { isLateRemittance, money, officialReportText } from "./remittance-helpers";
 import { RemittanceConfirmModal } from "./components/RemittanceConfirmModal";
 import { RemittanceSuccessModal } from "./components/RemittanceSuccessModal";
 import { RemittanceReportSlipModal } from "./components/RemittanceReportSlipModal";
@@ -69,7 +69,8 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
   const submitting = useRef(false);
   const preparing = useRef(false);
   const completed = useRef(false);
-  const late = Boolean(outstanding);
+  const hasOutstanding = Boolean(outstanding);
+  const returnToVerification = outstanding ? isLateRemittance(outstanding) : false;
 
   useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
 
@@ -163,8 +164,8 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
     [transactions],
   );
 
-  const canRemit = late || transactions.length > 0;
-  const allowed = late || canOperate;
+  const canRemit = hasOutstanding || transactions.length > 0;
+  const allowed = hasOutstanding || canOperate;
 
   const handlePressRemit = async () => {
     if (!canRemit || preparing.current || submitting.current || completed.current) return;
@@ -204,7 +205,7 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
         throw new Error("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
       }
       let snapshot = accountableTotals;
-      if (late) {
+      if (hasOutstanding) {
         const access = await readShiftAccess();
         if (access.kind !== "unremitted" || access.remittance.shift_id !== shift.shiftId) {
           throw new Error("This shift's remittance has changed. Return to verification and check again.");
@@ -364,7 +365,7 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
 
       <RemittanceSuccessModal
         visible={success}
-        late={late}
+        late={returnToVerification}
         accountableTotals={submittedTotals ?? accountableTotals}
         unitNumber={shift.unitNumber}
         onClose={exitAfterRemittance}

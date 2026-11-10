@@ -2,6 +2,21 @@
 
 export const money = (value: number | string | undefined) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value ?? 0));
 
+function manilaDay(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const part = (type: string) => parts.find(item => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+export function isLateRemittance(record: Remittance, now = new Date()): boolean {
+  const dated = record.date?.slice(0, 10);
+  const timeIn = record.time_in ? new Date(record.time_in) : null;
+  const shiftDay = dated && /^\d{4}-\d{2}-\d{2}$/.test(dated)
+    ? dated
+    : timeIn && !Number.isNaN(timeIn.getTime()) ? manilaDay(timeIn) : null;
+  return shiftDay !== null && shiftDay < manilaDay(now);
+}
+
 export function remittanceStatusLabel(item: Remittance): string {
   const raw = String(item.remittance_status ?? item.status ?? "SUBMITTED").toUpperCase();
   if (raw === "PENDING" && !item.remitted_at) return "Not Remitted";

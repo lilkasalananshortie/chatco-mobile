@@ -3,6 +3,7 @@ import React from "react";
 import App from "../../../../App";
 import { api } from "../../../core/api/chatco-api";
 import { readShiftAccess } from "../../../core/api/shift-access";
+import { isLateRemittance } from "../remittance-helpers";
 let mockStates: any[] = [], mockRefs: any[] = [], mockI = 0, mockR = 0;
 jest.mock("react", () => ({ ...jest.requireActual("react"), useMemo: (fn: any) => fn(), useCallback: (fn: any) => fn, useEffect: () => {},
   useState: (initial: any) => { const i = mockI++; if (!(i in mockStates)) mockStates[i] = initial; return [mockStates[i], (v: any) => { mockStates[i] = typeof v === "function" ? v(mockStates[i]) : v; }]; },
@@ -34,16 +35,32 @@ function render() { mockI = 0; mockR = 0; const root = walk(App()).find(e => typ
 async function settle() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
 const user = { id: "conductor", name: "Conductor" };
 const shift = { shiftId: "today", isActive: true, timeOut: null };
-beforeEach(() => { mockStates = []; mockRefs = []; jest.clearAllMocks(); render(); mockStates[0] = false; (api.logout as jest.Mock).mockResolvedValue(undefined); });
+beforeEach(() => { jest.useFakeTimers().setSystemTime(new Date("2026-11-10T04:00:00Z")); mockStates = []; mockRefs = []; jest.clearAllMocks(); render(); mockStates[0] = false; (api.logout as jest.Mock).mockResolvedValue(undefined); });
+afterEach(() => jest.useRealTimers());
 test("today's completed remittance logs out and returns to login", async () => {
   mockStates[1] = user; mockStates[2] = shift; mockStates[6] = "report";
   render().find(e => e.type === "Report").props.onEnded(); await settle();
   expect(api.logout).toHaveBeenCalledTimes(1); expect(render().some(e => e.type === "Login")).toBe(true);
 });
+test("today's ended shift also signs out immediately while server logout is pending", async () => {
+  let finishLogout!: () => void;
+  (api.logout as jest.Mock).mockReturnValue(new Promise<void>(resolve => { finishLogout = resolve; }));
+  mockStates[1] = user; mockStates[3] = { shift_id: "today", date: "2026-11-10", cash_total: 10, gcash_total: 0 }; mockStates[6] = "report";
+  render().find(e => e.type === "Report").props.onEnded();
+  expect(api.logout).toHaveBeenCalledTimes(1);
+  expect(render().some(e => e.type === "Login")).toBe(true);
+  finishLogout(); await settle();
+});
 test("late remittance keeps authentication and returns to unit verification", async () => {
   mockStates[1] = user; mockStates[3] = { shift_id: "old", date: "2026-11-08", cash_total: 10, gcash_total: 0 }; mockStates[6] = "report";
   render().find(e => e.type === "Report").props.onEnded(); await settle();
   expect(api.logout).not.toHaveBeenCalled(); expect(mockStates[1]).toBe(user); expect(render().some(e => e.type === "Verify")).toBe(true);
+});
+test("late status follows the Manila shift date across UTC midnight", () => {
+  const now = new Date("2026-11-09T16:30:00Z");
+  expect(isLateRemittance({ date: "2026-11-10" } as any, now)).toBe(false);
+  expect(isLateRemittance({ date: "2026-11-09" } as any, now)).toBe(true);
+  expect(isLateRemittance({ time_in: "2026-11-09T16:30:00Z" } as any, now)).toBe(false);
 });
 test.each(["active", "unremitted", "waiting"])("login routes server-confirmed %s access", async kind => {
   (readShiftAccess as jest.Mock).mockResolvedValue({ kind, shift, remittance: { shift_id: "old" } });

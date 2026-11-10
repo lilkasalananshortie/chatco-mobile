@@ -18,6 +18,7 @@ import { PaymentModal } from "./src/features/payments/PaymentModal";
 import { ReportScreen } from "./src/features/remittance/ReportScreen";
 import { RemittanceReminder } from "./src/features/remittance/RemittanceReminder";
 import { RemittanceOverview } from "./src/features/remittance/RemittanceOverview";
+import { isLateRemittance } from "./src/features/remittance/remittance-helpers";
 import { BrandFonts } from "./src/shared/ui/BrandFonts";
 import { SettingsScreen } from "./src/features/settings/SettingsScreen";
 import { VerificationScreen } from "./src/features/shift/VerificationScreen";
@@ -290,9 +291,10 @@ function AppRoot() {
     setShift(null);
     setScreen("verify");
     if (!late) {
+      setUser(null);
       try { await api.logout(); }
       catch { /* logout clears local authentication even during an outage */ }
-      finally { setUser(null); setRemitting(false); }
+      finally { setRemitting(false); }
     } else setRemitting(false);
   };
 
@@ -306,7 +308,7 @@ function AppRoot() {
     refreshKey={refreshKey} canOperate={false}
     onSubmitting={setRemitting}
     onBack={() => { if (!remitting.current) { setOutstanding(null); setScreen("verify"); } }}
-    onEnded={() => { void finishRemittance(true); }} />;
+    onEnded={() => { void finishRemittance(isLateRemittance(outstanding)); }} />;
   if (!shift && screen === "report") return <><RemittanceOverview onBack={() => setScreen("verify")} />{reminder}</>;
   if (!shift && screen === "metrics") return <><MetricsScreen onBack={() => setScreen("verify")} />{reminder}</>;
   if (!shift && screen === "settings") return <View style={{ flex: 1, backgroundColor: colors.background }}><View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 }}><VerificationBackButton onPress={() => setScreen("verify")} /></View><SettingsScreen user={user} shift={null} onLogout={() => { setUser(null); setScreen("verify"); }} />{reminder}</View>;

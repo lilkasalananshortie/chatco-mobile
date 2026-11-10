@@ -5,11 +5,13 @@ jest.mock("../../storage/app-storage", () => ({
 import { appStorage } from "../../storage/app-storage";
 
 let client: typeof import("../api-client");
+let auth: typeof import("../auth-service");
 const previousUrl = process.env.EXPO_PUBLIC_API_URL;
 
 beforeAll(async () => {
   process.env.EXPO_PUBLIC_API_URL = "https://api.chatco.test";
   client = await import("../api-client");
+  auth = await import("../auth-service");
 });
 afterAll(() => {
   if (previousUrl === undefined) delete process.env.EXPO_PUBLIC_API_URL;
@@ -34,6 +36,16 @@ test("fare signout removes only authentication, preserving server shift and queu
 
 test("late fare update cannot sign out a newer login", async () => {
   await client.endSessionForFareChange("old-token");
+  expect(appStorage.removeItem).not.toHaveBeenCalled();
+});
+
+test("a slow logout response cannot clear a newer login", async () => {
+  (appStorage.getItem as jest.Mock)
+    .mockResolvedValueOnce("old-token")
+    .mockResolvedValueOnce("old-token")
+    .mockResolvedValueOnce("new-token");
+  jest.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({ data: null }) } as Response);
+  await auth.authService.logout();
   expect(appStorage.removeItem).not.toHaveBeenCalled();
 });
 

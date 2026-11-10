@@ -31,10 +31,13 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
+    const endingToken = await appStorage.getItem(TOKEN_KEY);
     try {
       await post("/mobile/auth/logout");
     } finally {
-      await appStorage.removeItem(TOKEN_KEY);
+      if (await appStorage.getItem(TOKEN_KEY) === endingToken) {
+        await appStorage.removeItem(TOKEN_KEY);
+      }
     }
   },
 

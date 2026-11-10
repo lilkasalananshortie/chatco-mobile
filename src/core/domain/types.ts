@@ -105,7 +105,7 @@ export interface Remittance {
   total_collected?: number | string;
   remittance_status?: string;
   status?: string;
-  remitted_at?: string;
+  remitted_at?: string | null;
   unit_number?: string;
   route?: string;
   conductor_name?: string;

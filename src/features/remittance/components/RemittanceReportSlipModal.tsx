@@ -1,9 +1,10 @@
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { Animated, Modal, Pressable, ScrollView, View } from "react-native";
 import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import type { Remittance, Shift } from "../../../core/domain/types";
 import { useReportTheme } from "../report-styles";
 import { money, remittanceStatusLabel } from "../remittance-helpers";
+import { useWebEntrance } from "../../../shared/ui/useWebEntrance";
 
 function timeLabel(value?: string) {
   if (!value) return "—";
@@ -13,7 +14,7 @@ function timeLabel(value?: string) {
     : date.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function dateLabel(value?: string) {
+function dateLabel(value?: string | null) {
   if (!value) return "—";
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
@@ -37,13 +38,14 @@ export interface RemittanceReportSlipModalProps {
 
 export function RemittanceReportSlipModal({ selected, onClose, shift }: RemittanceReportSlipModalProps) {
   const { colors, isLofi, styles , isLowFidelity } = useReportTheme();
+  const entrance = useWebEntrance(selected !== null, isLowFidelity);
   const total = selected ? (Number(selected.cash_total) || 0) + (Number(selected.gcash_total) || 0) : 0;
 
   return (
-    <Modal visible={selected !== null} transparent animationType={isLowFidelity ? "none" : "fade"} onRequestClose={onClose}>
+    <Modal visible={selected !== null} transparent animationType="none" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 16 }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close official report" onPress={onClose} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
-        <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 448, maxHeight: "94%", backgroundColor: colors.dialog, borderWidth: 1, borderColor: colors.hairline, borderRadius: 12, overflow: "hidden" }}>
+        <Animated.View accessibilityViewIsModal style={[{ width: "100%", maxWidth: 448, maxHeight: "94%", backgroundColor: colors.dialog, borderWidth: 1, borderColor: colors.hairline, borderRadius: 12, overflow: "hidden" }, entrance]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderColor: colors.border }}>
             <Ionicons name="document-text-outline" size={22} color={colors.primary} />
             <Text style={{ flex: 1, color: colors.text, fontSize: 16, fontWeight: "700" }}>Official report</Text>
@@ -101,7 +103,7 @@ export function RemittanceReportSlipModal({ selected, onClose, shift }: Remittan
               <Text style={[styles.buttonText, styles.secondaryButtonText]}>Close</Text>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

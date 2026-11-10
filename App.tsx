@@ -1,10 +1,11 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { StatusBar } from "expo-status-bar";
-import { Alert, AppState, Pressable, Text, View } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Alert, AppState, Pressable, View } from "react-native";
+import { Text } from "./src/shared/ui/BrandText";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { api, setSessionEndedHandler, syncPendingCashTransactions } from "./src/core/api/chatco-api";
 import { appStorage } from "./src/core/storage/app-storage";
-import { endSessionForFareChange, TOKEN_KEY } from "./src/core/api/api-client";
+import { endSessionForFareChange, setShiftEndedHandler, TOKEN_KEY } from "./src/core/api/api-client";
 import { fareMatrixFingerprint } from "./src/core/api/fare-matrix-cache";
 import { ThemeProvider, useAppTheme } from "./src/core/theme/ThemeProvider";
 import { BottomNav, Loading, VerificationBackButton } from "./src/shared/ui";
@@ -21,20 +22,31 @@ import { BrandFonts } from "./src/shared/ui/BrandFonts";
 import { SettingsScreen } from "./src/features/settings/SettingsScreen";
 import { VerificationScreen } from "./src/features/shift/VerificationScreen";
 import { audioCues, initAudioCues, loadScanSoundSetting, preloadAudioCues } from "./src/core/utils/audio-cues";
-import type { Screen, Shift, User } from "./src/core/domain/types";
+import type { Remittance, Screen, Shift, User } from "./src/core/domain/types";
+import { readShiftAccess, remittanceShift, ShiftAccessUnavailableError } from "./src/core/api/shift-access";
 
 export default function App() {
   return (
     <SafeAreaProvider>
       <BrandFonts>
       <ThemeProvider>
-        <ThemedAppErrorBoundary>
-          <AppRoot />
-        </ThemedAppErrorBoundary>
+        <AppSafeArea>
+          <ThemedAppErrorBoundary>
+            <AppRoot />
+          </ThemedAppErrorBoundary>
+        </AppSafeArea>
       </ThemeProvider>
       </BrandFonts>
     </SafeAreaProvider>
   );
+}
+
+function AppSafeArea({ children }: { children: ReactNode }) {
+  const { colors, isLofi } = useAppTheme();
+  return <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.background }}>
+    <StatusBar style={isLofi ? "dark" : "light"} />
+    {children}
+  </SafeAreaView>;
 }
 
 function ThemedAppErrorBoundary({ children }: { children: ReactNode }) {
@@ -52,7 +64,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode; colors: ErrorScr
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("ChatCo application error", error, info.componentStack);
+    console.error("CHATCO application error", error, info.componentStack);
   }
 
   private recover = async () => {
@@ -64,7 +76,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode; colors: ErrorScr
     if (!this.state.error) return this.props.children;
     return (
       <View style={{ flex: 1, backgroundColor: this.props.colors.background, padding: 28, justifyContent: "center" }}>
-        <Text style={{ color: this.props.colors.text, fontSize: 24, fontWeight: "900" }}>ChatCo could not open this screen</Text>
+        <Text style={{ color: this.props.colors.text, fontSize: 24, fontWeight: "900" }}>CHATCO could not open this screen</Text>
         <Text style={{ color: this.props.colors.muted, fontSize: 14, lineHeight: 21, marginTop: 10 }}>
           The app stayed open so this error can be reported.
         </Text>
@@ -84,6 +96,10 @@ function AppRoot() {
   const [booting, setBooting] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
+  const [outstanding, setOutstanding] = useState<Remittance | null>(null);
+  const remitting = useRef(false);
+  const [remittanceBusy, setRemittanceBusy] = useState(false);
+  const setRemitting = (value: boolean) => { remitting.current = value; setRemittanceBusy(value); };
   const [deviceId, setDeviceId] = useState<string>("");
   const [screen, setScreen] = useState<Screen>("verify");
   const [payment, setPayment] = useState(false);
@@ -107,11 +123,22 @@ function AppRoot() {
     setPayment(false);
     setUser(null);
     setShift(null);
+    setOutstanding(null);
+    setRemitting(false);
     setScreen("verify");
     Alert.alert(
       "Session ended",
       message ?? "Please sign in again. Pending offline cash remains saved on this device.",
     );
+  }), []);
+
+  useEffect(() => setShiftEndedHandler(() => {
+    setPayment(false);
+    setShift(null);
+    setOutstanding(null);
+    setRemitting(false);
+    setScreen("verify");
+    setRefreshKey(key => key + 1);
   }), []);
 
   // Mobile uses polling; token expiry still enforces signout if an update is missed.
@@ -146,9 +173,10 @@ function AppRoot() {
     try {
       const currentUser = await api.me();
       if (currentUser && !currentUser.must_change_password) {
-        const active = await api.activeShift().catch(() => null);
-        setShift(active);
-        setScreen(active ? "home" : "verify");
+        const access = await readShiftAccess().catch(() => null);
+        setShift(access?.kind === "active" ? access.shift : null);
+        setOutstanding(access?.kind === "unremitted" ? access.remittance : null);
+        setScreen(access?.kind === "active" ? "home" : access?.kind === "unremitted" ? "report" : "verify");
       }
       setUser(currentUser);
     } catch {
@@ -161,9 +189,10 @@ function AppRoot() {
   }, []);
   const handleLogin = useCallback(async (currentUser: User) => {
     if (!currentUser.must_change_password) {
-      const active = await api.activeShift().catch(() => null);
-      setShift(active);
-      setScreen(active ? "home" : "verify");
+      const access = await readShiftAccess().catch(() => null);
+      setShift(access?.kind === "active" ? access.shift : null);
+      setOutstanding(access?.kind === "unremitted" ? access.remittance : null);
+      setScreen(access?.kind === "active" ? "home" : access?.kind === "unremitted" ? "report" : "verify");
     }
     setUser(currentUser);
   }, []);
@@ -176,15 +205,18 @@ function AppRoot() {
     let active = true;
     let running = false;
     const revalidate = async () => {
-      if (!active || running || AppState.currentState === "background" || AppState.currentState === "inactive") return;
+      if (!active || running || remitting.current || AppState.currentState === "background" || AppState.currentState === "inactive") return;
       running = true;
       try {
-        const current = await api.activeShift();
-        if (!active) return;
+        const access = await readShiftAccess();
+        if (!active || remitting.current) return;
+        const current = access.kind === "active" ? access.shift : null;
         if (!current) {
           const shiftJustEnded = Boolean(currentShiftRef.current?.isActive);
           setShift(null);
-          setScreen(previous => previous === "report" || previous === "settings" || previous === "metrics" ? previous : "verify");
+          setOutstanding(access.kind === "unremitted" ? access.remittance : null);
+          setRefreshKey(key => key + 1);
+          setScreen(previous => access.kind === "unremitted" ? "report" : previous === "report" || previous === "settings" || previous === "metrics" ? previous : "verify");
           setPayment(false);
           if (shiftJustEnded && currentScreenRef.current === "home") {
             Alert.alert("Shift Ended", "The shift has already ended. No new fares can be recorded.");
@@ -192,8 +224,15 @@ function AppRoot() {
         } else {
           setShift(current);
         }
-      } catch {
-        // Keep the current operational state during a temporary network outage.
+      } catch (cause) {
+        if (active && !remitting.current && cause instanceof ShiftAccessUnavailableError) {
+          // History failure cannot undo the server's confirmation that the shift ended.
+          setShift(null);
+          setOutstanding(null);
+          setPayment(false);
+          setScreen("verify");
+        }
+        // A failed active-shift read preserves queued cash and the last known state.
       } finally {
         running = false;
       }
@@ -246,10 +285,28 @@ function AppRoot() {
   const canOperate = Boolean(shift?.isActive && !shift.timeOut && isOperatingDevice);
   const isViewOnlyDevice = Boolean(shift && !ownsShift);
 
+  const finishRemittance = async (late: boolean) => {
+    setOutstanding(null);
+    setShift(null);
+    setScreen("verify");
+    if (!late) {
+      try { await api.logout(); }
+      catch { /* logout clears local authentication even during an outage */ }
+      finally { setUser(null); setRemitting(false); }
+    } else setRemitting(false);
+  };
+
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
+  if (remittanceBusy && !shift && !outstanding) return <Loading label="Signing out…" />;
   if (user.must_change_password) return <PasswordScreen setup onBack={() => { setUser(null); setShift(null); setScreen("verify"); }} />;
   const reminder = <RemittanceReminder key={user.id} dismissedIds={dismissedReminderIds} suspended={payment} onViewReport={() => setScreen("report")} />;
+  if (!shift && outstanding && screen === "report") return <ReportScreen
+    key={outstanding.shift_id} shift={remittanceShift(outstanding)} outstanding={outstanding}
+    refreshKey={refreshKey} canOperate={false}
+    onSubmitting={setRemitting}
+    onBack={() => { if (!remitting.current) { setOutstanding(null); setScreen("verify"); } }}
+    onEnded={() => { void finishRemittance(true); }} />;
   if (!shift && screen === "report") return <><RemittanceOverview onBack={() => setScreen("verify")} />{reminder}</>;
   if (!shift && screen === "metrics") return <><MetricsScreen onBack={() => setScreen("verify")} />{reminder}</>;
   if (!shift && screen === "settings") return <View style={{ flex: 1, backgroundColor: colors.background }}><View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 }}><VerificationBackButton onPress={() => setScreen("verify")} /></View><SettingsScreen user={user} shift={null} onLogout={() => { setUser(null); setScreen("verify"); }} />{reminder}</View>;
@@ -261,6 +318,7 @@ function AppRoot() {
         onViewMetrics={() => setScreen("metrics")}
         onViewSettings={() => setScreen("settings")}
         onStarted={s => { setShift(s); setScreen("home"); }}
+        onOutstanding={record => { setOutstanding(record); setScreen("report"); }}
         onLogout={() => { setUser(null); setShift(null); setScreen("verify"); }}
       />
       {reminder}
@@ -271,7 +329,6 @@ function AppRoot() {
   return (
     <ShiftGpsProvider userId={user.id} shift={shift} canOperate={canOperate} refreshKey={refreshKey}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <StatusBar style={isLofi ? "dark" : "light"} />
         {reminder}
         {screen === "home" && shift ? (
           <DashboardScreen
@@ -289,10 +346,8 @@ function AppRoot() {
             onBack={() => setScreen("home")}
             refreshKey={refreshKey}
             canOperate={canOperate}
-            onEnded={() => {
-              setShift(null);
-              setScreen("report");
-            }}
+            onSubmitting={setRemitting}
+            onEnded={() => { void finishRemittance(false); }}
           />
         ) : null}
         {screen === "metrics" ? <MetricsScreen shift={shift} /> : null}
@@ -306,12 +361,12 @@ function AppRoot() {
         ) : null}
         <BottomNav
           current={screen}
-          onNavigate={setScreen}
+          onNavigate={next => { if (!remitting.current) setScreen(next); }}
           onPayment={() => {
-            if (!shift) return;
+            if (!shift || remitting.current) return;
             setPayment(true);
           }}
-          isPaymentDisabled={!shift}
+          isPaymentDisabled={!shift || remittanceBusy}
         />
         {shift ? (
           <PaymentModal

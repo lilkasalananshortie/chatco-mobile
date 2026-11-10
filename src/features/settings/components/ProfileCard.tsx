@@ -40,12 +40,11 @@ export function ProfileCard({ styles, user, shift, profile, photoBusy, photoErro
             </Pressable>
             {onChangePhoto ? (
               <Pressable accessibilityRole="button" disabled={photoBusy} onPress={onChangePhoto} style={styles.profilePhotoAction}>
-                <Text numberOfLines={1} style={{ color: styles.profileEyebrow.color, fontSize: 9, fontWeight: "600" }}>{photoBusy ? "Uploading…" : "Change photo"}</Text>
+                <Text numberOfLines={1} style={{ width: "100%", color: styles.profileEyebrow.color, fontSize: 14, fontWeight: "600" }}>{photoBusy ? "Choosing…" : "Change photo"}</Text>
               </Pressable>
             ) : null}
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.profileEyebrow}>Conductor account</Text>
             <Text style={styles.profileName}>{name}</Text>
             {username ? <Text style={styles.profileUsername}>@{username}</Text> : null}
             <View style={styles.profileBadgeRow}>

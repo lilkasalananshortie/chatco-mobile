@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { FarePoint } from "../../../core/domain/types";
@@ -109,11 +110,7 @@ export function LocationBottomBar({
           {/* Route & Price display */}
           <View style={styles.fareTotalRow}>
             <View style={{ flex: 1, paddingRight: 8 }}>
-              <Text style={styles.fareRouteSub} numberOfLines={1}>
-                {pickupPoint?.name}
-                {pickupLandmark ? ` · ${pickupLandmark}` : ""} → {dropoffPoint?.name}
-                {dropoffLandmark ? ` · ${dropoffLandmark}` : ""}
-              </Text>
+              <Text style={styles.fareRouteSub}>Total fare</Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
               {fareInfo.hasDiscount ? (

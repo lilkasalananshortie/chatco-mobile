@@ -182,14 +182,14 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
         if (Platform.OS === "web") return;
         try {
           if (!await TaskManager.isAvailableAsync()) {
-            if (!cancelled) setBackgroundWarning("Background tracking requires a development or installed app build. Keep ChatCo open for vehicle updates.");
+            if (!cancelled) setBackgroundWarning("Background tracking requires a development or installed app build. Keep CHATCO open for vehicle updates.");
             return;
           }
           if (cancelled) return;
           const background = await Location.requestBackgroundPermissionsAsync();
           if (cancelled) return;
           if (background.status !== "granted") {
-            setBackgroundWarning("Background location is off. Keep ChatCo open for vehicle updates, or enable background location in device Settings.");
+            setBackgroundWarning("Background location is off. Keep CHATCO open for vehicle updates, or enable background location in device Settings.");
             return;
           }
           await transitionBackground(async () => {
@@ -202,15 +202,15 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
                 pausesUpdatesAutomatically: false,
                 showsBackgroundLocationIndicator: true,
                 foregroundService: {
-                  notificationTitle: "ChatCo live shift",
-                  notificationBody: "ChatCo is sharing this vehicle's location during the active shift.",
+                  notificationTitle: "CHATCO live shift",
+                  notificationBody: "CHATCO is sharing this vehicle's location during the active shift.",
                 },
               });
               backgroundStarted = true;
               if (cancelled) { await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME); backgroundStarted = false; }
-            } catch { if (!cancelled) setBackgroundWarning("Background tracking could not start. Keep ChatCo open and retry tracking."); }
+            } catch { if (!cancelled) setBackgroundWarning("Background tracking could not start. Keep CHATCO open and retry tracking."); }
           });
-        } catch { if (!cancelled) setBackgroundWarning("Background location is unavailable. Keep ChatCo open for vehicle updates."); }
+        } catch { if (!cancelled) setBackgroundWarning("Background location is unavailable. Keep CHATCO open for vehicle updates."); }
       })
       .catch(() => {
         if (!cancelled) {

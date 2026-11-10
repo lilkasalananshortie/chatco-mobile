@@ -55,7 +55,7 @@ export function createSettingsStyles(
       marginBottom: 24,
     },
     profileHero: {
-      backgroundColor: isLofi ? "#F3F8FF" : "#0D2947",
+      backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: isLofi ? "#BFDBFE" : "rgba(98,160,234,0.25)",
       borderRadius: 16,
@@ -64,18 +64,18 @@ export function createSettingsStyles(
     },
     profileHeroRow: {
       flexDirection: "row",
-      alignItems: "center",
-      gap: 14,
+      alignItems: "flex-start",
+      gap: 12,
     },
     profilePhotoColumn: {
-      width: 64,
+      width: 110,
       flexShrink: 0,
-      alignItems: "center",
-      gap: 4,
+      alignItems: "flex-start",
+      gap: 8,
     },
     profileAvatar: {
-      width: 64,
-      height: 64,
+      width: 80,
+      height: 80,
       borderRadius: 16,
       backgroundColor: colors.primary,
       borderWidth: 1,
@@ -97,8 +97,9 @@ export function createSettingsStyles(
       justifyContent: "center",
     },
     profilePhotoAction: {
-      minHeight: 22,
-      alignItems: "center",
+      width: "100%",
+      minHeight: 28,
+      alignItems: "flex-start",
       justifyContent: "center",
     },
     profileEyebrow: {
@@ -115,7 +116,7 @@ export function createSettingsStyles(
     },
     profileName: {
       color: colors.text,
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: "700",
       marginTop: 3,
     },
@@ -129,7 +130,7 @@ export function createSettingsStyles(
       flexWrap: "wrap",
       alignItems: "center",
       gap: 8,
-      marginTop: 12,
+      marginTop: 10,
     },
     profileBadge: {
       borderWidth: 1,
@@ -387,30 +388,6 @@ export function createSettingsStyles(
       color: "#FFFFFF",
       fontSize: 13,
       fontWeight: "800",
-    },
-    clearCacheButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.04)",
-      borderWidth: isLowFidelity ? 1.5 : 1,
-      borderColor: colors.border,
-      borderRadius: isLowFidelity ? 4 : 14,
-      paddingVertical: 13,
-      marginTop: 8,
-    },
-    clearCacheButtonText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: colors.text,
-    },
-    clearCacheSubtitle: {
-      fontSize: 11,
-      lineHeight: 16,
-      marginTop: 8,
-      textAlign: "center",
-      color: colors.muted,
     },
   });
 }

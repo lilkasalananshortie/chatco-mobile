@@ -1,4 +1,6 @@
-import { Modal, Pressable, SafeAreaView, Text, View } from "react-native";
+import { Modal, Pressable, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { CommuterType, FarePoint } from "../../../core/domain/types";
@@ -42,6 +44,7 @@ export interface LocationPickerStepProps {
   clearPickup: () => void;
   clearDropoff: () => void;
   swapLocations: () => void;
+  onBack: () => void;
   handleClose: () => void;
   setStep: (step: Step) => void;
 }
@@ -81,6 +84,7 @@ export function LocationPickerStep({
   clearPickup,
   clearDropoff,
   swapLocations,
+  onBack,
   handleClose,
   setStep,
 }: LocationPickerStepProps) {
@@ -89,10 +93,11 @@ export function LocationPickerStep({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
       <SafeAreaView style={styles.fullscreenContainer}>
+        <View style={{ flex: 1, width: "100%", maxWidth: 512, alignSelf: "center" }}>
         {/* Top Bar: Back, Title, Method Badge, Close */}
         <View style={styles.topBar}>
           <View style={styles.topBarLeft}>
-            <Pressable accessibilityRole="button" onPress={() => setStep("method")} style={styles.iconButton} accessibilityLabel="Back to payment methods">
+            <Pressable accessibilityRole="button" onPress={onBack} style={styles.iconButton} accessibilityLabel="Back to payment methods">
               <Ionicons name="chevron-back" size={20} color={colors.text} />
             </Pressable>
             <Text numberOfLines={1} style={styles.topBarTitle}>Select Location</Text>
@@ -101,15 +106,17 @@ export function LocationPickerStep({
             <View
               style={[
                 styles.methodBadge,
-                selectedMethod === "GCash"
+                selectedMethod === "GCash" || selectedMethod === "Cash"
                   ? styles.methodBadgeBlue
                   : styles.methodBadgeGreen,
+                { backgroundColor: "transparent", flexDirection: "row", alignItems: "center", gap: 6 },
               ]}
             >
+              <View style={{ width: 5, height: 5, backgroundColor: colors.primaryLight }} />
               <Text
                 style={[
                   styles.methodBadgeText,
-                  selectedMethod === "GCash"
+                  selectedMethod === "GCash" || selectedMethod === "Cash"
                     ? styles.methodBadgeTextBlue
                     : styles.methodBadgeTextGreen,
                 ]}
@@ -153,6 +160,7 @@ export function LocationPickerStep({
         {/* Search & Points List */}
         <LocationPointsList
           styles={styles}
+          selectedMethod={selectedMethod}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           selectingField={selectingField}
@@ -179,12 +187,13 @@ export function LocationPickerStep({
           dropoffPoint={dropoffPoint}
           pickupLandmark={pickupLandmark}
           dropoffLandmark={dropoffLandmark}
-          pickupDotColor={pickupDotColor}
-          dropoffDotColor={dropoffDotColor}
+          pickupDotColor={selectedMethod === "Cash" || selectedMethod === "GCash" ? (isSameBarangay ? "#8B5CF6" : "#10B981") : pickupDotColor}
+          dropoffDotColor={selectedMethod === "Cash" || selectedMethod === "GCash" ? (isSameBarangay ? "#8B5CF6" : "#F97316") : dropoffDotColor}
           isGroupMode={isGroupMode}
           fareInfo={fareInfo}
           setStep={setStep}
         />
+        </View>
       </SafeAreaView>
     </Modal>
   );

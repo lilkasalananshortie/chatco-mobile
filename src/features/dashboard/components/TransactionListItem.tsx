@@ -1,14 +1,16 @@
 import React from "react";
-import { Pressable, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 import type { Transaction } from "../../../core/domain/types";
 import { Text } from "../../../shared/ui/BrandText";
 import { ConductorIcon } from "../../../shared/ui/ConductorIcon";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
+import { useAnimatedToggle } from "../../../shared/ui/useAnimatedFeedback";
 
 interface TransactionListItemProps {
   transaction: Transaction;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  reduceMotion?: boolean;
 }
 
 const formatPeso = (amount: number) =>
@@ -17,17 +19,18 @@ const formatPeso = (amount: number) =>
 function Detail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   const { isLofi } = useAppTheme();
   return (
-    <View style={{ minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)", paddingVertical: 6 }}>
-      <Text style={{ color: isLofi ? "#6B7280" : "rgba(255,255,255,0.45)", fontSize: 12 }}>{label}</Text>
-      <Text style={{ flex: 1, color: isLofi ? "#111827" : "#FFFFFF", fontSize: mono ? 11 : 12, fontWeight: "500", textAlign: "right", fontFamily: mono ? "monospace" : undefined }}>
+    <View style={{ minHeight: 26, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)", paddingVertical: 4 }}>
+      <Text style={{ color: isLofi ? "#6B7280" : "rgba(255,255,255,0.45)", fontSize: 11 }}>{label}</Text>
+      <Text style={{ flex: 1, color: isLofi ? "#111827" : "#FFFFFF", fontSize: mono ? 10 : 11, fontWeight: "500", textAlign: "right", fontFamily: mono ? "monospace" : undefined }}>
         {value}
       </Text>
     </View>
   );
 }
 
-export function TransactionListItem({ transaction, isExpanded, onToggleExpand }: TransactionListItemProps) {
-  const { isLofi } = useAppTheme();
+export function TransactionListItem({ transaction, isExpanded, onToggleExpand, reduceMotion = false }: TransactionListItemProps) {
+  const { isLofi, isLowFidelity } = useAppTheme();
+  const chevron = useAnimatedToggle(isExpanded, 150, isLowFidelity || reduceMotion);
   const text = isLofi ? "#111827" : "#FFFFFF";
   const muted = isLofi ? "#6B7280" : "rgba(255,255,255,0.45)";
   const when = new Date(transaction.timestamp);
@@ -44,34 +47,36 @@ export function TransactionListItem({ transaction, isExpanded, onToggleExpand }:
         style={{ minHeight: 68, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 12 }}
       >
         <View style={{ width: 56 }}>
-          <Text style={{ color: isLofi ? "#374151" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{displayTime}</Text>
+          <Text style={{ color: isLofi ? "#1A5FB4" : "#99C1F1", fontSize: 11, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{displayTime}</Text>
           <Text style={{ color: muted, fontSize: 10, marginTop: 2 }}>{when.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</Text>
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ color: text, fontSize: 14, fontWeight: "600" }}>{transaction.passengerName || "Walk-in"}</Text>
-          <Text numberOfLines={1} style={{ color: muted, fontSize: 12, marginTop: 2 }}>{transaction.from} → {transaction.to}</Text>
+          <Text numberOfLines={1} style={{ color: text, fontSize: 13, fontWeight: "600" }}>{transaction.passengerName || "Commuter"}</Text>
+          <Text numberOfLines={1} style={{ color: muted, fontSize: 11, marginTop: 2 }}>{transaction.from} → {transaction.to}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ color: text, fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatPeso(transaction.finalAmount)}</Text>
+            <Text style={{ color: text, fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatPeso(transaction.finalAmount)}</Text>
             <Text style={{ color: muted, fontSize: 10, fontWeight: "500", marginTop: 2 }}>{paymentMethod}</Text>
           </View>
-          <ConductorIcon name={isExpanded ? "up" : "down"} size={16} color={isLofi ? "#9CA3AF" : "rgba(255,255,255,0.35)"} />
+          <Animated.View style={{ transform: [{ rotate: chevron.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }) }] }}>
+            <ConductorIcon name="down" size={16} color={isLofi ? "#9CA3AF" : "rgba(255,255,255,0.35)"} />
+          </Animated.View>
         </View>
       </Pressable>
 
       {isExpanded ? (
-        <View style={{ gap: 12, paddingHorizontal: 20, paddingBottom: 16 }}>
+        <View style={{ gap: 10, paddingHorizontal: 20, paddingBottom: 16 }}>
           <View style={{ borderTopWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)" }}>
             <Detail label="Fare" value={formatPeso(transaction.finalAmount)} />
             <Detail label="First km" value={formatPeso(transaction.baseFare ?? 0)} />
-            <Detail label="Succeeding rate" value={formatPeso(transaction.succeedingKm ?? 0)} />
+            <Detail label="Succeeding" value={formatPeso(transaction.succeedingKm ?? 0)} />
             {(transaction.discountAmount ?? 0) > 0 ? <Detail label="Discount" value={`− ${formatPeso(transaction.discountAmount ?? 0)}`} /> : null}
             <Detail label="Distance" value={`${transaction.distance ?? 0} km`} />
             <Detail label="Payment" value={paymentMethod} />
           </View>
           <View style={{ borderTopWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)" }}>
-            <Detail label="Passenger" value={transaction.passengerName || "Walk-in"} />
+            <Detail label="Passenger" value={transaction.passengerName || "Commuter"} />
             <Detail label="Passenger ID" value={transaction.passengerId || "—"} />
             {transaction.passengerRole ? <Detail label="Type" value={transaction.passengerRole} /> : null}
           </View>

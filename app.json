@@ -1,20 +1,21 @@
 {
   "expo": {
-    "name": "ChatCo Conductor",
+    "name": "CHATCO Conductor",
     "slug": "chatco-mobile",
     "scheme": "chatco-conductor",
     "version": "1.0.13",
+    "icon": "./assets/logo-transparent.png",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "plugins": [
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ChatCo uses your location during an active shift so commuters can see the vehicle.",
+          "locationWhenInUsePermission": "CHATCO uses your location during an active shift so commuters can see the vehicle.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
           "isIosBackgroundLocationEnabled": true,
-          "locationAlwaysAndWhenInUsePermission": "ChatCo uses your location during an active shift, including when the app is minimized, so commuters can see the vehicle."
+          "locationAlwaysAndWhenInUsePermission": "CHATCO uses your location during an active shift, including when the app is minimized, so commuters can see the vehicle."
         }
       ],
       "expo-maps",
@@ -24,7 +25,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "ChatCo uses your photo library so you can add a conductor profile picture.",
+          "photosPermission": "CHATCO uses your photo library so you can add a conductor profile picture.",
           "cameraPermission": false,
           "microphonePermission": false
         }

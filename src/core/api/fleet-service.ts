@@ -165,8 +165,8 @@ export const fleetService = {
         total_cashless: Number(r.total_cashless) || 0,
         gcash_scanned_total: Number(r.gcash_scanned_total) || 0,
         gcash_direct_total: Number(r.gcash_direct_total) || 0,
-        time_in: r.shift?.time_in ?? "",
-        time_out: r.shift?.time_out ?? "",
+        time_in: r.time_in ?? r.shift?.time_in ?? "",
+        time_out: r.time_out ?? r.shift?.time_out ?? "",
         shortage: Number(r.shortage) || 0,
         overage: Number(r.overage) || 0,
         due_at: r.remittance_due_at ?? null,
@@ -181,12 +181,10 @@ export const fleetService = {
 
   remit: async (shift: Shift, expectedCash: number, gcash: number) => {
     const deviceId = await getConductorDeviceId();
-    return post("/mobile/conductor/remittances", {
+    return post<{ remittance?: Remittance }>("/mobile/conductor/remittances", {
       shift_id: shift.shiftId,
       total_collected: expectedCash,
-      // Declared cash defaults to the collected total; the backend also
-      // falls back to total_collected when this field is absent.
-      remitted_amount: expectedCash,
+      // Required legacy total is informational; only admin declares counted cash.
       cash_total: expectedCash,
       gcash_total: gcash,
       device_id: deviceId,

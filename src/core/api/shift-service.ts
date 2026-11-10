@@ -9,10 +9,12 @@ import {
   post,
   PROVISIONAL_SHIFT_KEY,
   request,
+  TOKEN_KEY,
 } from "./api-client";
 import { mapDriver, mapShift, mapUnit } from "./api-mappers";
 
 let activeShiftRequest: Promise<Shift | null> | null = null;
+let activeShiftToken: string | null = null;
 let connectivityRequest: Promise<boolean> | null = null;
 
 export const shiftService = {
@@ -90,7 +92,8 @@ export const shiftService = {
   },
 
   activeShift: async (): Promise<Shift | null> => {
-    if (activeShiftRequest) return activeShiftRequest;
+    const token = await appStorage.getItem(TOKEN_KEY);
+    if (activeShiftRequest && activeShiftToken === token) return activeShiftRequest;
     const pending = (async (): Promise<Shift | null> => {
       try {
         const data = await request<any | null>("/mobile/conductor/shift");
@@ -111,6 +114,7 @@ export const shiftService = {
       }
     })();
     activeShiftRequest = pending;
+    activeShiftToken = token;
     try {
       return await pending;
     } finally {

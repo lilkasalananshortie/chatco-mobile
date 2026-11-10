@@ -2,7 +2,8 @@
 import React from "react";
 import { BreakConfirmModal } from "../../../features/dashboard/components/BreakConfirmModal";
 jest.mock("react", () => ({ ...jest.requireActual("react"), useRef: (value: unknown) => ({ current: value }), useState: (value: unknown) => [value, jest.fn()], useEffect: jest.fn() }));
-jest.mock("react-native", () => ({ Modal: "Modal", Pressable: "Button", View: "View", useWindowDimensions: () => ({ width: 390 }), StyleSheet: { create: (value: unknown) => value } }));
+jest.mock("react-native", () => ({ Modal: "Modal", Pressable: "Button", View: "View", Animated: { View: "AnimatedView" }, useWindowDimensions: () => ({ width: 390 }), StyleSheet: { create: (value: unknown) => value } }));
+jest.mock("../../../shared/ui/useWebEntrance", () => ({ useWebEntrance: () => ({ opacity: 1, transform: [] }) }));
 jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 jest.mock("../../../shared/ui/ConductorIcon", () => ({ ConductorIcon: "Icon" }));
 jest.mock("../../../shared/ui/SlideToConfirm", () => ({ SlideToConfirm: "Slider" }));

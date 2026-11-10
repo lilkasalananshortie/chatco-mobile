@@ -1,4 +1,5 @@
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
+import { Text } from "../../shared/ui/BrandText";
 import QRCode from "react-native-qrcode-svg";
 import type { ReceiptSettings } from "../../core/domain/types";
 

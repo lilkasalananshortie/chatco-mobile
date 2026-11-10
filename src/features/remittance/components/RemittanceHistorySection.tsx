@@ -1,6 +1,5 @@
-import { useMemo } from "react";
-import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, Pressable, View } from "react-native";
 import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import type { Remittance } from "../../../core/domain/types";
@@ -8,6 +7,7 @@ import { useReportTheme } from "../report-styles";
 import { ModalShell } from "../../../shared/ui";
 import { ConductorDatePicker } from "../../../shared/ui/ConductorDatePicker";
 import { money, remittanceStatusLabel } from "../remittance-helpers";
+import { useReducedMotion } from "../../../shared/ui/useWebEntrance";
 
 export type RemittanceHistoryFilter = "today" | "last7" | "week" | "month" | "date";
 
@@ -18,13 +18,13 @@ const FILTERS: { key: Exclude<RemittanceHistoryFilter, "date">; label: string }[
   { key: "month", label: "This Month" },
 ];
 
-function asDate(value: string | undefined) {
+function asDate(value: string | null | undefined) {
   if (!value) return null;
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function dateLabel(value: string | undefined) {
+function dateLabel(value: string | null | undefined) {
   const date = asDate(value);
   return date ? date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—";
 }
@@ -74,7 +74,25 @@ export function RemittanceHistorySection({
   onView,
   onPrint,
 }: RemittanceHistorySectionProps) {
-  const { colors, isLofi, styles } = useReportTheme();
+  const { colors, isLofi, isLowFidelity, styles } = useReportTheme();
+  const reduceMotion = useReducedMotion();
+  const expansion = useRef(new Animated.Value(expanded ? 1 : 0)).current;
+  const [contentHeight, setContentHeight] = useState(0);
+  useEffect(() => {
+    expansion.stopAnimation();
+    if (isLowFidelity || reduceMotion) {
+      expansion.setValue(expanded ? 1 : 0);
+      return;
+    }
+    const animation = Animated.timing(expansion, {
+      toValue: expanded ? 1 : 0,
+      duration: 300,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [expanded, expansion, isLowFidelity, reduceMotion]);
   const [periodPicker, setPeriodPicker] = useState(false);
   const filteredHistory = useMemo(() => {
     const today = new Date();
@@ -152,11 +170,11 @@ export function RemittanceHistorySection({
             </Text>
           </View>
         </View>
-        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={19} color={colors.muted} />
+        <Animated.View style={{ transform: [{ rotate: expansion.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }) }] }}><Ionicons name="chevron-down" size={19} color={colors.muted} /></Animated.View>
       </Pressable>
 
-      {expanded ? (
-        <View style={{ gap: 12 }}>
+      <Animated.View pointerEvents={expanded ? "auto" : "none"} accessibilityElementsHidden={!expanded} importantForAccessibility={expanded ? "auto" : "no-hide-descendants"} style={{ overflow: "hidden", height: expansion.interpolate({ inputRange: [0, 1], outputRange: [0, contentHeight] }), opacity: expansion }}>
+        <View onLayout={event => setContentHeight(event.nativeEvent.layout.height)} style={{ gap: 12 }}>
           <View style={{ gap: 4 }}>
             <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "600" }}>Period</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Filter remittance history period" onPress={() => setPeriodPicker(true)} style={{ height: 32, borderRadius: 8, borderWidth: 1, borderColor: isLofi ? "#D1D5DB" : "rgba(255,255,255,0.1)", backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 10 }}>
@@ -271,7 +289,7 @@ export function RemittanceHistorySection({
             </>
           )}
         </View>
-      ) : null}
+      </Animated.View>
 
       <ModalShell visible={periodPicker} title="Period" onClose={() => setPeriodPicker(false)}>
         {FILTERS.map(option => <Pressable key={option.key} accessibilityRole="button" accessibilityState={{ selected: filter === option.key }} onPress={() => { chooseFilter(option.key); setPeriodPicker(false); }} style={{ padding: 12, borderRadius: 8, backgroundColor: filter === option.key ? colors.action : colors.surface }}><Text style={{ color: filter === option.key ? "#FFFFFF" : colors.text, fontSize: 14 }}>{option.label}</Text></Pressable>)}

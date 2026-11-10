@@ -1,14 +1,14 @@
 import React from "react";
-import { Modal, Pressable, View } from "react-native";
+import { Animated, Modal, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../../../shared/ui/BrandText";
+import { useWebEntrance } from "../../../shared/ui/useWebEntrance";
 
 export interface AccountSessionSectionProps {
   styles: any;
   colors: any;
   isLofi: boolean;
   isLowFidelity?: boolean;
-  onClearCache: () => void;
   logoutLocked: boolean;
   logoutCheckStatus: "loading" | "ready" | "error";
   onRetryLogoutCheck: () => void;
@@ -23,7 +23,6 @@ export function AccountSessionSection({
   colors,
   isLofi,
   isLowFidelity = false,
-  onClearCache,
   logoutLocked,
   logoutCheckStatus,
   onRetryLogoutCheck,
@@ -32,20 +31,9 @@ export function AccountSessionSection({
   setShowLogoutConfirm,
   onConfirmLogout,
 }: AccountSessionSectionProps) {
+  const entrance = useWebEntrance(showLogoutConfirm, isLowFidelity);
   return (
     <View>
-      {/* Data & Storage */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionHeaderTitle}>Data & Storage</Text>
-        <Pressable onPress={onClearCache} style={styles.clearCacheButton}>
-          <Ionicons name="trash-outline" size={18} color={colors.text} />
-          <Text style={styles.clearCacheButtonText}>Clear App Cache</Text>
-        </Pressable>
-        <Text style={styles.clearCacheSubtitle}>
-          Removes local tile & temporary offline caches. Active shift, transactions, and authentication are not affected.
-        </Text>
-      </View>
-
       {/* Logout Section */}
       <View style={styles.logoutSection}>
         {logoutCheckStatus === "loading" ? (
@@ -93,11 +81,11 @@ export function AccountSessionSection({
       <Modal
         visible={showLogoutConfirm}
         transparent
-        animationType={isLowFidelity ? "none" : "fade"}
+        animationType="none"
         onRequestClose={() => setShowLogoutConfirm(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalContent}>
+          <Animated.View style={[styles.modalContent, entrance]}>
             <View style={styles.logoutModalIconCircle}>
               <Ionicons name="log-out-outline" size={28} color={isLofi ? "#DC2626" : "#F87171"} />
             </View>
@@ -123,7 +111,7 @@ export function AccountSessionSection({
                 </Text>
               </Pressable>
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </View>

@@ -275,9 +275,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       paddingHorizontal: 16,
       paddingTop: 12,
       paddingBottom: 8,
-      backgroundColor: colors.surface,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      backgroundColor: colors.background,
     },
     searchBar: {
       flexDirection: "row",
@@ -462,7 +460,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     bottomBarContainer: {
       borderTopWidth: isLowFidelity ? 1.5 : 1,
       borderTopColor: colors.border,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.background,
       paddingHorizontal: 16,
       paddingTop: 14,
       paddingBottom: 16,
@@ -498,6 +496,12 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       color: colors.muted,
     },
     fareTotalRow: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: isLowFidelity ? 4 : 12,
+      backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.03)",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
@@ -505,6 +509,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
     },
     fareRouteSub: {
       fontSize: 10,
+      fontWeight: "600",
       color: colors.muted,
       textTransform: "uppercase",
       letterSpacing: 0.5,
@@ -525,7 +530,7 @@ export function createLocationStyles(colors: ReturnType<typeof useAppTheme>["col
       color: isLofi ? colors.success : "#34D399",
     },
     cashActionButton: {
-      backgroundColor: colors.success,
+      backgroundColor: "#009966",
       paddingVertical: 14,
       borderRadius: isLowFidelity ? 4 : 12,
       alignItems: "center",

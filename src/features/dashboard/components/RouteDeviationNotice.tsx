@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
 import { CORRIDOR_DEVIATION_THRESHOLD_METERS } from "../../../core/utils/corridor-guard";

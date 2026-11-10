@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, AppState, Image, Pressable, ScrollView, View } from "react-native";
+import { Text } from "../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../core/api/chatco-api";
-import type { Driver, Shift, Unit } from "../../core/domain/types";
+import type { Driver, Remittance, Shift, Unit } from "../../core/domain/types";
+import { readShiftAccess } from "../../core/api/shift-access";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Header, Loading, ScreenShell } from "../../shared/ui";
 import { AssignmentCard } from "./components/AssignmentCard";
+import { SelectionFade } from "./components/SelectionFade";
 import { OfflineDepotNotice } from "./components/OfflineDepotNotice";
 import { ShiftSetupModal } from "./components/ShiftSetupModal";
+import { MinibusFrontIcon } from "./components/MinibusFrontIcon";
 
 type Step = "select-unit" | "select-driver";
 
@@ -17,12 +21,14 @@ export function VerificationScreen({
   onLogout,
   onViewMetrics,
   onViewSettings,
+  onOutstanding,
 }: {
   conductorName?: string;
   onStarted: (shift: Shift) => void;
   onLogout?: () => void;
   onViewMetrics?: () => void;
   onViewSettings?: () => void;
+  onOutstanding: (record: Remittance) => void;
 }) {
   const { colors, styles, isLofi } = useAppTheme();
   const [units, setUnits] = useState<Unit[]>([]);
@@ -38,6 +44,12 @@ export function VerificationScreen({
   const [selectionError, setSelectionError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isOfflineDepot, setIsOfflineDepot] = useState(false);
+  const [waiting, setWaiting] = useState<Remittance | null>(null);
+  const checking = useRef(false);
+  const starting = useRef(false);
+  const mounted = useRef(true);
+  const callbacks = useRef({ onStarted, onOutstanding });
+  callbacks.current = { onStarted, onOutstanding };
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -52,28 +64,40 @@ export function VerificationScreen({
     }
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (checking.current || starting.current) return;
+    checking.current = true;
     setLoading(true);
     setLoadError("");
+    setShowConfirmModal(false);
+    setUnit(null); setDriver(null); setStep("select-unit");
+    setWaiting(null); setUnits([]); setDrivers([]);
     try {
-      const isConnected = await api.checkConnectivity().catch(() => false);
-      setIsOfflineDepot(!isConnected);
+      const access = await readShiftAccess();
+      if (!mounted.current) return;
+      if (access.kind === "active") { callbacks.current.onStarted(access.shift); return; }
+      if (access.kind === "unremitted") { callbacks.current.onOutstanding(access.remittance); return; }
+      if (access.kind === "waiting") { setWaiting(access.remittance); return; }
+      setIsOfflineDepot(false);
       const [availableUnits, availableDrivers] = await Promise.all([
         api.units(),
         api.drivers(),
       ]);
-      setUnits(availableUnits);
-      setDrivers(availableDrivers);
+      if (mounted.current) { setUnits(availableUnits); setDrivers(availableDrivers); }
     } catch (cause) {
-      setLoadError(cause instanceof Error ? cause.message : "Unable to load assignments.");
+      if (mounted.current) setLoadError(cause instanceof Error ? cause.message : "Unable to verify remittances. Reconnect and check again.");
     } finally {
-      setLoading(false);
+      checking.current = false;
+      if (mounted.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    mounted.current = true;
     void load();
-  }, []);
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") void load(); });
+    return () => { mounted.current = false; subscription.remove(); };
+  }, [load]);
 
   if (loading) return <Loading label="Checking assigned units…" />;
 
@@ -133,6 +157,7 @@ export function VerificationScreen({
   };
 
   const handleConfirmShiftSetup = async () => {
+    if (starting.current || checking.current || waiting || loadError) return;
     setSubmitError("");
     if (!unit || !driver) return;
 
@@ -145,26 +170,29 @@ export function VerificationScreen({
       return;
     }
 
+    starting.current = true;
     setBusy(true);
     try {
+      const access = await readShiftAccess();
+      if (!mounted.current) return;
+      if (access.kind === "active") { onStarted(access.shift); return; }
+      if (access.kind !== "ready") {
+        setShowConfirmModal(false);
+        if (access.kind === "unremitted") onOutstanding(access.remittance);
+        else setWaiting(access.remittance);
+        return;
+      }
       const startedShift = await api.startShift(unit, driver);
-      onStarted(startedShift);
+      if (mounted.current) onStarted(startedShift);
     } catch (cause: unknown) {
       const msg = cause instanceof Error ? cause.message : String(cause || "");
-      if (msg.toLowerCase().includes("maintenance")) {
-        if (msg.toLowerCase().includes("chatco")) {
-          setSubmitError("CHATCO is under maintenance right now. Shifts cannot be started until complete.");
-        } else {
-          setSubmitError("This vehicle is currently under maintenance and cannot be operated.");
-        }
-      } else if (msg.toLowerCase().includes("driver") && msg.toLowerCase().includes("shift")) {
-        setSubmitError("Driver is already on an active shift.");
-      } else if (msg.toLowerCase().includes("vehicle") && msg.toLowerCase().includes("shift")) {
-        setSubmitError("Vehicle is already assigned to an active shift.");
-      } else {
-        setSubmitError(msg || "Unable to start shift.");
-      }
+      starting.current = false;
+      // A 409 may mean the overnight reset ended a stale shift or assignment.
+      // Refresh all access and assignment state; failed reads leave selection blocked.
+      await load();
+      if (mounted.current) setLoadError(msg || "Unable to start shift. Check again.");
     } finally {
+      starting.current = false;
       setBusy(false);
     }
   };
@@ -181,9 +209,12 @@ export function VerificationScreen({
               marginBottom: 20,
             }}
           >
-            <View>
-              <Text style={styles.title}>CHATCO.</Text>
-              <Text style={[styles.label, { marginTop: 2 }]}>Conductor Portal</Text>
+            <View accessible accessibilityLabel="Chatco logo, Conductor Portal" style={{ flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1, minWidth: 0 }}>
+              <Image source={require("../../../assets/logo-transparent.png")} style={{ width: 40, height: 40 }} resizeMode="contain" accessible={false} />
+              <View style={{ flexShrink: 1, minWidth: 0 }}>
+                <Text style={{ color: colors.text, fontSize: 24, fontWeight: "800", letterSpacing: -0.6 }}>CHATCO<Text style={{ color: colors.primaryLight }}>.</Text></Text>
+                <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "600", letterSpacing: 2, marginTop: 4 }}>CONDUCTOR PORTAL</Text>
+              </View>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -218,6 +249,15 @@ export function VerificationScreen({
             </View>
           ) : null}
 
+          {waiting || loadError ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>{waiting ? "Awaiting cash declaration" : "Shift access unavailable"}</Text>
+              <Text style={styles.subtitle}>{waiting
+                ? `Your remittance for the ${waiting.date?.slice(0, 10) || "previous"} shift is awaiting the admin's cash declaration. Coordinate with admin before starting a new shift.`
+                : "Reconnect to verify your shift and remittances before selecting a unit."}</Text>
+              <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.button}><Text style={styles.buttonText}>Check again</Text></Pressable>
+            </View>
+          ) : <SelectionFade key={step}>
           <Header
             eyebrow={step === "select-unit" ? "STEP 1 OF 2" : "STEP 2 OF 2"}
             title={step === "select-unit" ? "Select your unit" : "Select your driver"}
@@ -297,7 +337,7 @@ export function VerificationScreen({
 
               {unit ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 12, marginBottom: 14 }}>
-                  <Ionicons name="bus-outline" size={27} color={colors.primaryLight} />
+                  <MinibusFrontIcon size={32} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.label, { fontSize: 10 }]}>YOUR UNIT</Text>
                     <Text style={{ color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 2 }}>
@@ -334,7 +374,7 @@ export function VerificationScreen({
               )}
             </>
           )}
-
+          </SelectionFade>}
         </View>
       </ScreenShell>
 

@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { SelectedPaymentMethod } from "../payment-types";
@@ -36,9 +37,12 @@ export function MethodSelectionStep({
   const { height: screenHeight } = useWindowDimensions();
   const sheetMaxHeight = Math.max(240, screenHeight - 24);
   const bodyMaxHeight = Math.max(160, sheetMaxHeight - 96);
+  const methodSurface = isLofi ? "#F9FAFB" : "#15293B";
+  const methodBorder = isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)";
+  const iconStyle = { backgroundColor: "transparent", borderWidth: 0 };
 
   return (
-    <View style={[styles.modalCard, fullBottomSheet ? { maxWidth: "100%", maxHeight: sheetMaxHeight, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : null]}>
+    <View style={[styles.modalCard, { backgroundColor: isLofi ? "#FFFFFF" : "#071A2E", borderColor: methodBorder }, fullBottomSheet ? { maxWidth: "100%", maxHeight: sheetMaxHeight, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : null]}>
       <View style={styles.modalHeader}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.modalTitle}>Collect Payment</Text>
@@ -81,14 +85,13 @@ export function MethodSelectionStep({
         <Pressable
           disabled={Boolean(blockedReason) || !fareReady}
           onPress={() => onSelectMethod("Cash")}
-          style={[styles.methodOptionCard, blockedReason || !fareReady ? { opacity: 0.5 } : null]}
+          style={[styles.methodOptionCard, { backgroundColor: methodSurface, borderColor: methodBorder }, blockedReason || !fareReady ? { opacity: 0.5 } : null]}
         >
           <View
             style={[
               styles.methodIconBox,
               {
-                backgroundColor: isLofi ? "#F0F7FF" : "rgba(98, 160, 234, 0.1)",
-                borderColor: isLofi ? "#DAEEFF" : "rgba(98, 160, 234, 0.2)",
+                ...iconStyle,
               },
             ]}
           >
@@ -112,6 +115,7 @@ export function MethodSelectionStep({
           }}
           style={[
             styles.methodOptionCard,
+            { backgroundColor: methodSurface, borderColor: methodBorder },
             !isOnline || blockedReason || !fareReady ? { opacity: 0.5 } : null,
           ]}
         >
@@ -119,8 +123,7 @@ export function MethodSelectionStep({
             style={[
               styles.methodIconBox,
               {
-                backgroundColor: isLofi ? "#F0F7FF" : "rgba(98, 160, 234, 0.1)",
-                borderColor: isLofi ? "#DAEEFF" : "rgba(98, 160, 234, 0.2)",
+                ...iconStyle,
               },
             ]}
           >
@@ -137,7 +140,7 @@ export function MethodSelectionStep({
           <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>
 
-        <Pressable accessibilityRole="button" onPress={onShowHistory} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginTop: 8, marginBottom: 12 }}>
+        <Pressable accessibilityRole="button" onPress={onShowHistory} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, borderWidth: 1, borderColor: methodBorder, backgroundColor: isLofi ? "#F3F4F6" : "#0E1628", borderRadius: 12, marginTop: 8, marginBottom: 12 }}>
           <Ionicons name="time-outline" size={18} color={colors.text} />
           <Text style={{ color: colors.text, fontSize: 13, fontWeight: "600" }}>Payment History</Text>
         </Pressable>

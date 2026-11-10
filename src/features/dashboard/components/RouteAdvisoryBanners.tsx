@@ -1,5 +1,6 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
 import { SPEED_LIMIT_KMH } from "../../../core/utils/corridor-guard";

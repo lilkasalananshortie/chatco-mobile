@@ -4,9 +4,10 @@ export const money = (value: number | string | undefined) => new Intl.NumberForm
 
 export function remittanceStatusLabel(item: Remittance): string {
   const raw = String(item.remittance_status ?? item.status ?? "SUBMITTED").toUpperCase();
-  if (item.is_overdue || raw === "OVERDUE") return "Overdue";
+  if (raw === "PENDING" && !item.remitted_at) return "Not Remitted";
+  if ((raw === "PENDING" && item.remitted_at && item.is_overdue) || raw === "OVERDUE") return "Overdue";
   if (raw === "PENDING" || raw === "FOR CASH DECLARATION") return "For Cash Declaration";
-  if (raw === "SETTLED") return "Settled";
+  if (raw === "SETTLED" || raw === "COMPLETE") return "Settled";
   if (raw === "SHORTAGE") return "Shortage";
   if (raw === "OVERAGE") return "Overage";
   return raw.charAt(0) + raw.slice(1).toLowerCase();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AppState, Platform, Pressable, Share, View } from "react-native";
+import { Alert, Animated, AppState, Easing, Platform, Pressable, Share, View } from "react-native";
 import { Text } from "../../shared/ui/BrandText";
 import { ConductorIcon } from "../../shared/ui/ConductorIcon";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,20 +15,39 @@ import { RemittanceReportSlipModal } from "./components/RemittanceReportSlipModa
 import { RemittanceCollectionsCard } from "./components/RemittanceCollectionsCard";
 import { RemittanceHistorySection, type RemittanceHistoryFilter } from "./components/RemittanceHistorySection";
 import { transactionSummary } from "../../core/domain/transaction-summary";
+import { readShiftAccess, remittanceTotals } from "../../core/api/shift-access";
+import { useReducedMotion } from "../../shared/ui/useWebEntrance";
 
 type ReportLoadState = "loading" | "success" | "error";
 
-export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }: {
+export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnded, onBack, onSubmitting }: {
   shift: Shift;
+  outstanding?: Remittance;
   refreshKey: number;
   canOperate: boolean;
   onEnded: () => void;
   onBack?: () => void;
+  onSubmitting?: (value: boolean) => void;
 }) {
-  const { colors, isLofi, styles } = useReportTheme();
+  const { colors, isLofi, isLowFidelity, styles } = useReportTheme();
+  const reduceMotion = useReducedMotion();
+  const skeletonOpacity = useRef(new Animated.Value(0.55)).current;
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [earnings, setEarnings] = useState<ShiftEarnings | null>(null);
   const [reportState, setReportState] = useState<ReportLoadState>("loading");
+  useEffect(() => {
+    if (reportState !== "loading" || isLowFidelity || reduceMotion) {
+      skeletonOpacity.stopAnimation();
+      skeletonOpacity.setValue(0.55);
+      return;
+    }
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(skeletonOpacity, { toValue: 0.9, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(skeletonOpacity, { toValue: 0.45, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [reportState, isLowFidelity, reduceMotion, skeletonOpacity]);
   const [history, setHistory] = useState<Remittance[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -47,10 +66,20 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
   const loadInFlight = useRef<Promise<void> | null>(null);
   const endedRef = useRef(false);
   const onEndedRef = useRef(onEnded);
+  const submitting = useRef(false);
+  const preparing = useRef(false);
+  const completed = useRef(false);
+  const late = Boolean(outstanding);
 
   useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
 
   const load = useCallback(async () => {
+    if (submitting.current || completed.current) return;
+    if (outstanding) {
+      try { remittanceTotals(outstanding); setReportState("success"); }
+      catch (cause) { setError((cause as Error).message); setReportState("error"); }
+      return;
+    }
     if (loadInFlight.current) return loadInFlight.current;
     const request = (async () => {
       try {
@@ -71,7 +100,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
     })();
     loadInFlight.current = request;
     return request;
-  }, [shift.shiftId]);
+  }, [shift.shiftId, outstanding]);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -125,7 +154,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
     const summary = transactionSummary(transactions);
     return { ...summary, all: summary.total };
   }, [transactions]);
-  const accountableTotals = earnings
+  const accountableTotals = outstanding ? remittanceTotals(outstanding) : earnings
     ? { ...totals, cash: earnings.cashTotal, gcash: earnings.gcashTotal, all: earnings.total }
     : totals;
 
@@ -134,14 +163,17 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
     [transactions],
   );
 
-  const canRemit = transactions.length > 0;
+  const canRemit = late || transactions.length > 0;
+  const allowed = late || canOperate;
 
   const handlePressRemit = async () => {
-    if (!canOperate) {
+    if (!canRemit || preparing.current || submitting.current || completed.current) return;
+    if (!allowed) {
       setError("This shift is active on another device. Complete the handoff before remitting here.");
       return;
     }
     setError("");
+    preparing.current = true;
     try {
       await syncPendingCashTransactions();
       const pending = await api.pendingCashCount(shift.shiftId);
@@ -152,14 +184,17 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
       setConfirm(true);
     } catch {
       setError("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
-    }
+    } finally { preparing.current = false; }
   };
 
   const submit = async () => {
-    if (!canOperate) {
+    if (!canRemit || submitting.current || completed.current) return;
+    if (!allowed) {
       setError("This shift is active on another device. Complete the handoff before remitting here.");
       return;
     }
+    submitting.current = true;
+    onSubmitting?.(true);
     setBusy(true);
     setError("");
     try {
@@ -168,13 +203,29 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
       if (pendingForShift > 0) {
         throw new Error("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
       }
-      await api.remit(shift, accountableTotals.cash, accountableTotals.gcash);
-      setSubmittedTotals({ cash: accountableTotals.cash, gcash: accountableTotals.gcash, all: accountableTotals.all });
+      let snapshot = accountableTotals;
+      if (late) {
+        const access = await readShiftAccess();
+        if (access.kind !== "unremitted" || access.remittance.shift_id !== shift.shiftId) {
+          throw new Error("This shift's remittance has changed. Return to verification and check again.");
+        }
+        snapshot = { ...accountableTotals, ...remittanceTotals(access.remittance) };
+      } else {
+        const fresh = await api.earnings(shift.shiftId);
+        snapshot = { ...accountableTotals, cash: fresh.cashTotal, gcash: fresh.gcashTotal, all: fresh.total };
+      }
+      if (await api.pendingCashCount(shift.shiftId) > 0) throw new Error("Cash transactions still need to sync. Reconnect and retry.");
+      const result = await api.remit(shift, snapshot.cash, snapshot.gcash);
+      completed.current = true;
+      const captured = result.remittance ? remittanceTotals(result.remittance) : snapshot;
+      setSubmittedTotals({ cash: captured.cash, gcash: captured.gcash, all: captured.all });
       setConfirm(false);
       setSuccess(true);
     } catch (cause) {
+      onSubmitting?.(false);
       setError(cause instanceof Error ? cause.message : "Unable to submit the remittance.");
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   };
@@ -200,7 +251,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
     return (
       <ReportPage onBack={onBack}>
         {[80, 112, 192, 128, 56].map((height, index) => (
-          <View key={index} style={[styles.card, { height, marginTop: index === 0 ? 4 : 12, opacity: 0.55 }]} />
+          <Animated.View key={index} style={[styles.card, { height, marginTop: index === 0 ? 4 : 12, opacity: skeletonOpacity }]} />
         ))}
       </ReportPage>
     );
@@ -218,7 +269,7 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
   }
 
   return (
-    <ReportPage onBack={onBack}>
+    <ReportPage onBack={busy || success ? undefined : onBack}>
 
       <View style={[styles.card, { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 }]}>
         <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
@@ -232,8 +283,8 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
 
       <RemittanceCollectionsCard
         totalAmount={accountableTotals.all}
-        totalPassengers={totalPassengers}
-        transactionCount={transactions.length}
+        totalPassengers={outstanding ? Number(outstanding.total_passengers ?? 0) : totalPassengers}
+        transactionCount={outstanding ? undefined : transactions.length}
         shiftTimeIn={shift.timeIn}
       />
 
@@ -267,15 +318,16 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
         </View>
         <Pressable
           accessibilityRole="button"
-          disabled={!canOperate || !canRemit}
+          accessibilityState={{ disabled: !allowed || !canRemit || busy || success, busy }}
+          disabled={!allowed || !canRemit || busy || success}
           onPress={() => void handlePressRemit()}
-          style={[styles.button, (!canOperate || !canRemit) && { backgroundColor: isLofi ? colors.surface2 : "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: colors.border }]}
+          style={[styles.button, (!allowed || !canRemit) && { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border }]}
         >
-          <Text style={[styles.buttonText, (!canOperate || !canRemit) && { color: colors.muted }]}>
-            {!canRemit ? "No pending remittance" : canOperate ? "Remit to Admin" : "Complete shift handoff to remit"}
+          <Text style={[styles.buttonText, (!allowed || !canRemit) && { color: colors.muted }]}>
+            {!canRemit ? "No pending remittance" : allowed ? "Remit to Admin" : "Complete shift handoff to remit"}
           </Text>
         </Pressable>
-        {!canOperate ? <Text style={styles.error}>This shift is active on another device. Complete handoff to remit.</Text> : null}
+        {!allowed ? <Text style={styles.error}>This shift is active on another device. Complete handoff to remit.</Text> : null}
       </View>
 
       <RemittanceHistorySection
@@ -301,16 +353,18 @@ export function ReportScreen({ shift, refreshKey, canOperate, onEnded, onBack }:
 
       <RemittanceConfirmModal
         visible={confirm}
-        onClose={() => setConfirm(false)}
+        onClose={() => { if (!submitting.current) setConfirm(false); }}
         busy={busy}
+        error={error}
         shiftInfo={{ driverName: shift.driverName, unitNumber: shift.unitNumber }}
-        totalPassengers={totalPassengers}
+        totalPassengers={outstanding ? Number(outstanding.total_passengers ?? 0) : totalPassengers}
         accountableTotals={accountableTotals}
-        onConfirm={() => void submit()}
+        onConfirm={submit}
       />
 
       <RemittanceSuccessModal
         visible={success}
+        late={late}
         accountableTotals={submittedTotals ?? accountableTotals}
         unitNumber={shift.unitNumber}
         onClose={exitAfterRemittance}

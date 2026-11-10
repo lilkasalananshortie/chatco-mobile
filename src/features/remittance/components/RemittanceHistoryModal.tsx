@@ -1,4 +1,5 @@
-﻿import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
 import type { Remittance } from "../../../core/domain/types";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
 import { ModalShell } from "../../../shared/ui";

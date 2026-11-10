@@ -1,14 +1,16 @@
 import React from "react";
 import { Text } from "../../../shared/ui/BrandText";
-import { Platform, Pressable, ScrollView, View } from "react-native";
+import { Animated, Platform, Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { CommuterType, FarePoint, GcashInitiation, ReceiptSettings, Shift, Transaction } from "../../../core/domain/types";
-import { thermalPrinter, type PrinterStatus } from "../../../core/utils/thermal-printer";
+import type { PrinterStatus } from "../../../core/utils/thermal-printer";
 import type { FareInfo, GroupPassengerRow, SelectedPaymentMethod } from "../payment-types";
 import { formatCurrency, getCommuterTypeLabel, selectedPointName } from "../fare-helpers";
 import { TransactionReceipt } from "../TransactionReceipt";
 import { receiptSummary } from "../receipt-summary";
+import { useAnimatedToggle } from "../../../shared/ui/useAnimatedFeedback";
+import { useReducedMotion } from "../../../shared/ui/useWebEntrance";
 
 export interface PaymentSuccessStepProps {
   styles: any;
@@ -66,26 +68,28 @@ export function PaymentSuccessStep({
   handlePrint,
   handleClose,
 }: PaymentSuccessStepProps) {
-  const { colors, isLofi } = usePaymentTheme();
+  const { colors, isLofi, isLowFidelity } = usePaymentTheme();
+  const reduceMotion = useReducedMotion();
+  const receiptChevron = useAnimatedToggle(showReceiptDetails, 150, isLowFidelity || reduceMotion);
   const summary = receiptSummary(receiptTransactions, isGroupMode ? groupTotalFare : fareInfo?.finalFare ?? 0, selectedMethod ?? "Cash");
   const hasPendingOfflineCash = selectedMethod === "Cash" && receiptTransactions.some(transaction => transaction.offlinePending);
 
   return (
     // Amounts and passenger roles below come from the final server receipt rows.
-    <View style={[styles.modalCard, { maxWidth: 384, maxHeight: "92%", flexShrink: 1, flexDirection: "column" }]}>
-      <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ padding: 20, alignItems: "center" }}>
+    <View style={[styles.modalCard, { maxWidth: 512, maxHeight: "92%", flexShrink: 1, flexDirection: "column", backgroundColor: isLofi ? "#FFFFFF" : "#071A2E" }]}>
+      <ScrollView style={{ flexGrow: 0, flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ padding: 20, alignItems: "center" }} bounces={false}>
         <View style={styles.successCheckCircle}>
-          <Ionicons name="checkmark" size={32} color={isLofi ? colors.success : "#34D399"} />
+          <Ionicons name="checkmark" size={32} color={isLofi ? colors.success : "#00C896"} accessible={false} />
         </View>
 
-        <Text style={styles.successTitle}>{hasPendingOfflineCash ? "Saved on this device" : "Payment Successful!"}</Text>
+        <Text accessibilityRole="header" style={styles.successTitle}>{hasPendingOfflineCash ? "Saved on this device" : "Payment Successful!"}</Text>
         <Text style={styles.successSubtitle}>
           {hasPendingOfflineCash
             ? "Cash fare saved locally. It will sync to this shift when the connection returns."
             : selectedMethod === "Voucher" && summary.amount > 0
             ? `Voucher applied. Collect ₱${summary.amount.toFixed(2)} remaining fare in cash.`
             : summary.amount === 0 && summary.hasVoucher ? "The voucher covered the fare. No cash is due."
-            : selectedMethod === "GCash" ? "Payment confirmed by ChatCo."
+            : selectedMethod === "GCash" ? "Fare has been charged via GCash"
             : "Cash payment has been recorded"}
         </Text>
 
@@ -108,7 +112,7 @@ export function PaymentSuccessStep({
           {pickupLandmark ? (
             <View style={styles.confirmRow}>
               <Text style={styles.confirmRowLabel}>Pickup Landmark</Text>
-              <Text style={[styles.confirmRowValue, { color: pickupBadgeText }]}>
+              <Text style={[styles.confirmRowValue, { color: selectedMethod === "GCash" ? (isLofi ? colors.success : "#00C896") : pickupBadgeText }]}>
                 {pickupLandmark}
               </Text>
             </View>
@@ -116,7 +120,7 @@ export function PaymentSuccessStep({
           {dropoffLandmark ? (
             <View style={styles.confirmRow}>
               <Text style={styles.confirmRowLabel}>Drop-off Landmark</Text>
-              <Text style={[styles.confirmRowValue, { color: dropoffBadgeText }]}>
+              <Text style={[styles.confirmRowValue, { color: selectedMethod === "GCash" ? "#F97316" : dropoffBadgeText }]}>
                 {dropoffLandmark}
               </Text>
             </View>
@@ -140,7 +144,7 @@ export function PaymentSuccessStep({
             <Text
               style={[
                 styles.confirmRowValue,
-                { color: selectedMethod === "GCash" ? (isLofi ? colors.primary : "#60A5FA") : (isLofi ? colors.success : "#34D399") },
+                { color: selectedMethod === "GCash" ? (isLofi ? colors.primary : "#60A5FA") : (isLofi ? colors.success : "#00C896") },
               ]}
             >
               {summary.method}
@@ -149,12 +153,12 @@ export function PaymentSuccessStep({
           {gcashInitiation && selectedMethod === "GCash" ? (
             <View style={styles.confirmRow}>
               <Text style={styles.confirmRowLabel}>Ref ID</Text>
-              <Text style={[styles.confirmRowValue, { fontFamily: Platform.OS === "ios" ? "Courier" : "monospace", fontSize: 11, color: colors.text }]}>
-                {gcashInitiation.transactionId}
+              <Text style={[styles.confirmRowValue, { fontSize: 10, color: colors.muted }]}>
+                {receiptTransactions[0]?.transactionId ?? gcashInitiation.transactionId}
               </Text>
             </View>
           ) : null}
-          {selectedMethod === "Cash" && receiptSettings?.showManualCode !== false && (receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken) ? (
+          {showReceiptDetails && selectedMethod === "Cash" && receiptSettings?.showManualCode !== false && (receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken) ? (
             <View
               accessible
               accessibilityLabel={`Reward Claim Code: ${receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken}`}
@@ -187,6 +191,9 @@ export function PaymentSuccessStep({
 
         {/* Receipt Details Toggle */}
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Receipt Details"
+          accessibilityState={{ expanded: showReceiptDetails }}
           onPress={() => setShowReceiptDetails((s) => !s)}
           style={styles.receiptAccordionToggle}
         >
@@ -198,13 +205,37 @@ export function PaymentSuccessStep({
                 : `Tap to view ${Math.max(1, receiptTransactions.length)} receipt`}
             </Text>
           </View>
-          <Ionicons
-            name={showReceiptDetails ? "chevron-up" : "chevron-down"}
-            size={18}
-            color={colors.muted}
-          />
+          <Animated.View style={{ transform: [{ rotate: receiptChevron.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }) }] }}>
+            <Ionicons name="chevron-down" size={18} color={colors.muted} />
+          </Animated.View>
         </Pressable>
 
+        {/* Action buttons */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={handlePrint}
+          style={[
+            styles.printReceiptButton,
+            { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+          ]}
+        >
+          <Text style={styles.printReceiptButtonText}>
+            Print {isGroupMode ? "All Receipts" : "Receipt"}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleClose}
+          style={[
+            selectedMethod === "GCash"
+              ? styles.gcashActionButton
+              : styles.cashActionButton,
+            { width: "100%" },
+          ]}
+        >
+          <Text style={styles.cashActionButtonText}>Done</Text>
+        </Pressable>
         {/* Thermal Receipt Content */}
         {showReceiptDetails ? (
           <View style={styles.receiptContainer}>
@@ -267,7 +298,7 @@ export function PaymentSuccessStep({
         ) : null}
 
         {/* Goojprt Belt Printer Status Bar */}
-        <View
+        {showReceiptDetails ? <View
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -312,65 +343,8 @@ export function PaymentSuccessStep({
                 : "Printer: Disconnected"}
             </Text>
           </View>
-          <View
-            style={{
-              backgroundColor: thermalPrinter.isAutoPrintEnabled()
-                ? isLofi
-                  ? "rgba(22, 112, 90, 0.15)"
-                  : "rgba(16, 185, 129, 0.15)"
-                : colors.surface,
-              paddingHorizontal: 6,
-              paddingVertical: 2,
-              borderRadius: 4,
-              borderWidth: 1,
-              borderColor: thermalPrinter.isAutoPrintEnabled()
-                ? isLofi
-                  ? colors.success
-                  : "rgba(16, 185, 129, 0.3)"
-                : colors.border,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 9,
-                fontWeight: "800",
-                color: thermalPrinter.isAutoPrintEnabled()
-                  ? isLofi
-                    ? colors.success
-                    : "#34D399"
-                  : colors.muted,
-              }}
-            >
-              {thermalPrinter.isAutoPrintEnabled() ? "AUTO-PRINT: ON" : "AUTO-PRINT: OFF"}
-            </Text>
-          </View>
-        </View>
+        </View> : null}
 
-        {/* Action buttons */}
-        <Pressable
-          onPress={handlePrint}
-          style={[
-            styles.printReceiptButton,
-            { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-          ]}
-        >
-          <Ionicons name="print-outline" size={16} color={colors.text} />
-          <Text style={styles.printReceiptButtonText}>
-            Print {isGroupMode ? "All Receipts" : "Receipt"}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={handleClose}
-          style={[
-            selectedMethod === "GCash"
-              ? styles.gcashActionButton
-              : styles.cashActionButton,
-            { width: "100%" },
-          ]}
-        >
-          <Text style={styles.cashActionButtonText}>Done</Text>
-        </Pressable>
       </ScrollView>
     </View>
   );

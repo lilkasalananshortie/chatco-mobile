@@ -37,6 +37,18 @@ test("late fare update cannot sign out a newer login", async () => {
   expect(appStorage.removeItem).not.toHaveBeenCalled();
 });
 
+test("server-confirmed ended shifts invalidate operations without removing authentication or queued cash", async () => {
+  const ended = jest.fn(); const cleanup = client.setShiftEndedHandler(ended);
+  jest.spyOn(globalThis, "fetch").mockResolvedValue({ ok: false, status: 409,
+    json: async () => ({ message: "The shift has already ended; no new transaction can be recorded." }),
+  } as Response);
+  try {
+    await expect(client.post("/mobile/conductor/transactions/cash", {})).rejects.toThrow("shift has already ended");
+    expect(ended).toHaveBeenCalledTimes(1);
+    expect(appStorage.removeItem).not.toHaveBeenCalled();
+  } finally { cleanup(); }
+});
+
 test("mobile requests retain bearer authentication and unwrap the existing envelope", async () => {
   const fetchMock = jest.spyOn(globalThis, "fetch").mockResolvedValue({
     ok: true, json: async () => ({ success: true, data: { id: "shared-account" } }),

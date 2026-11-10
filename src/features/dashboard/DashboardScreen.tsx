@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState, Linking, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import Constants from "expo-constants";
 import { getNativeMaps } from "./native-map-module";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDashboardKeepAwake } from "./hooks/useDashboardKeepAwake";
 import { Text } from "../../shared/ui/BrandText";
 import { api } from "../../core/api/chatco-api";
@@ -31,10 +31,8 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const { colors, styles, isLofi } = useAppTheme();
   const safeInsets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const [dashboardHeight, setDashboardHeight] = useState(0);
-  const bottomNavigationInset = Platform.OS === "android" ? Math.max(safeInsets.bottom, 24) : safeInsets.bottom;
-  const bottomNavigationHeight = 64 + bottomNavigationInset;
-  const availableHeight = windowHeight - safeInsets.top;
+  const bottomNavigationHeight = 64 + 8;
+  const availableHeight = windowHeight - safeInsets.top - safeInsets.bottom;
   const dashboardMaxHeight = Math.max(90, Math.min(availableHeight * 0.75, availableHeight - bottomNavigationHeight - 160));
   const usesWebMapFallback = Platform.OS !== "web" && (!getNativeMaps() || (Platform.OS === "android" && Constants.expoConfig?.extra?.googleMapsConfigured !== true));
   useDashboardKeepAwake();
@@ -45,6 +43,7 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const [directionModalOpen, setDirectionModalOpen] = useState(false);
   const [tripCycleState, setTripCycleState] = useState<TripCycleState | null>(null);
   const tripCycleStateRef = useRef<TripCycleState | null>(null);
+  const directionMutationRef = useRef(false);
   const shiftData = useDashboardShift({ shift, refreshKey, canOperate, isOnline, onShiftUpdated, onShiftEnded });
   const gpsData = useShiftGps();
 
@@ -77,23 +76,36 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   }, [shift.shiftId, shift.timeIn, shift.tripDirection]);
 
   const handleAdvanceTrip = useCallback(async () => {
-    if (!tripCycleStateRef.current) return;
-    audioCues.playDutySound();
-    const next = completeAndAdvanceTrip(tripCycleStateRef.current, shiftData.transactions);
-    setTripCycleState(next); tripCycleStateRef.current = next; await saveTripCycleState(next);
-  }, [shiftData.transactions]);
+    if (!tripCycleStateRef.current || directionMutationRef.current) return;
+    if (!canOperate) { Alert.alert("Unable to turn around", "Claim this shift on this device before changing direction."); return; }
+    directionMutationRef.current = true;
+    try {
+      const next = completeAndAdvanceTrip(tripCycleStateRef.current, shiftData.transactions);
+      const serverDirection = next.activeTrip.direction === "SOUTHBOUND" ? "FORWARD" : "REVERSE";
+      await api.updateTripDirection(serverDirection);
+      setTripCycleState(next); tripCycleStateRef.current = next;
+      onShiftUpdated?.({ ...shift, tripDirection: serverDirection });
+      await saveTripCycleState(next);
+      audioCues.playDutySound();
+    } catch (cause) { Alert.alert("Unable to turn around", cause instanceof Error ? cause.message : "Try again."); }
+    finally { directionMutationRef.current = false; }
+  }, [canOperate, onShiftUpdated, shift, shiftData.transactions]);
   const handleSaveDirection = useCallback(async (direction: TripDirection) => {
     if (!canOperate) throw new Error("Claim this shift on this device before changing direction.");
     if (!tripCycleStateRef.current) throw new Error("Trip direction is still loading. Try again.");
-    const serverDirection = direction === "SOUTHBOUND" ? "FORWARD" : "REVERSE";
-    await api.updateTripDirection(serverDirection);
-    const current = tripCycleStateRef.current;
-    const next = current.activeTrip.direction === direction ? current : switchActiveTripDirection(current);
-    setTripCycleState(next);
-    tripCycleStateRef.current = next;
-    await saveTripCycleState(next);
-    onShiftUpdated?.({ ...shift, tripDirection: serverDirection });
-    audioCues.playDutySound();
+    if (directionMutationRef.current) throw new Error("Trip direction is already being updated.");
+    directionMutationRef.current = true;
+    try {
+      const serverDirection = direction === "SOUTHBOUND" ? "FORWARD" : "REVERSE";
+      await api.updateTripDirection(serverDirection);
+      const current = tripCycleStateRef.current;
+      const next = current.activeTrip.direction === direction ? current : switchActiveTripDirection(current);
+      setTripCycleState(next);
+      tripCycleStateRef.current = next;
+      onShiftUpdated?.({ ...shift, tripDirection: serverDirection });
+      await saveTripCycleState(next);
+      audioCues.playDutySound();
+    } finally { directionMutationRef.current = false; }
   }, [canOperate, onShiftUpdated, shift]);
   const handleSwitchDirection = useCallback(async () => {
     const current = tripCycleStateRef.current;
@@ -102,10 +114,20 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
     catch (cause) { Alert.alert("Unable to switch direction", cause instanceof Error ? cause.message : "Try again."); }
   }, [handleSaveDirection]);
   const handleUndoTurnaround = useCallback(async () => {
-    if (!tripCycleStateRef.current) return;
-    const next = undoLastTurnaround(tripCycleStateRef.current);
-    setTripCycleState(next); tripCycleStateRef.current = next; await saveTripCycleState(next);
-  }, []);
+    if (!tripCycleStateRef.current || directionMutationRef.current) return;
+    if (!canOperate) { Alert.alert("Unable to undo turnaround", "Claim this shift on this device before changing direction."); return; }
+    directionMutationRef.current = true;
+    try {
+      const next = undoLastTurnaround(tripCycleStateRef.current);
+      if (next === tripCycleStateRef.current) return;
+      const serverDirection = next.activeTrip.direction === "SOUTHBOUND" ? "FORWARD" : "REVERSE";
+      await api.updateTripDirection(serverDirection);
+      setTripCycleState(next); tripCycleStateRef.current = next;
+      onShiftUpdated?.({ ...shift, tripDirection: serverDirection });
+      await saveTripCycleState(next);
+    } catch (cause) { Alert.alert("Unable to undo turnaround", cause instanceof Error ? cause.message : "Try again."); }
+    finally { directionMutationRef.current = false; }
+  }, [canOperate, onShiftUpdated, shift]);
   const combinedError = shiftData.error || gpsData.gpsError;
   const routeDeviationActive = gpsData.corridorDeviationMeters > CORRIDOR_DEVIATION_THRESHOLD_METERS;
   const openAction = (action: () => void) => { setActions(false); action(); };
@@ -140,10 +162,10 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
     <RouteAdvisoryBanners currentSpeedKmh={gpsData.currentSpeedKmh} isOverspeeding={gpsData.isOverspeeding} thermalState={{ enabled: false }} approachingStop={null} />
   </ScrollView>;
 
-  return <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.background }}>
+  return <View style={{ flex: 1, backgroundColor: colors.background }}>
     <View style={{ flex: 1 }}>
-      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} tripDirection={tripCycleState?.activeTrip.direction ?? "SOUTHBOUND"} viewportInsets={{ top: dashboardHeight, bottom: bottomNavigationHeight + (routeDeviationActive ? 88 : 0) + (combinedError ? 60 : 0) }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} canOperate={canOperate} onHail={(id, action) => shiftData.handleHail(id, action)} />
-      <View renderToHardwareTextureAndroid onLayout={event => setDashboardHeight(event.nativeEvent.layout.height)} style={{ pointerEvents: "box-none", position: "absolute", top: 0, left: 0, right: 0, maxHeight: dashboardMaxHeight, zIndex: 10, elevation: 10 }}>
+      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} tripDirection={tripCycleState?.activeTrip.direction ?? "SOUTHBOUND"} viewportInsets={{ top: 0, bottom: bottomNavigationHeight + (routeDeviationActive ? 88 : 0) + (combinedError ? 60 : 0) }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} canOperate={canOperate} onHail={(id, action) => shiftData.handleHail(id, action)} />
+      <View renderToHardwareTextureAndroid style={{ pointerEvents: "box-none", position: "absolute", top: 0, left: 0, right: 0, maxHeight: dashboardMaxHeight, zIndex: 10, elevation: 10 }}>
         {dashboardContent}
       </View>
       {routeDeviationActive ? <View pointerEvents="none" style={{ position: "absolute", left: 16, right: 16, bottom: bottomNavigationHeight + 16 + (combinedError ? 60 : 0), zIndex: 14, elevation: 14 }}><RouteDeviationNotice distanceMeters={gpsData.corridorDeviationMeters} /></View> : null}
@@ -157,11 +179,11 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
         <Text style={styles.subtitle}>{gpsData.permissionStatus === "inactive" ? "Tracking paused or awaiting location acknowledgement." : gpsData.lastUploadAt ? `Last foreground upload accepted: ${new Date(gpsData.lastUploadAt).toLocaleTimeString()}` : "No successful foreground upload confirmed for this tracking session yet."}</Text>
         {gpsData.backgroundWarning ? <Text style={[styles.subtitle, { color: colors.warning }]}>{gpsData.backgroundWarning}</Text> : null}
         <Pressable onPress={gpsData.retryTracking} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Retry tracking</Text></Pressable>
-        <Pressable onPress={() => void Linking.openSettings().catch(() => Alert.alert("Open device Settings", "Open ChatCo's permissions in device Settings to manage location access."))} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Device permissions</Text></Pressable>
+        <Pressable onPress={() => void Linking.openSettings().catch(() => Alert.alert("Open device Settings", "Open CHATCO's permissions in device Settings to manage location access."))} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Device permissions</Text></Pressable>
       </View>
     </ModalShell>
     {shiftData.breakConfirmOpen ? <BreakConfirmModal visible isOnBreak={shiftData.isOnBreak} breakPending={shiftData.breakPending} error={shiftData.error} onClose={() => shiftData.setBreakConfirmOpen(false)} onConfirm={shiftData.updateBreak} /> : null}
     {directionModalOpen && tripCycleState ? <TripDirectionModal direction={tripCycleState.activeTrip.direction} onClose={() => setDirectionModalOpen(false)} onSave={handleSaveDirection} /> : null}
     {tripCycleState ? <TripLogbookModal visible={tripModalOpen} onClose={() => setTripModalOpen(false)} state={tripCycleState} transactions={shiftData.transactions} onAdvanceTrip={() => void handleAdvanceTrip()} onSwitchDirection={() => void handleSwitchDirection()} onUndoTurnaround={() => void handleUndoTurnaround()} /> : null}
-  </SafeAreaView>;
+  </View>;
 }

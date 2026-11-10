@@ -15,6 +15,13 @@ import { paymentService } from "../payment-service";
 import { shiftService } from "../shift-service";
 import { transactionSummary } from "../../domain/transaction-summary";
 beforeEach(() => jest.clearAllMocks());
+test("conductor remittance records handover without declaring counted cash", async () => {
+  await fleetService.remit({ shiftId: "late" } as any, 850, 120);
+  const body = (post as jest.Mock).mock.calls[0]![1];
+  expect(body).toMatchObject({ shift_id: "late", total_collected: 850, device_type: "MOBILE" });
+  expect(body).not.toHaveProperty("remitted_amount");
+  expect(body).not.toHaveProperty("shortage");
+});
 test("history requests subsequent backend pages with the selected filter", async () => {
   (request as jest.Mock).mockResolvedValue({ data: [{ id: "old", shift_id: "s" }], current_page: 8, last_page: 9, total: 130 });
   const page = await fleetService.remittancesPage(8, "WEEK");

@@ -10,9 +10,13 @@ jest.mock("react", () => ({ ...jest.requireActual("react"),
   useRef: (value: any) => { const i = mockRefIndex++; return mockRefs[i] ?? (mockRefs[i] = { current: value }); },
   useEffect: (fn: () => any) => { if (!mockCleanups.length) mockCleanups.push(fn()); },
 }));
-jest.mock("react-native", () => ({ ActivityIndicator: "Spinner", Keyboard: { dismiss: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })) }, KeyboardAvoidingView: "KeyboardView", Platform: { OS: "android" }, Pressable: "Button", ScrollView: "Scroll", StyleSheet: { create: (styles: any) => styles }, Text: "Text", TextInput: "Input", useWindowDimensions: () => ({ height: mockHeight }), View: "View" }));
+jest.mock("react-native", () => ({ ActivityIndicator: "Spinner", Animated: { View: "AnimatedView" }, Keyboard: { dismiss: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })) }, KeyboardAvoidingView: "KeyboardView", Platform: { OS: "android" }, Pressable: "Button", ScrollView: "Scroll", StyleSheet: { create: (styles: any) => styles }, Text: "Text", TextInput: "Input", useWindowDimensions: () => ({ height: mockHeight }), View: "View" }));
+jest.mock("../../../shared/ui/useAnimatedFeedback", () => ({ useAnimatedColor: (color: string) => color }));
+jest.mock("../../../shared/ui/useWebEntrance", () => ({ useReducedMotion: () => false }));
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeArea" }));
+jest.mock("../../../shared/ui/BrandText", () => ({ Text: "Text", TextInput: "Input" }));
 jest.mock("@expo/vector-icons/Ionicons", () => "Icon");
+jest.mock("../../../../assets/logo-transparent.png", () => "chatco-logo");
 jest.mock("../../../core/theme/ThemeProvider", () => ({ useAppTheme: () => ({ isLofi: mockLight, colors: { background: mockLight ? "light" : "dark", text: "text", muted: "muted", primary: "blue", border: "border", surface: "surface", surface2: "field", danger: "red" } }) }));
 jest.mock("../../../core/api/chatco-api", () => ({ api: { login: jest.fn() } }));
 jest.mock("../PasswordScreen", () => ({ PasswordScreen: "Recovery" }));
@@ -70,13 +74,17 @@ test("password visibility and keyboard next retain their expected actions", () =
   field("Username or email").props.onSubmitEditing(); expect(focus).toHaveBeenCalledTimes(1);
 });
 test("forgot password opens the existing recovery screen and returns to login", () => {
-  const node = render().find(item => item.type === "Button" && walk(item).some(child => child.props.children === "Forgot password?"));
+  const nodes = render();
+  const passwordIndex = nodes.findIndex(item => item.type === "Input" && item.props.accessibilityLabel === "Password");
+  const recoveryIndex = nodes.findIndex(item => item.type === "Button" && walk(item).some(child => child.props.children === "Forgot password?"));
+  expect(recoveryIndex).toBeGreaterThan(passwordIndex);
+  const node = nodes[recoveryIndex];
   node.props.onPress(); const recovery = render().find(item => item.type === "Recovery");
   expect(recovery).toBeTruthy(); recovery.props.onBack(); expect(button("Sign in")).toBeTruthy();
 });
 test.each([false, true])("small-screen login fits without a scrolling container with theme light=%s", light => {
   mockLight = light; mockHeight = 600; const nodes = render();
-  expect(nodes.find(node => node.type === "SafeArea").props.style[1].backgroundColor).toBe(light ? "light" : "dark");
+  expect(nodes.find(node => node.type === "View" && Array.isArray(node.props.style) && node.props.style[1]?.backgroundColor).props.style[1].backgroundColor).toBe(light ? "light" : "dark");
   expect(nodes.some(node => node.type === "Scroll")).toBe(false);
   expect(nodes.some(node => node.props.children === "Welcome back. Sign in to get on the road.")).toBe(false);
   expect(field("Password").props.autoComplete).toBe("current-password");

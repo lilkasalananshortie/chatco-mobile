@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Text } from "../../shared/ui/BrandText";
-import { AppState, Modal, Pressable, View } from "react-native";
+import { Animated, AppState, Modal, Pressable, View } from "react-native";
 import { api } from "../../core/api/chatco-api";
 import type { Announcement } from "../../core/domain/types";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { unreadReminders } from "./reminder-state";
+import { useWebEntrance } from "../../shared/ui/useWebEntrance";
 
 /** Uses existing personal notices. This never creates or completes a remittance. */
 export function RemittanceReminder({ suspended = false, dismissedIds, onViewReport }: { suspended?: boolean; dismissedIds?: Set<string>; onViewReport: () => void }) {
-  const { colors, styles } = useAppTheme();
+  const { colors, styles, isLowFidelity } = useAppTheme();
   const [items, setItems] = useState<Announcement[]>([]);
   const dismissed = useRef(dismissedIds ?? new Set<string>());
   useEffect(() => {
@@ -36,9 +37,10 @@ export function RemittanceReminder({ suspended = false, dismissedIds, onViewRepo
     setItems([]);
   };
   const latest = items[0];
-  return <Modal visible={Boolean(latest) && !suspended} transparent animationType="fade" onRequestClose={dismiss}>
+  const entrance = useWebEntrance(Boolean(latest) && !suspended, isLowFidelity);
+  return <Modal visible={Boolean(latest) && !suspended} transparent animationType="none" onRequestClose={dismiss}>
     <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: colors.overlay }}>
-      <View style={[styles.card, { width: "100%", maxWidth: 440, alignSelf: "center" }]} accessibilityViewIsModal>
+      <Animated.View style={[styles.card, { width: "100%", maxWidth: 440, alignSelf: "center" }, entrance]} accessibilityViewIsModal>
         <Text style={styles.label}>Remittance reminder</Text>
         <Text style={[styles.title, { marginTop: 10 }]}>{latest?.title}</Text>
         <Text style={[styles.subtitle, { marginTop: 12 }]}>{latest?.body} Hand the cash to the office so an admin can record it.</Text>
@@ -50,7 +52,7 @@ export function RemittanceReminder({ suspended = false, dismissedIds, onViewRepo
             <Text style={styles.buttonText}>View report</Text>
           </Pressable>
         </View>
-      </View>
+      </Animated.View>
     </View>
   </Modal>;
 }

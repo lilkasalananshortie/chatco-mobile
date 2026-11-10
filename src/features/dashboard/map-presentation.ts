@@ -15,6 +15,17 @@ export function markerPresentation(capacity: Capacity = "AVAILABLE", onBreak = f
     : { color: "#34D399", label: "Available" };
 }
 
+/** Colors shared by native and web unit details, matching the conductor web popup. */
+export function unitPopupPalette(light: boolean, capacity: Capacity = "AVAILABLE", onBreak = false) {
+  const status = onBreak ? (light ? "#1A5FB4" : "#8CB9F0")
+    : capacity === "STANDING" ? (light ? "#B45309" : "#FDE68A")
+    : capacity === "FULL" ? (light ? "#B91C1C" : "#FCA5A5")
+    : (light ? "#047857" : "#86EFAC");
+  return light
+    ? { background: "#FFFFFF", border: "#E5E7EB", divider: "#E5E7EB", text: "#374151", title: "#111827", muted: "#6B7280", icon: "#1A5FB4", status }
+    : { background: "#0D192A", border: "#2A3A55", divider: "#23344F", text: "#E2E8F0", title: "#F8FAFC", muted: "#94A3B8", icon: "#62A0EA", status };
+}
+
 function facingFor(bearing: number): BusFacing {
   return (["n", "ne", "e", "se", "s", "sw", "w", "nw"] as const)[Math.round(bearing / 45) % 8]!;
 }

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../../shared/ui/BrandText";
 import { api } from "../../core/api/chatco-api";
-import { appStorage } from "../../core/storage/app-storage";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { ScreenShell } from "../../shared/ui";
 import type { ConductorProfile, Remittance, Shift, Transaction, User } from "../../core/domain/types";
@@ -14,7 +13,7 @@ import { AppPreferencesCard } from "./components/AppPreferencesCard";
 import { BluetoothPrinterCard } from "./components/BluetoothPrinterCard";
 import { AccountSessionSection } from "./components/AccountSessionSection";
 import { thermalPrinter, type PrinterStatus } from "../../core/utils/thermal-printer";
-import { pickProfilePhoto } from "./profile-photo";
+import { pickProfilePhotoSelection } from "./profile-photo";
 import { transactionSummary } from "../../core/domain/transaction-summary";
 import { loadScanSoundSetting, setScanSoundEnabled } from "../../core/utils/audio-cues";
 
@@ -34,16 +33,33 @@ export function SettingsScreen({
   const [profile, setProfile] = useState<ConductorProfile | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState("");
+  const [pendingPhoto, setPendingPhoto] = useState<{ body: FormData; uri: string } | null>(null);
+  const [photoSaved, setPhotoSaved] = useState(false);
   const photoPending = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const changePhoto = async () => {
     if (photoPending.current) return;
     photoPending.current = true; setPhotoBusy(true); setPhotoError("");
+    setPhotoSaved(false);
     try {
-      const photo = await pickProfilePhoto();
+      const photo = await pickProfilePhotoSelection();
       if (!photo || !mounted.current) return;
-      const url = await api.uploadProfilePhoto(photo, user.id);
+      setPendingPhoto(photo);
+    } catch (error) { if (mounted.current) setPhotoError(error instanceof Error ? error.message : "Could not choose a photo. Please retry."); }
+    finally { photoPending.current = false; if (mounted.current) setPhotoBusy(false); }
+  };
+  const cancelPhoto = () => {
+    if (photoPending.current) return;
+    setPendingPhoto(null);
+    setPhotoSaved(false);
+    setPhotoError("");
+  };
+  const savePhoto = async () => {
+    if (!pendingPhoto || photoPending.current) return;
+    photoPending.current = true; setPhotoBusy(true); setPhotoError("");
+    try {
+      const url = await api.uploadProfilePhoto(pendingPhoto.body, user.id);
       if (mounted.current) setProfile(previous => ({
         id: user.id,
         name: previous?.name ?? user.name,
@@ -51,6 +67,7 @@ export function SettingsScreen({
         phoneNumber: previous?.phoneNumber,
         profilePictureUrl: url,
       }));
+      if (mounted.current) { setPendingPhoto(null); setPhotoSaved(true); }
     } catch (error) { if (mounted.current) setPhotoError(error instanceof Error ? error.message : "Upload failed. Please retry."); }
     finally { photoPending.current = false; if (mounted.current) setPhotoBusy(false); }
   };
@@ -234,31 +251,8 @@ export function SettingsScreen({
     }
   };
 
-  const handleClearCache = () => {
-    Alert.alert(
-      "Clear App Cache?",
-      "Temporary cached data will be removed. Transactions, ratings, shift history, and authentication are not affected.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear Cache",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await appStorage.removeItem("conductor_app_cache");
-              await appStorage.removeItem("leaflet_tile_cache");
-              Alert.alert("Cache Cleared", "Temporary cached data has been removed successfully.");
-            } catch {
-              Alert.alert("Error", "Unable to clear cache at this time.");
-            }
-          },
-        },
-      ]
-    );
-  };
-
   return (
-    <ScreenShell contentStyle={{ paddingHorizontal: 16, paddingTop: 10 }}>
+    <ScreenShell scrollable={false} contentStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: shift ? 88 : 16 }}>
       {/* Page Header */}
       <View style={styles.header}>
         <View style={styles.headerTitleGroup}>
@@ -283,6 +277,14 @@ export function SettingsScreen({
         </Pressable>
       </View>
 
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+      >
       {/* Profile Section */}
       <ProfileCard styles={styles} user={user} shift={shift} profile={profile} photoBusy={photoBusy} photoError={photoError} onChangePhoto={() => void changePhoto()} />
 
@@ -323,7 +325,6 @@ export function SettingsScreen({
         styles={styles}
         colors={colors}
         isLofi={isLofi}
-        onClearCache={handleClearCache}
         logoutLocked={logoutLocked}
         logoutCheckStatus={logoutCheckStatus}
         onRetryLogoutCheck={() => void loadSettingsData()}
@@ -332,6 +333,33 @@ export function SettingsScreen({
         setShowLogoutConfirm={setShowLogoutConfirm}
         onConfirmLogout={() => void confirmLogout()}
       />
+
+      </ScrollView>
+
+      <Modal visible={pendingPhoto !== null || photoSaved} transparent animationType="fade" onRequestClose={cancelPhoto}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.6)" }}>
+          <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 380, maxHeight: "90%", backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16 }}>
+            <ScrollView contentContainerStyle={{ padding: 24, alignItems: "center", gap: 16 }}>
+              {photoSaved ? <>
+                <Ionicons name="checkmark-circle-outline" size={44} color={colors.primary} />
+                <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={{ color: colors.text, fontSize: 20, fontWeight: "700", textAlign: "center" }}>Profile photo updated</Text>
+                <Text style={{ color: colors.muted, textAlign: "center", lineHeight: 21 }}>Your new photo has been saved.</Text>
+                <Pressable accessibilityRole="button" onPress={cancelPhoto} style={{ width: "100%", minHeight: 48, justifyContent: "center", alignItems: "center", borderRadius: 10, backgroundColor: colors.primary }}><Text style={{ color: "#FFFFFF", fontWeight: "600" }}>Done</Text></Pressable>
+              </> : <>
+                <Text accessibilityRole="header" style={{ color: colors.text, fontSize: 20, fontWeight: "700", textAlign: "center" }}>Save profile photo?</Text>
+                {pendingPhoto ? <Image source={{ uri: pendingPhoto.uri }} accessibilityLabel="Selected profile photo preview" style={{ width: 144, height: 144, borderRadius: 72 }} /> : null}
+                <Text style={{ color: colors.muted, textAlign: "center", lineHeight: 21 }}>Do you want to save this as your profile photo?</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center" }}>JPG, PNG or WebP only. Max 3 MB.</Text>
+                {photoError ? <Text accessibilityRole="alert" style={{ color: colors.danger, textAlign: "center" }}>{photoError}</Text> : null}
+                <View style={{ flexDirection: "row", gap: 12, width: "100%" }}>
+                  <Pressable accessibilityRole="button" onPress={cancelPhoto} disabled={photoBusy} style={{ flex: 1, minHeight: 48, justifyContent: "center", alignItems: "center", borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface2, opacity: photoBusy ? 0.5 : 1 }}><Text style={{ color: colors.text, fontWeight: "600" }}>Cancel</Text></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Save profile photo" onPress={() => void savePhoto()} disabled={photoBusy} style={{ flex: 1, minHeight: 48, justifyContent: "center", alignItems: "center", borderRadius: 10, backgroundColor: colors.primary, opacity: photoBusy ? 0.5 : 1 }}>{photoBusy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>Save photo</Text>}</Pressable>
+                </View>
+              </>}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
     </ScreenShell>
   );

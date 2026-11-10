@@ -5,13 +5,14 @@ import { useImage } from "expo-image";
 import type { AppleMaps as AppleMapsTypes, GoogleMaps as GoogleMapsTypes } from "expo-maps";
 import { getNativeMaps } from "./native-map-module";
 import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Text } from "../../shared/ui/BrandText";
 import Svg, { Path } from "react-native-svg";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { LiveMapProps } from "./LiveMap";
 import { distanceMeters, PICKUP_RADIUS_METERS, ROUTE_COORDINATES } from "./route-data";
-import { JEEPNEY_PATH, markerPresentation, vehicleMarkerDataUri, vehicleMarkerHtml } from "./map-presentation";
+import { JEEPNEY_PATH, markerPresentation, unitPopupPalette, vehicleMarkerDataUri, vehicleMarkerHtml } from "./map-presentation";
 
 /** Use the platform map over native UI; keep Leaflet as the configured fallback. */
 export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, tripDirection = "SOUTHBOUND", capacity = "AVAILABLE", isOnBreak = false, canOperate = false, onHail }: LiveMapProps) {
@@ -48,6 +49,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const neutralColor = isLofi ? "#071A2E" : "#FFFFFF";
   const vehicleLabel = `Unit ${unitNumber} · ${isOnBreak ? "On Break" : capacity.replace("_", " ")}`;
   const unitStatus = markerPresentation(capacity, isOnBreak);
+  const popup = unitPopupPalette(isLofi, capacity, isOnBreak);
   const routeLabel = tripDirection === "SOUTHBOUND" ? "Calumpit → Meycauayan" : "Meycauayan → Calumpit";
   const vehiclePosition: [number, number] = [position.latitude, position.longitude];
   const vehicleIconHtml = vehicleMarkerHtml(capacity, isOnBreak, isLofi ? colors.surface : "#071A2E", tripDirection, route, vehiclePosition);
@@ -101,26 +103,25 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   }, [loaded, configured, liveScript]);
 
   const unitInfo = <Modal visible={unitInfoVisible} transparent animationType="fade" onRequestClose={() => setUnitInfoVisible(false)}>
-    <View style={{ flex: 1, justifyContent: "flex-end", paddingHorizontal: 16, paddingBottom: 24, backgroundColor: colors.overlay }}>
+    <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 16 }}>
       <Pressable accessibilityLabel="Close unit details" onPress={() => setUnitInfoVisible(false)} style={StyleSheet.absoluteFill} />
-      <View style={{ overflow: "hidden", borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-          <Svg width={34} height={34} viewBox="0 0 24 24"><Path d={JEEPNEY_PATH} fill={colors.primaryLight} /></Svg>
+      <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 280, overflow: "hidden", borderRadius: 14, borderWidth: 1, borderColor: popup.border, backgroundColor: popup.background, shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: popup.divider }}>
+          <Svg width={34} height={34} viewBox="0 0 24 24"><Path d={JEEPNEY_PATH} fill={popup.icon} /></Svg>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1 }}>YOUR UNIT</Text>
-            <Text numberOfLines={1} style={{ color: colors.text, fontSize: 17, fontWeight: "700", marginTop: 2 }}>{unitNumber}</Text>
+            <Text style={{ color: popup.muted, fontSize: 10 }}>Your unit</Text>
+            <Text style={{ color: popup.title, fontSize: 16, fontWeight: "600", marginTop: 2 }}>{unitNumber}</Text>
           </View>
-          <Pressable onPress={() => setUnitInfoVisible(false)} accessibilityRole="button" accessibilityLabel="Close unit details" style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Close</Text>
-          </Pressable>
         </View>
-        <View style={{ paddingHorizontal: 18, paddingTop: 15, paddingBottom: 17, gap: 12 }}>
-          <UnitDetailRow label="Status" value={unitStatus.label} valueColor={unitStatus.color} colors={colors} />
-          <UnitDetailRow label="Route" value={routeLabel} colors={colors} />
-          {isOnBreak ? <UnitDetailRow label="Capacity" value={capacity.replace("_", " ")} colors={colors} /> : null}
+        <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 }}>
+          <Text style={{ color: popup.status, fontSize: 13, fontWeight: "600", textAlign: "center" }}>{unitStatus.label}</Text>
+          <View style={{ gap: 10, marginTop: 14 }}>
+            <UnitDetailRow label="Route" value={routeLabel} muted={popup.muted} text={popup.text} />
+            {isOnBreak ? <UnitDetailRow label="Capacity" value={capacity.replace("_", " ")} muted={popup.muted} text={popup.text} /> : null}
+          </View>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   </Modal>;
 
   const frameStyle = [fill ? StyleSheet.absoluteFill : { height: 420, borderRadius: 18, overflow: "hidden" as const }, { backgroundColor: mapColor }];
@@ -172,9 +173,9 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   </View>;
 }
 
-function UnitDetailRow({ label, value, valueColor, colors }: { label: string; value: string; valueColor?: string; colors: ReturnType<typeof useAppTheme>["colors"] }) {
-  return <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
-    <Text style={{ color: colors.muted, fontSize: 13 }}>{label}</Text>
-    <Text style={{ flex: 1, color: valueColor ?? colors.text, fontSize: 13, fontWeight: "600", textAlign: "right" }}>{value}</Text>
+function UnitDetailRow({ label, value, muted, text }: { label: string; value: string; muted: string; text: string }) {
+  return <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+    <Text style={{ color: muted, fontSize: 12 }}>{label}</Text>
+    <Text style={{ flex: 1, color: text, fontSize: 12, fontWeight: "500", textAlign: "right" }}>{value}</Text>
   </View>;
 }

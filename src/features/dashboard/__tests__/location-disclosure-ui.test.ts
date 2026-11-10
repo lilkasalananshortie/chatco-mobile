@@ -12,9 +12,11 @@ jest.mock("react", () => ({ ...jest.requireActual("react"),
 }));
 jest.mock("react-native", () => ({ Modal: "Modal", Pressable: "Button", ScrollView: "ScrollView", Text: "Text", View: "View" }));
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeArea" }));
+jest.mock("@expo/vector-icons/Ionicons", () => "Icon");
+jest.mock("../../../shared/ui/BrandText", () => ({ Text: "Text" }));
 jest.mock("../../../core/theme/ThemeProvider", () => ({ useAppTheme: () => ({ colors: { text: "text" } }) }));
 jest.mock("../hooks/useDashboardGps", () => ({ useDashboardGps: jest.fn() }));
-jest.mock("../location-notice", () => ({ hasLocationNotice: jest.fn(), acknowledgeLocationNotice: jest.fn(), LOCATION_NOTICE_TEXT: "Location disclosure" }));
+jest.mock("../location-notice", () => ({ hasLocationNotice: jest.fn(), acknowledgeLocationNotice: jest.fn(), LOCATION_NOTICE_SECTIONS: [{ title: "During your active shift", text: "Location disclosure" }], LOCATION_NOTICE_AUTHORIZATION: "No assignment authorization" }));
 jest.mock("../../../shared/legal/legal-links", () => ({ openLegalLink: jest.fn() }));
 function walk(node: any): any[] {
   if (Array.isArray(node)) return node.flatMap(walk);

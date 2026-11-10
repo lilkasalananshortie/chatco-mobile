@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
 
@@ -41,7 +42,7 @@ export function OfflineDepotNotice({ isOfflineDepot, onRetry }: OfflineDepotNoti
             lineHeight: 15,
           }}
         >
-          Cached assignments cannot authorize a shift. Reconnect to verify the assignment with ChatCo.
+          Cached assignments cannot authorize a shift. Reconnect to verify the assignment with CHATCO.
         </Text>
         <Pressable accessibilityRole="button" onPress={onRetry} style={{ alignSelf: "flex-start", marginTop: 8 }}>
           <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>Retry connection</Text>

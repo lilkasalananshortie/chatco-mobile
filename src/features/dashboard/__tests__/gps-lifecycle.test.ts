@@ -60,7 +60,7 @@ test("foreground denial is visible and never requests background permission", as
 test("background denial keeps foreground watcher and explains the limitation", async () => {
   const remove = jest.fn(); (Location.watchPositionAsync as jest.Mock).mockResolvedValue({ remove });
   const cleanup = start(); await settle();
-  expect(mockSetters[7]).toHaveBeenLastCalledWith(expect.stringContaining("Keep ChatCo open"));
+  expect(mockSetters[7]).toHaveBeenLastCalledWith(expect.stringContaining("Keep CHATCO open"));
   expect(remove).not.toHaveBeenCalled(); cleanup();
 });
 

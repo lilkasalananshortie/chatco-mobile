@@ -5,7 +5,7 @@ import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from
 import "./leaflet-base.css";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { LiveMapProps } from "./LiveMap";
-import { HAIL_MARKER_HTML, JEEPNEY_PATH, vehicleMarkerHtml, markerPresentation } from "./map-presentation";
+import { HAIL_MARKER_HTML, JEEPNEY_PATH, vehicleMarkerHtml, markerPresentation, unitPopupPalette } from "./map-presentation";
 
 const CARTO_API_KEY =
   process.env.EXPO_PUBLIC_CARTO_API_KEY ||
@@ -129,6 +129,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
     distanceMeters(vehiclePosition, [hail.latitude, hail.longitude]) <= RADIUS_METERS
   );
   const unitStatus = markerPresentation(capacity, isOnBreak);
+  const popup = unitPopupPalette(isLofi, capacity, isOnBreak);
   const routeLabel = tripDirection === "SOUTHBOUND" ? "Calumpit → Meycauayan" : "Meycauayan → Calumpit";
 
   const cartoBase = isLofi
@@ -204,18 +205,20 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         <Polyline positions={routeCoords} pathOptions={{ color: isLofi ? "#1A5FB4" : "#62A0EA", weight: 4, opacity: 0.9, dashArray: "10 10", lineCap: "round", lineJoin: "round" }} />
         <Circle center={vehiclePosition} radius={RADIUS_METERS} pathOptions={{ color: isLofi ? "#071A2E" : "#FFFFFF", fillColor: isLofi ? "#071A2E" : "#FFFFFF", fillOpacity: 0.05, weight: 1.5, opacity: 0.3, dashArray: "8 4" }} />
         <Marker position={vehiclePosition} icon={vehicleIcon}>
-          <Popup>
-            <div style={{ width: 260, maxWidth: "calc(100vw - 72px)", color: colors.text }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 14px 12px", borderBottom: `1px solid ${colors.border}` }}>
-                <svg width="34" height="34" viewBox="0 0 24 24" fill={colors.primaryLight} aria-hidden="true"><path d={JEEPNEY_PATH} /></svg>
-                <div style={{ minWidth: 0 }}><div style={{ color: colors.muted, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>YOUR UNIT</div><strong style={{ display: "block", marginTop: 2, color: colors.text, fontSize: 16, overflowWrap: "anywhere" }}>{unitNumber}</strong></div>
+          <Popup className="chatco-unit-popup" closeButton={false} minWidth={0} maxWidth={320} autoPanPadding={[20, 20]}>
+            <section aria-label={`Your unit: ${unitNumber}`} style={{ minWidth: 210, maxWidth: "calc(100vw - 48px)", color: popup.text, fontFamily: "Poppins-Regular, sans-serif", fontSize: 12, lineHeight: 1.5 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 16px 14px", borderBottom: `1px solid ${popup.divider}` }}>
+                <svg width="34" height="34" viewBox="0 0 24 24" fill={popup.icon} aria-hidden="true" style={{ flexShrink: 0 }}><path d={JEEPNEY_PATH} /></svg>
+                <div style={{ minWidth: 0 }}><div style={{ color: popup.muted, fontSize: 10 }}>Your unit</div><div style={{ marginTop: 2, color: popup.title, fontSize: 16, fontFamily: "Poppins-SemiBold, sans-serif", overflowWrap: "anywhere" }}>{unitNumber}</div></div>
               </div>
-              <div style={{ display: "grid", gap: 10, padding: "13px 14px 15px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 12 }}><span style={{ color: colors.muted }}>Status</span><strong style={{ color: unitStatus.color, textAlign: "right" }}>{unitStatus.label}</strong></div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 12 }}><span style={{ color: colors.muted }}>Route</span><strong style={{ color: colors.text, textAlign: "right" }}>{routeLabel}</strong></div>
-                {isOnBreak ? <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 12 }}><span style={{ color: colors.muted }}>Capacity</span><strong style={{ color: colors.text, textAlign: "right" }}>{capacity.replace("_", " ")}</strong></div> : null}
+              <div style={{ padding: "14px 16px 16px" }}>
+                <div style={{ color: popup.status, fontSize: 13, fontFamily: "Poppins-SemiBold, sans-serif", textAlign: "center" }}>{unitStatus.label}</div>
+                <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "max-content auto", alignItems: "start", gap: 16 }}><span style={{ color: popup.muted }}>Route</span><span style={{ color: popup.text, fontFamily: "Poppins-Medium, sans-serif", textAlign: "right", overflowWrap: "anywhere", fontVariantNumeric: "tabular-nums" }}>{routeLabel}</span></div>
+                  {isOnBreak ? <div style={{ display: "grid", gridTemplateColumns: "max-content auto", alignItems: "start", gap: 16 }}><span style={{ color: popup.muted }}>Capacity</span><span style={{ color: popup.text, fontFamily: "Poppins-Medium, sans-serif", textAlign: "right" }}>{capacity.replace("_", " ")}</span></div> : null}
+                </div>
               </div>
-            </div>
+            </section>
           </Popup>
         </Marker>
         {visibleHails.map(hail => (
@@ -251,6 +254,9 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         .chatco-map-shell .leaflet-popup-content-wrapper{background:${colors.surface};border:1px solid ${colors.border};border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.3)}
         .chatco-map-shell .leaflet-popup-content{margin:0;color:${colors.text};line-height:1.5;min-width:0}
         .chatco-map-shell .leaflet-popup-tip{background:${colors.surface}}
+        .chatco-map-shell .chatco-unit-popup .leaflet-popup-content-wrapper{padding:0;overflow:hidden;background:${popup.background};border-color:${popup.border};border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.3)}
+        .chatco-map-shell .chatco-unit-popup .leaflet-popup-content{margin:0;max-width:calc(100vw - 48px);color:${popup.text};font-family:Poppins-Regular,sans-serif;line-height:1.5}
+        .chatco-map-shell .chatco-unit-popup .leaflet-popup-tip{background:${popup.background}}
         @keyframes chatco-pulse{0%{transform:scale(1);opacity:1}100%{transform:scale(2.5);opacity:0}}@keyframes chatco-spin{to{transform:rotate(360deg)}}
       `}</style>
     </div>

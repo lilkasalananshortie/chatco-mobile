@@ -90,7 +90,7 @@ export function usePaymentFlow({
     setFareReady(false);
     setFareLoading(true);
     setFareLoadFailed(false);
-    setFareNotice("Loading published fares…");
+    setFareNotice("");
 
     void api
       .fareMatrix(shift.routeId)
@@ -259,6 +259,12 @@ export function usePaymentFlow({
     setSearchQuery("");
     setSelectingField("pickup");
     setExpandedBarangay(null);
+  };
+
+  const handleBackToMethods = () => {
+    resetRideSelection();
+    setSelectedMethod(null);
+    setStep("method");
   };
 
   // GCash specialized hook
@@ -530,6 +536,7 @@ export function usePaymentFlow({
     clearPickup,
     clearDropoff,
     swapLocations,
+    handleBackToMethods,
     handleClose,
     handleInitiateGcash: gcash.handleInitiateGcash,
     handleCancelGcash: gcash.handleCancelGcash,

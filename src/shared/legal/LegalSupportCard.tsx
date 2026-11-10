@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "../ui/BrandText";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { openLegalLink } from "./legal-links";
 

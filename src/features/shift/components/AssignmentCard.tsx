@@ -1,10 +1,10 @@
-import { Pressable, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, View } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
-import Svg, { Path } from "react-native-svg";
 import type { Driver, Unit } from "../../../core/domain/types";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
-
-const JEEPNEY_PATH = "M19,13V7H20V4H4V7H5V13H2C2,13.93 2.5,14.71 3.5,14.93V20A1,1 0 0,0 4.5,21H5.5A1,1 0 0,0 6.5,20V19H17.5V20A1,1 0 0,0 18.5,21H19.5A1,1 0 0,0 20.5,20V14.93C21.5,14.7 22,13.93 22,13H19M8,15A1.5,1.5 0 0,1 6.5,13.5A1.5,1.5 0 0,1 8,12A1.5,1.5 0 0,1 9.5,13.5A1.5,1.5 0 0,1 8,15M16,15A1.5,1.5 0 0,1 14.5,13.5A1.5,1.5 0 0,1 16,12A1.5,1.5 0 0,1 17.5,13.5A1.5,1.5 0 0,1 16,15M17.5,10.5C15.92,10.18 14.03,10 12,10C9.97,10 8,10.18 6.5,10.5V7H17.5V10.5Z";
+import { MinibusFrontIcon } from "./MinibusFrontIcon";
 
 export interface AssignmentCardProps {
   item: Unit | Driver;
@@ -12,7 +12,9 @@ export interface AssignmentCardProps {
 }
 
 export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
-  const { colors, isLofi, styles , isLowFidelity } = useAppTheme();
+  const { colors, styles, isLight, isLowFidelity } = useAppTheme();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const isUnit = "unitNumber" in item;
   const available = item.status === "available" && !item.unavailableReason;
   const title = isUnit ? item.unitNumber : item.name;
@@ -37,37 +39,41 @@ export function AssignmentCard({ item, onSelect }: AssignmentCardProps) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${status}${!available && item.unavailableReason ? `. ${item.unavailableReason}` : ""}`}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       onPress={() => onSelect(item)}
-      style={[
+      style={({ pressed }) => [
         styles.card,
         {
           marginTop: 0,
           padding: 14,
           minHeight: isUnit ? 66 : undefined,
-          borderColor: colors.border,
+          borderWidth: 1,
+          borderColor: available && (hovered || focused || pressed) ? colors.primary : colors.border,
           borderRadius: isLowFidelity ? 3 : 14,
-          backgroundColor: colors.surface,
+          backgroundColor: available && (hovered || focused || pressed) ? (isLight ? "#F3F4F6" : "#10273F") : colors.surface,
+          transform: [{ scale: available && pressed && !isLowFidelity ? 0.99 : 1 }],
           opacity: available ? 1 : 0.78,
         },
       ]}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         {isUnit ? (
-          <Svg width={36} height={36} viewBox="0 0 24 24" accessible={false}>
-            <Path d={JEEPNEY_PATH} fill={available ? colors.primaryLight : colors.muted} />
-          </Svg>
+          <MinibusFrontIcon available={available} />
         ) : (
           <Ionicons name="person-outline" size={25} color={colors.muted} />
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ color: available ? colors.text : colors.muted, fontSize: 14, fontWeight: "700" }}>
+          <Text numberOfLines={1} style={{ color: available ? colors.text : colors.muted, fontSize: isUnit ? 16 : 14, fontWeight: isUnit ? "600" : "700" }}>
             {title}
           </Text>
-          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 11, fontWeight: "500", marginTop: 3 }}>
+          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: isUnit ? 12 : 11, fontWeight: "500", marginTop: 3 }}>
             {subtitle}
           </Text>
         </View>
-        <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <Text style={{ color: colors.muted, fontSize: isUnit ? 11 : 9, fontWeight: isUnit ? "600" : "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
           {status}
         </Text>
         {available ? <Ionicons name="chevron-forward" size={16} color={colors.muted} /> : null}

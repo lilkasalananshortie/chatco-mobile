@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import { useWebEntrance } from "../../../shared/ui/useWebEntrance";
 import { Text } from "../../../shared/ui/BrandText";
 import { ConductorIcon } from "../../../shared/ui/ConductorIcon";
 import { SlideToConfirm } from "../../../shared/ui/SlideToConfirm";
@@ -10,16 +11,21 @@ export interface RemittanceConfirmModalProps {
   shiftInfo: { driverName: string; unitNumber: string }; totalPassengers: number;
   accountableTotals: { all: number; cash: number; gcash: number };
   onConfirm: () => void | Promise<void>;
+  error?: string;
 }
 
-export function RemittanceConfirmModal({ visible, onClose, busy, shiftInfo, totalPassengers, accountableTotals, onConfirm }: RemittanceConfirmModalProps) {
-  const { colors: c, isLofi } = useReportTheme();
+export function RemittanceConfirmModal({ visible, onClose, busy, shiftInfo, totalPassengers, accountableTotals, onConfirm, error }: RemittanceConfirmModalProps) {
+  const { colors: c, isLofi, isLowFidelity } = useReportTheme();
+  const { height } = useWindowDimensions();
+  const entrance = useWebEntrance(visible, isLowFidelity, height, 320);
+  const backdropEntrance = useWebEntrance(visible, isLowFidelity, 0, 200);
   const muted = isLofi ? "#4B5563" : "rgba(255,255,255,0.4)";
   const divider = isLofi ? "#E5E7EB" : "rgba(255,255,255,0.04)";
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}>
-    <View style={{ flex: 1, backgroundColor: c.overlay, justifyContent: "flex-end", alignItems: "center", padding: 16 }}>
+  return <Modal visible={visible} transparent animationType="none" onRequestClose={() => { if (!busy) onClose(); }}>
+    <View style={{ flex: 1, justifyContent: "flex-end", alignItems: "center", padding: 16 }}>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.overlay }, backdropEntrance]} />
       <Pressable onPress={() => { if (!busy) onClose(); }} style={{ position: "absolute", inset: 0 }} accessibilityLabel="Close confirmation" />
-      <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 384, maxHeight: "90%", backgroundColor: c.dialog, borderWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)", borderRadius: 24, overflow: "hidden" }}>
+      <Animated.View accessibilityViewIsModal style={[{ width: "100%", maxWidth: 384, maxHeight: "90%", backgroundColor: c.dialog, borderWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)", borderRadius: 24, overflow: "hidden" }, entrance]}>
         <ScrollView contentContainerStyle={{ padding: 24, gap: 20 }} bounces={false}>
           <View style={{ alignItems: "center" }}><ConductorIcon name="cash" size={32} color={c.muted} /></View>
           <View style={{ alignItems: "center" }}>
@@ -46,11 +52,12 @@ export function RemittanceConfirmModal({ visible, onClose, busy, shiftInfo, tota
             <Text style={{ flex: 1, color: c.secondary, fontSize: 11, lineHeight: 18 }}>Hand over <Text style={{ color: c.text, fontWeight: "700" }}>{money(accountableTotals.cash)}</Text> in cash to admin. They'll count it and record the official Cash Declaration for this shift.</Text>
           </View>
           <View style={{ gap: 12 }}>
-            <SlideToConfirm rounded commitRatio={0.9} label="Slide to confirm remittance" disabledLabel="Processing..." disabled={busy} onComplete={onConfirm} trackColor={isLofi ? "#F3F4F6" : c.surface2} handleColor="#1A5FB4" textColor={c.muted} style={{ marginTop: 0, borderWidth: 1, borderColor: c.border }} />
+            {!!error && <Text accessibilityRole="alert" style={{ color: c.danger, fontSize: 13, lineHeight: 20 }}>{error}</Text>}
+            <SlideToConfirm rounded commitRatio={0.9} activationFeedback label="Slide to confirm remittance" disabledLabel="Processing..." disabled={busy} onComplete={onConfirm} trackColor={isLofi ? "#F3F4F6" : c.surface2} handleColor="#1A5FB4" textColor={c.muted} style={{ marginTop: 0, borderWidth: 1, borderColor: c.border }} />
             <Pressable accessibilityRole="button" disabled={busy} onPress={onClose} style={{ paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: c.border, backgroundColor: isLofi ? "#F3F4F6" : c.surface2, alignItems: "center", opacity: busy ? 0.5 : 1 }}><Text style={{ color: c.secondary, fontSize: 14, fontWeight: "600" }}>Cancel</Text></Pressable>
           </View>
         </ScrollView>
-      </View>
+      </Animated.View>
     </View>
   </Modal>;
 }

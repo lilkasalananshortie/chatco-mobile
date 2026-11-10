@@ -6,6 +6,7 @@ jest.mock("react", () => ({
   useState: (initial: unknown) => [initial === 0 ? 320 : initial, jest.fn()],
   useRef: (initial: unknown) => ({ current: initial }),
   useMemo: (factory: () => unknown) => factory(),
+  useEffect: () => undefined,
 }));
 jest.mock("react-native", () => ({
   View: "View", ActivityIndicator: "Spinner",
@@ -25,6 +26,7 @@ jest.mock("../BrandText", () => ({ Text: "Text" }));
 jest.mock("../ConductorIcon", () => ({ ConductorIcon: "Icon" }));
 jest.mock("../../../core/utils/haptics", () => ({ appHaptics: { selection: jest.fn() } }));
 jest.mock("../../../core/theme/ThemeProvider", () => ({ useAppTheme: () => ({ colors: {}, isLofi: false }) }));
+jest.mock("../useWebEntrance", () => ({ useReducedMotion: () => false }));
 
 import { SlideToConfirm } from "../SlideToConfirm";
 type Element = React.ReactElement<Record<string, any>>;

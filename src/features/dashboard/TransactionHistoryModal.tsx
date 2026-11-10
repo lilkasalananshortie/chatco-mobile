@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../core/api/chatco-api";
 import type { Transaction } from "../../core/domain/types";
@@ -7,6 +7,7 @@ import type { TripCycleState } from "../../core/utils/trip-cycle-tracker";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Text } from "../../shared/ui/BrandText";
 import { ConductorIcon } from "../../shared/ui/ConductorIcon";
+import { useReducedMotion, useWebEntrance } from "../../shared/ui/useWebEntrance";
 import {
   TransactionFilterBar,
   getPresetRange,
@@ -18,6 +19,11 @@ import { TripHistoryLog } from "./TripHistoryLog";
 
 const PAGE_SIZE = 25;
 const formatPeso = (amount: number) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(amount || 0);
+
+function HistoryViewContent({ children, disabled }: { children: React.ReactNode; disabled: boolean }) {
+  const entrance = useWebEntrance(true, disabled, 10, 300);
+  return <Animated.View style={[{ flex: 1, minHeight: 0 }, entrance]}>{children}</Animated.View>;
+}
 
 function shortDate(iso: string) {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -45,8 +51,9 @@ export function TransactionHistoryModal({
   tripCycleState?: TripCycleState | null;
   onClose: () => void;
 }) {
-  const { isLofi } = useAppTheme();
-  const { height: windowHeight } = useWindowDimensions();
+  const { isLofi, isLowFidelity } = useAppTheme();
+  const backdropEntrance = useWebEntrance(visible, isLowFidelity, 0, 200);
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Filter>("ALL");
   const [datePreset, setDatePreset] = useState<DatePreset>("TODAY");
@@ -54,6 +61,19 @@ export function TransactionHistoryModal({
   const [toDate, setToDate] = useState(() => getPresetRange("TODAY").to);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterHeight, setFilterHeight] = useState(0);
+  const filterExpansion = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (isLowFidelity) { filterExpansion.setValue(filtersOpen ? 1 : 0); return; }
+    const animation = Animated.timing(filterExpansion, {
+      toValue: filtersOpen ? 1 : 0,
+      duration: 300,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [filterExpansion, filtersOpen, isLowFidelity]);
   const [items, setItems] = useState<Transaction[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -61,6 +81,21 @@ export function TransactionHistoryModal({
   const [totalAmount, setTotalAmount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [historyView, setHistoryView] = useState<"TRANSACTIONS" | "TRIPS">("TRANSACTIONS");
+  const [hasSwitchedView, setHasSwitchedView] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const tabSelection = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const target = historyView === "TRIPS" ? 1 : 0;
+    if (isLowFidelity || reduceMotion) { tabSelection.setValue(target); return; }
+    const animation = Animated.timing(tabSelection, {
+      toValue: target,
+      duration: 250,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [historyView, isLowFidelity, reduceMotion, tabSelection]);
   const requestSeqRef = useRef(0);
 
   const loadData = useCallback(
@@ -130,6 +165,7 @@ export function TransactionHistoryModal({
     setExpanded(null);
     setFiltersOpen(false);
     setHistoryView("TRANSACTIONS");
+    setHasSwitchedView(false);
     void loadData(1, "ALL", todayRange.from, todayRange.to);
   }, [visible, shiftId]);
 
@@ -180,7 +216,8 @@ export function TransactionHistoryModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" }}>
+      <View style={{ flex: 1, justifyContent: windowWidth >= 640 ? "center" : "flex-end", alignItems: "center", paddingHorizontal: windowWidth >= 640 ? 16 : 0 }}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.5)" }, backdropEntrance]} />
         <Pressable accessibilityLabel="Close transaction history" onPress={onClose} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
         <View
           accessibilityViewIsModal
@@ -191,15 +228,17 @@ export function TransactionHistoryModal({
             overflow: "hidden",
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,
+            borderBottomLeftRadius: windowWidth >= 640 ? 16 : 0,
+            borderBottomRightRadius: windowWidth >= 640 ? 16 : 0,
             borderWidth: 1,
-            borderBottomWidth: 0,
+            borderBottomWidth: windowWidth >= 640 ? 1 : 0,
             borderColor: hairline,
             backgroundColor: isLofi ? "#FFFFFF" : "#071A2E",
           }}
         >
           <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-              <Text style={{ color: muted, fontSize: 10, lineHeight: 15, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase" }}>{historyView === "TRIPS" ? "Trip History" : "Transaction History"}</Text>
+              <Text accessibilityRole="header" style={{ color: muted, fontSize: 10, lineHeight: 15, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase" }}>{historyView === "TRIPS" ? "Trip History" : "Transaction History"}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Close transaction history" onPress={onClose} style={{ width: 32, height: 32, marginTop: -6, marginRight: -6, alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
                 <ConductorIcon name="close" size={18} color={muted} />
               </Pressable>
@@ -220,21 +259,37 @@ export function TransactionHistoryModal({
           <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: hairline, backgroundColor: isLofi ? "#F9FAFB" : "#0B223A" }}>
             {([["TRANSACTIONS", "Transactions"], ["TRIPS", "Trip Log"]] as const).map(([view, label]) => {
               const selected = historyView === view;
-              return <Pressable key={view} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => setHistoryView(view)} style={{ minHeight: 36, flex: 1, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: selected ? "#1A5FB4" : hairline, backgroundColor: selected ? "#1A5FB4" : (isLofi ? "#FFFFFF" : "#12304F") }}>
-                <Text style={{ color: selected ? "#FFFFFF" : (isLofi ? "#374151" : "rgba(255,255,255,0.72)"), fontSize: 12, fontWeight: "700" }}>{label}</Text>
-              </Pressable>;
+              const selectedProgress = view === "TRIPS" ? tabSelection : tabSelection.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+              return <Animated.View key={view} style={{ flex: 1, borderRadius: 8, borderWidth: 1,
+                borderColor: selectedProgress.interpolate({ inputRange: [0, 1], outputRange: [hairline, "#1A5FB4"] }),
+                backgroundColor: selectedProgress.interpolate({ inputRange: [0, 1], outputRange: [isLofi ? "#FFFFFF" : "#12304F", "#1A5FB4"] }) }}>
+                <Pressable accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected }} onPress={() => { if (!selected) { setHasSwitchedView(true); setHistoryView(view); } }} style={{ minHeight: 36, alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
+                  <View accessible={false} style={{ alignItems: "center", justifyContent: "center" }}>
+                    <Animated.View style={{ opacity: selectedProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
+                      <Text style={{ color: isLofi ? "#374151" : "rgba(255,255,255,0.72)", fontSize: 12, fontWeight: "700" }}>{label}</Text>
+                    </Animated.View>
+                    <Animated.View style={{ position: "absolute", opacity: selectedProgress }}>
+                      <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>{label}</Text>
+                    </Animated.View>
+                  </View>
+                </Pressable>
+              </Animated.View>;
             })}
           </View>
 
-          {historyView === "TRANSACTIONS" ? <View style={{ borderBottomWidth: 1, borderColor: hairline, backgroundColor: isLofi ? "#F9FAFB" : "#0B223A" }}>
-            <Pressable accessibilityRole="button" accessibilityState={{ expanded: filtersOpen }} onPress={() => setFiltersOpen(open => !open)} style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 20, paddingVertical: 12 }}>
+          <HistoryViewContent key={historyView} disabled={isLowFidelity || !hasSwitchedView}>
+          {historyView === "TRANSACTIONS" ? <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: hairline, backgroundColor: isLofi ? "#F9FAFB" : "#0B223A" }}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: filtersOpen }} onPress={() => setFiltersOpen(open => !open)} style={{ minHeight: 40, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
               <Text style={{ color: text, fontSize: 12, fontWeight: "600" }}>Filters</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
                 <Text numberOfLines={1} style={{ flexShrink: 1, color: muted, fontSize: 12, textAlign: "right" }}>{periodLabel(datePreset, fromDate, toDate)} · {filter === "ALL" ? "All payments" : filter}</Text>
-                <ConductorIcon name={filtersOpen ? "up" : "down"} size={16} color={muted} />
+                <Animated.View style={{ transform: [{ rotate: filterExpansion.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }) }] }}>
+                  <ConductorIcon name="down" size={16} color={muted} />
+                </Animated.View>
               </View>
             </Pressable>
-            {filtersOpen ? (
+            <Animated.View pointerEvents={filtersOpen ? "auto" : "none"} accessibilityElementsHidden={!filtersOpen} importantForAccessibility={filtersOpen ? "auto" : "no-hide-descendants"} style={{ overflow: "hidden", height: filterExpansion.interpolate({ inputRange: [0, 1], outputRange: [0, filterHeight] }) }}>
+              <View onLayout={event => setFilterHeight(event.nativeEvent.layout.height)} style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
               <TransactionFilterBar
                 filter={filter}
                 datePreset={datePreset}
@@ -246,7 +301,8 @@ export function TransactionHistoryModal({
                 onPresetChange={handlePresetChange}
                 onCustomDateApply={handleCustomDateApply}
               />
-            ) : null}
+              </View>
+            </Animated.View>
           </View> : null}
 
           {historyView === "TRIPS" ? <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled"><TripHistoryLog state={tripCycleState} /></ScrollView> : <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
@@ -272,6 +328,7 @@ export function TransactionHistoryModal({
                 {items.map((transaction, index) => (
                   <View key={transaction.transactionId}>
                     <TransactionListItem
+                      reduceMotion={reduceMotion}
                       transaction={transaction}
                       isExpanded={expanded === transaction.transactionId}
                       onToggleExpand={() => setExpanded(expanded === transaction.transactionId ? null : transaction.transactionId)}
@@ -306,6 +363,7 @@ export function TransactionHistoryModal({
               <Text style={{ minWidth: 32, color: muted, fontSize: 11, textAlign: "center", fontVariant: ["tabular-nums"] }}>{safePage} / {totalPages}</Text>
             </View>
           </View> : <View style={{ minHeight: Math.max(24, insets.bottom), borderTopWidth: 1, borderColor: hairline }} />}
+          </HistoryViewContent>
         </View>
       </View>
     </Modal>

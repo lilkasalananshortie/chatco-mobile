@@ -21,6 +21,11 @@ type Envelope<T> = { data: T; message?: string; errors?: unknown };
 
 let sessionEndedHandler: ((message?: string) => void) | null = null;
 let sessionEndedNotified = false;
+let shiftEndedHandler: (() => void) | null = null;
+export function setShiftEndedHandler(handler: () => void): () => void {
+  shiftEndedHandler = handler;
+  return () => { if (shiftEndedHandler === handler) shiftEndedHandler = null; };
+}
 
 // Share only simultaneous default reads. Never cache financial responses or
 // combine writes, custom headers, or independently cancellable requests.
@@ -141,6 +146,8 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
       }
     }
     const message = payload?.message ?? `Request failed (${response.status}).`;
+    if (response.status === 409 && /shift (?:has )?(?:already )?ended/i.test(message)
+      && token && await appStorage.getItem(TOKEN_KEY) === token) shiftEndedHandler?.();
     const err = new Error(message);
     (err as any).status = response.status;
     (err as any).response = { status: response.status, data: payload };

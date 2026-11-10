@@ -1,5 +1,7 @@
 import React, { useMemo } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Text } from "../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { appHaptics } from "../../core/utils/haptics";
@@ -10,6 +12,7 @@ import {
   type TripRecord,
 } from "../../core/utils/trip-cycle-tracker";
 import { createTripLogbookStyles } from "./trip-logbook-styles";
+import { useWebEntrance } from "../../shared/ui/useWebEntrance";
 
 interface TripLogbookModalProps {
   visible: boolean;
@@ -40,6 +43,7 @@ export function TripLogbookModal({
   onUndoTurnaround,
 }: TripLogbookModalProps) {
   const { colors, isLofi, isLowFidelity, styles } = useAppTheme();
+  const backdropEntrance = useWebEntrance(visible, isLowFidelity, 0, 200);
 
   const activeStats = useMemo(
     () => computeTripStats(state.activeTrip, transactions),
@@ -82,7 +86,8 @@ export function TripLogbookModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalStyles.overlay}>
+      <SafeAreaView edges={["top", "bottom"]} style={[modalStyles.overlay, { backgroundColor: "transparent" }]}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0, 0, 0, 0.75)" }, backdropEntrance]} />
         <View style={modalStyles.sheet}>
           {/* Header */}
           <View style={modalStyles.headerRow}>
@@ -260,7 +265,7 @@ export function TripLogbookModal({
             ) : null}
           </ScrollView>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

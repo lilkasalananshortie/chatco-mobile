@@ -1,7 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { Platform } from "react-native";
 
-export async function pickProfilePhoto(): Promise<FormData | null> {
+export async function pickProfilePhotoSelection(): Promise<{ body: FormData; uri: string } | null> {
   if (Platform.OS !== "web" && !(await ImagePicker.requestMediaLibraryPermissionsAsync()).granted) throw new Error("Allow photo access in device settings to choose a profile picture.");
   const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.85 });
   const image = result.canceled ? null : result.assets?.[0];
@@ -14,5 +14,9 @@ export async function pickProfilePhoto(): Promise<FormData | null> {
   if (image.width > 4096 || image.height > 4096) throw new Error("Choose a photo no larger than 4096 × 4096 pixels.");
   const body = new FormData();
   body.append("photo", image.file ?? ({ uri: image.uri, name: fileName, type: mimeType } as unknown as Blob));
-  return body;
+  return { body, uri: image.uri };
+}
+
+export async function pickProfilePhoto(): Promise<FormData | null> {
+  return (await pickProfilePhotoSelection())?.body ?? null;
 }

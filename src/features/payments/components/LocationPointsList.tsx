@@ -1,12 +1,24 @@
-﻿import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Animated, Pressable, ScrollView, View } from "react-native";
+import { Text, TextInput } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import { appHaptics } from "../../../core/utils/haptics";
 import type { FarePoint } from "../../../core/domain/types";
 import { subDropoffPoints } from "../fare-helpers";
+import type { SelectedPaymentMethod } from "../payment-types";
+import { useAnimatedToggle } from "../../../shared/ui/useAnimatedFeedback";
+import { useReducedMotion } from "../../../shared/ui/useWebEntrance";
+
+function RotatingChevron({ expanded, color, disabled }: { expanded: boolean; color: string; disabled: boolean }) {
+  const rotation = useAnimatedToggle(expanded, 200, disabled);
+  return <Animated.View style={{ transform: [{ rotate: rotation.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }) }] }}>
+    <Ionicons name="chevron-down" size={16} color={color} />
+  </Animated.View>;
+}
 
 export interface LocationPointsListProps {
   styles: any;
+  selectedMethod?: SelectedPaymentMethod | null;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   selectingField: "pickup" | "dropoff" | null;
@@ -27,6 +39,7 @@ export interface LocationPointsListProps {
 
 export function LocationPointsList({
   styles,
+  selectedMethod,
   searchQuery,
   setSearchQuery,
   selectingField,
@@ -44,7 +57,9 @@ export function LocationPointsList({
   setDropoffPoint,
   setDropoffLandmark,
 }: LocationPointsListProps) {
-  const { colors, isLofi } = usePaymentTheme();
+  const { colors, isLofi, isLowFidelity } = usePaymentTheme();
+  const reduceMotion = useReducedMotion();
+  const standardSelection = selectedMethod === "Cash" || selectedMethod === "GCash";
 
   return (
     <>
@@ -55,7 +70,7 @@ export function LocationPointsList({
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder={`Search ${selectingField === "pickup" ? "pickup" : "drop-off"} barangay or landmark…`}
+            placeholder="Search barangay or landmark…"
             placeholderTextColor={colors.muted}
             style={styles.searchInput}
           />
@@ -67,6 +82,7 @@ export function LocationPointsList({
         </View>
       </View>
 
+      <Text style={[styles.searchTip, { paddingHorizontal: 16, paddingBottom: 8 }]}>Tap your destination Point Area → then select a sub drop-off point · Auto-opens after selection</Text>
       {/* Points List */}
       <ScrollView style={styles.pointsList} contentContainerStyle={styles.pointsListContent}>
         {filteredPoints.map((point) => {
@@ -92,6 +108,14 @@ export function LocationPointsList({
               : isLofi
               ? colors.success
               : "rgba(16, 185, 129, 0.4)";
+          }
+
+          if (standardSelection) {
+            itemBg = "transparent";
+            itemBorder = isPickup && isDropoff ? "#8B5CF6"
+              : isDropoff && isExpanded ? colors.text
+              : isPickup ? "#10B981"
+              : isDropoff ? "#F97316" : colors.border;
           }
 
           return (
@@ -152,7 +176,7 @@ export function LocationPointsList({
                     <View
                       style={[
                         styles.statusTag,
-                        { backgroundColor: isSameBarangay ? "#8B5CF6" : "#10B981" },
+                        { backgroundColor: isSameBarangay ? "#8B5CF6" : standardSelection ? "#F97316" : "#10B981" },
                       ]}
                     >
                       <Text style={styles.statusTagText}>DROP-OFF</Text>
@@ -167,11 +191,7 @@ export function LocationPointsList({
                       }}
                       style={styles.expandChevronButton}
                     >
-                      <Ionicons
-                        name={isExpanded ? "chevron-up" : "chevron-down"}
-                        size={16}
-                        color={colors.muted}
-                      />
+                      <RotatingChevron expanded={isExpanded} color={colors.muted} disabled={isLowFidelity || reduceMotion} />
                     </Pressable>
                   ) : null}
                 </View>
@@ -232,14 +252,14 @@ export function LocationPointsList({
                           styles.substopRow,
                           isLmSelected
                             ? {
-                                backgroundColor: isSameBarangay
+                                backgroundColor: standardSelection ? colors.surface2 : isSameBarangay
                                   ? isLofi
                                     ? "rgba(109, 40, 217, 0.12)"
                                     : "rgba(139, 92, 246, 0.15)"
                                   : isLofi
                                   ? "rgba(22, 112, 90, 0.12)"
                                   : "rgba(16, 185, 129, 0.15)",
-                                borderColor: isSameBarangay
+                                borderColor: standardSelection ? colors.text : isSameBarangay
                                   ? isLofi
                                     ? "#6D28D9"
                                     : "rgba(139, 92, 246, 0.3)"
@@ -271,7 +291,7 @@ export function LocationPointsList({
                             styles.substopName,
                             isLmSelected
                               ? {
-                                  color: isSameBarangay
+                                  color: standardSelection ? colors.text : isSameBarangay
                                     ? isLofi
                                       ? "#6D28D9"
                                       : "#A78BFA"

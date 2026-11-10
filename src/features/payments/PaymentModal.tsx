@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Modal, Text, View, useWindowDimensions } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, Modal, StyleSheet, View, useWindowDimensions } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Text } from "../../shared/ui/BrandText";
 import type { Shift } from "../../core/domain/types";
 import { usePaymentTheme } from "../../core/theme/payment-theme";
 import { createPaymentStyles } from "./payment-styles";
@@ -14,6 +16,7 @@ import { PaymentSuccessStep } from "./components/PaymentSuccessStep";
 import { PaymentFailedStep } from "./components/PaymentFailedStep";
 import { TransactionHistoryModal } from "../dashboard/TransactionHistoryModal";
 import { loadTripCycleState, type TripCycleState } from "../../core/utils/trip-cycle-tracker";
+import { useReducedMotion, useWebEntrance } from "../../shared/ui/useWebEntrance";
 
 export interface PaymentModalProps {
   visible: boolean;
@@ -33,7 +36,12 @@ export function PaymentModal({
   blockedReason,
 }: PaymentModalProps) {
   const { colors, isLofi, isLowFidelity } = usePaymentTheme();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const backdropEntrance = useWebEntrance(visible, isLowFidelity, 0, 200);
+  const reduceMotion = useReducedMotion();
+  const exitProgress = useRef(new Animated.Value(0)).current;
+  const backdropExit = useRef(new Animated.Value(0)).current;
+  const closing = useRef(false);
   const centeredPanel = width >= 640;
   const [showHistory, setShowHistory] = useState(false);
   const [historyTrips, setHistoryTrips] = useState<TripCycleState | null>(null);
@@ -48,6 +56,34 @@ export function PaymentModal({
     colors,
     isLofi,
   });
+  const entrance = useWebEntrance(visible, isLowFidelity, height, 320, flow.step);
+  const exitOpacity = exitProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const backdropExitOpacity = backdropExit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+
+  useEffect(() => {
+    if (visible) {
+      closing.current = false;
+      exitProgress.setValue(0);
+      backdropExit.setValue(0);
+    }
+  }, [visible, exitProgress, backdropExit]);
+
+  const requestClose = () => {
+    if (closing.current) return;
+    if (flow.step === "processing") return;
+    if (width < 1280 || isLowFidelity || reduceMotion) {
+      flow.handleClose();
+      return;
+    }
+    closing.current = true;
+    Animated.parallel([
+      Animated.timing(exitProgress, { toValue: 1, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(backdropExit, { toValue: 1, duration: 180, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) flow.handleClose();
+      else closing.current = false;
+    });
+  };
 
   useEffect(() => {
     if (!visible) setShowHistory(false);
@@ -107,7 +143,8 @@ export function PaymentModal({
         clearPickup={flow.clearPickup}
         clearDropoff={flow.clearDropoff}
         swapLocations={flow.swapLocations}
-        handleClose={flow.handleClose}
+        onBack={flow.handleBackToMethods}
+        handleClose={requestClose}
         setStep={flow.setStep}
       />
     );
@@ -115,10 +152,11 @@ export function PaymentModal({
 
   // MODAL OVERLAY FOR OTHER STEPS
   return (
-    <Modal visible={visible} transparent animationType={isLowFidelity ? "none" : "fade"} onRequestClose={flow.handleClose}>
-      <View style={[styles.modalBackdrop, displayStep === "method" && !centeredPanel ? { padding: 0, alignItems: "stretch" } : null, { justifyContent: centeredPanel || displayStep === "qr_code" ? "center" : "flex-end", backgroundColor: displayStep === "qr_code" ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.6)" }]}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
+      <SafeAreaView edges={["top", "bottom"]} style={[styles.modalBackdrop, displayStep === "method" && !centeredPanel ? { padding: 0, alignItems: "stretch" } : null, { justifyContent: centeredPanel || displayStep === "qr_code" ? "center" : "flex-end", backgroundColor: "transparent" }]}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: displayStep === "qr_code" ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.6)" }, backdropEntrance, { opacity: Animated.multiply(backdropEntrance.opacity, backdropExitOpacity) }]} />
         {displayStep !== "method" && flow.fareNotice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.text, backgroundColor: colors.surface, padding: 12, marginBottom: 8 }}>{flow.fareNotice}</Text> : null}
-        <View style={{ width: "100%", alignItems: "center" }}>
+        <Animated.View style={[{ width: "100%", alignItems: "center" }, entrance, width >= 1280 ? { opacity: Animated.multiply(entrance.opacity, exitOpacity), transform: [...entrance.transform, { translateY: exitProgress.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }) }, { scale: exitProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.95] }) }] } : null]}>
         {displayStep === "method" ? (
           <MethodSelectionStep
             styles={styles}
@@ -137,7 +175,7 @@ export function PaymentModal({
               flow.setSelectedMethod(method);
               flow.setStep("select");
             }}
-            onClose={flow.handleClose}
+            onClose={requestClose}
           />
         ) : null}
 
@@ -164,10 +202,16 @@ export function PaymentModal({
             selectedMethod={flow.selectedMethod}
             isGroupMode={flow.isGroupMode}
             groupTotalFare={flow.groupTotalFare}
+            groupGrossFare={flow.groupGrossFare}
+            groupDiscount={flow.groupDiscount}
+            groupPassengers={flow.groupPassengers}
+            commuterType={flow.commuterType}
+            pickupLandmark={flow.pickupLandmark}
+            dropoffLandmark={flow.dropoffLandmark}
             fareInfo={flow.fareInfo}
             isInitiatingGcash={flow.isInitiatingGcash}
             handleConfirmPayment={flow.handleConfirmPayment}
-            onClose={flow.handleClose}
+            onBack={() => flow.setStep(flow.isGroupMode ? "passengers" : "select")}
           />
         ) : null}
 
@@ -218,7 +262,7 @@ export function PaymentModal({
             printerStatus={flow.printerStatus}
             pairedPrinterName={flow.pairedPrinterName}
             handlePrint={flow.handlePrint}
-            handleClose={flow.handleClose}
+            handleClose={requestClose}
           />
         ) : null}
 
@@ -228,12 +272,12 @@ export function PaymentModal({
             gcashError={flow.gcashError}
             selectedMethod={flow.selectedMethod}
             isGroupMode={flow.isGroupMode}
-            handleClose={flow.handleClose}
+            handleClose={requestClose}
             setStep={flow.setStep}
           />
         ) : null}
-        </View>
-      </View>
+        </Animated.View>
+      </SafeAreaView>
     </Modal>
   );
 }

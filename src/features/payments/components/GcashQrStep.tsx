@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { Text } from "../../../shared/ui/BrandText";
 import QRCode from "react-native-qrcode-svg";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { FarePoint, GcashInitiation } from "../../../core/domain/types";
@@ -99,7 +100,7 @@ export function GcashQrStep({
                 />
               </View>
               <Text style={{ marginTop: 10, color: muted, fontSize: 11, lineHeight: 16 }}>
-                Commuter scans this with the e-Chatco app to pay through GCash.
+                Commuter scans this with the CHATCO app to pay through GCash.
               </Text>
             </>
           )}

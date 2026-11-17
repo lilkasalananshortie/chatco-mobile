@@ -12,6 +12,7 @@ const sources: Record<CueName, number> = {
 };
 
 const players = new Map<CueName, AudioPlayer>();
+const played = new Set<CueName>();
 let loading: Promise<typeof import("expo-audio")> | undefined;
 
 async function audioModule() {
@@ -24,12 +25,17 @@ async function audioModule() {
 
 export async function preloadNativeAudio(): Promise<void> {
   try {
-    const { createAudioPlayer } = await audioModule();
+    const { createAudioPlayer, setAudioModeAsync } = await audioModule();
+    try {
+      await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "mixWithOthers" });
+    } catch (error) {
+      console.warn("Unable to configure conductor sound playback", error);
+    }
     for (const name of Object.keys(sources) as CueName[]) {
       if (!players.has(name)) players.set(name, createAudioPlayer(sources[name]));
     }
-  } catch {
-    // Haptics remain available if audio cannot initialize on this device.
+  } catch (error) {
+    console.warn("Unable to preload conductor sounds", error);
   }
 }
 
@@ -38,9 +44,12 @@ export async function playNativeCue(name: CueName): Promise<void> {
     if (!players.has(name)) await preloadNativeAudio();
     const player = players.get(name);
     if (!player) return;
-    await player.seekTo(0);
+    // The first play can arrive while the bundled source is still loading.
+    // Seeking at that point can fail on iOS, so only rewind after a prior play.
+    if (played.has(name)) await player.seekTo(0);
     player.play();
-  } catch {
-    // A sound failure should never interrupt a payment or shift action.
+    played.add(name);
+  } catch (error) {
+    console.warn(`Unable to play ${name} conductor sound`, error);
   }
 }

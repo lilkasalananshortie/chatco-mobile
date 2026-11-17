@@ -6,7 +6,7 @@ jest.mock("react", () => ({
   useState: (initial: unknown) => [initial === 0 ? 320 : initial, jest.fn()],
   useRef: (initial: unknown) => ({ current: initial }),
   useMemo: (factory: () => unknown) => factory(),
-  useEffect: () => undefined,
+  useEffect: (effect: () => void) => effect(),
 }));
 jest.mock("react-native", () => ({
   View: "View", ActivityIndicator: "Spinner",
@@ -15,12 +15,15 @@ jest.mock("react-native", () => ({
   Animated: {
     View: "AnimatedView",
     Value: class {
+      stopAnimation = jest.fn();
       setValue = jest.fn();
       interpolate(config: unknown) { return config; }
     },
     multiply: (value: unknown, multiplier: number) => ({ value, multiplier }),
     spring: () => ({ start: jest.fn() }),
+    timing: jest.fn(() => ({ start: jest.fn(), stop: jest.fn() })),
   },
+  Easing: { inOut: (value: unknown) => value, ease: "ease" },
 }));
 jest.mock("../BrandText", () => ({ Text: "Text" }));
 jest.mock("../ConductorIcon", () => ({ ConductorIcon: "Icon" }));
@@ -29,6 +32,7 @@ jest.mock("../../../core/theme/ThemeProvider", () => ({ useAppTheme: () => ({ co
 jest.mock("../useWebEntrance", () => ({ useReducedMotion: () => false }));
 
 import { SlideToConfirm } from "../SlideToConfirm";
+import { Animated } from "react-native";
 type Element = React.ReactElement<Record<string, any>>;
 function children(node: Element): Element[] { return React.Children.toArray(node.props.children).filter(React.isValidElement) as Element[]; }
 function style(node: Element) { return Object.assign({}, ...node.props.style.filter(Boolean)); }
@@ -51,4 +55,10 @@ test("reverse slider moves left and rejects a drag in the opposite direction", (
   expect(animation.value.setValue).toHaveBeenLastCalledWith(100);
   root.props.onPanResponderMove({}, { dx: 100 });
   expect(animation.value.setValue).toHaveBeenLastCalledWith(0);
+});
+
+test("activation colors animate on the JS driver", () => {
+  (Animated.timing as jest.Mock).mockClear();
+  SlideToConfirm({ label: "Slide to confirm remittance", onComplete: jest.fn(), activationFeedback: true });
+  expect(Animated.timing).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ useNativeDriver: false }));
 });

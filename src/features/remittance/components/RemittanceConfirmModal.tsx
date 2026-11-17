@@ -1,4 +1,5 @@
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useWebEntrance } from "../../../shared/ui/useWebEntrance";
 import { Text } from "../../../shared/ui/BrandText";
 import { ConductorIcon } from "../../../shared/ui/ConductorIcon";
@@ -22,7 +23,7 @@ export function RemittanceConfirmModal({ visible, onClose, busy, shiftInfo, tota
   const muted = isLofi ? "#4B5563" : "rgba(255,255,255,0.4)";
   const divider = isLofi ? "#E5E7EB" : "rgba(255,255,255,0.04)";
   return <Modal visible={visible} transparent animationType="none" onRequestClose={() => { if (!busy) onClose(); }}>
-    <View style={{ flex: 1, justifyContent: "flex-end", alignItems: "center", padding: 16 }}>
+    <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, justifyContent: "flex-end", alignItems: "center", padding: 16 }}>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.overlay }, backdropEntrance]} />
       <Pressable onPress={() => { if (!busy) onClose(); }} style={{ position: "absolute", inset: 0 }} accessibilityLabel="Close confirmation" />
       <Animated.View accessibilityViewIsModal style={[{ width: "100%", maxWidth: 384, maxHeight: "90%", backgroundColor: c.dialog, borderWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)", borderRadius: 24, overflow: "hidden" }, entrance]}>
@@ -58,6 +59,6 @@ export function RemittanceConfirmModal({ visible, onClose, busy, shiftInfo, tota
           </View>
         </ScrollView>
       </Animated.View>
-    </View>
+    </SafeAreaView>
   </Modal>;
 }

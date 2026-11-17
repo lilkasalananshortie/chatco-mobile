@@ -130,13 +130,15 @@ export interface ReceiptOptions {
   passengerBreakdown?: Array<{ passengerType: string; quantity: number; subtotal: number }>;
 }
 
-// Build complete ESC/POS binary stream for Goojprt 58mm Belt Printer
+// Build one passenger's ESC/POS fare receipt using the saved web receipt settings.
 export function buildGoojprtReceiptBytes(
   txns: Transaction[],
   options: ReceiptOptions = {}
 ): { bytes: Uint8Array; text: string } {
   const parts: Uint8Array[] = [CMD.INIT];
   let textBuffer = "";
+  const settings = options.settings;
+  const lineWidth = settings?.paperWidth === "80" ? 48 : GOOJPRT_LINE_WIDTH;
 
   const appendText = (str: string, isCenter = false, isBold = false) => {
     if (isCenter) parts.push(CMD.ALIGN_CENTER);
@@ -149,8 +151,25 @@ export function buildGoojprtReceiptBytes(
     textBuffer += str;
   };
 
+  const appendCenteredWrapped = (value: string) => {
+    let line = "";
+    for (const word of value.trim().split(/\s+/)) {
+      if (line && line.length + word.length + 1 > lineWidth) {
+        appendText(centerText(line, lineWidth), true);
+        line = "";
+      }
+      if (word.length > lineWidth) {
+        for (let offset = 0; offset < word.length; offset += lineWidth) {
+          if (line) { appendText(centerText(line, lineWidth), true); line = ""; }
+          appendText(centerText(word.slice(offset, offset + lineWidth), lineWidth), true);
+        }
+      } else line = line ? `${line} ${word}` : word;
+    }
+    if (line) appendText(centerText(line, lineWidth), true);
+  };
+
   const appendRow = (label: string, value: string, isBold = false) => {
-    const rowStr = formatRow(label, value);
+    const rowStr = formatRow(label, value, lineWidth);
     if (isBold) parts.push(CMD.BOLD_ON);
     parts.push(CMD.ALIGN_LEFT);
     parts.push(encodeText(rowStr));
@@ -159,120 +178,86 @@ export function buildGoojprtReceiptBytes(
   };
 
   const appendDivider = (char = "-") => {
-    const line = dividerLine(char);
+    const line = dividerLine(char, lineWidth);
     parts.push(CMD.ALIGN_LEFT);
     parts.push(encodeText(line));
     textBuffer += line;
   };
 
   const firstTxn = txns[0];
-  const settings = options.settings;
   const shift = options.shift;
 
-  const businessName = settings?.businessName || "CHATCO TRANSPORT";
+  const businessName = settings?.businessName || "E-CHATCO";
   const addressLine = settings?.addressLine || "";
-  const footerNote = settings?.footerNote || "Thank you for riding with ChatCo!";
+  const footerNote = settings?.footerNote ?? "Thank you for riding with E-CHATCO!";
 
   // 1. HEADER
-  parts.push(CMD.ALIGN_CENTER);
-  parts.push(CMD.DOUBLE_SIZE_ON);
-  parts.push(CMD.BOLD_ON);
-  parts.push(encodeText(`${businessName.slice(0, 16)}\n`));
-  parts.push(CMD.BOLD_OFF);
-  parts.push(CMD.DOUBLE_SIZE_OFF);
-  textBuffer += centerText(businessName);
+  if (businessName.length <= lineWidth / 2) {
+    parts.push(CMD.ALIGN_CENTER, CMD.DOUBLE_SIZE_ON, CMD.BOLD_ON, encodeText(`${businessName}\n`), CMD.BOLD_OFF, CMD.DOUBLE_SIZE_OFF);
+    textBuffer += centerText(businessName, lineWidth);
+  } else appendCenteredWrapped(businessName);
 
   if (addressLine) {
-    appendText(centerText(addressLine), true);
+    appendCenteredWrapped(addressLine);
   }
-  appendText(centerText("OFFICIAL FARE TICKET"), true, true);
-  appendDivider("=");
+  appendText(centerText("FARE RECEIPT", lineWidth), true, true);
+  appendDivider("-");
 
   // 2. META (Date, Unit, Crew)
   const timestamp = firstTxn?.timestamp ? new Date(firstTxn.timestamp) : new Date();
-  const dateStr = timestamp.toLocaleDateString("en-PH", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const timeStr = timestamp.toLocaleTimeString("en-PH", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  appendRow("Date & Time:", `${dateStr} ${timeStr}`);
+  const dateStr = timestamp.toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
+  if (settings?.showDateTime !== false) appendRow("Date", dateStr);
 
-  const unitNum = firstTxn?.unitNumber || shift?.unitNumber || "104";
-  appendRow("Unit No:", unitNum, true);
+  if (settings?.showTransactionId !== false && firstTxn?.transactionId) appendRow("Ref", firstTxn.transactionId, true);
+  if (firstTxn?.multiplePaymentReference) appendRow("Group ref", firstTxn.multiplePaymentReference);
+
+  const unitNum = firstTxn?.unitNumber || shift?.unitNumber || "-";
+  if (settings?.showUnit !== false) appendRow("Unit", unitNum, true);
 
   const conductorName = firstTxn?.conductorName || shift?.conductorName || "Conductor";
-  appendRow("Conductor:", conductorName);
+  if (settings?.showConductor !== false) appendRow("Conductor", conductorName);
 
   const driverName = firstTxn?.driverName || shift?.driverName;
   if (driverName) {
-    appendRow("Driver:", driverName);
+    appendRow("Driver", driverName);
   }
 
-  // 3. TICKET REFERENCE(S)
-  if (firstTxn?.multiplePaymentReference) {
-    appendRow("Group Ref:", firstTxn.multiplePaymentReference, true);
+  const role = firstTxn?.passengerRole || "REGULAR";
+  if (settings?.showPassenger !== false) {
+    appendRow("Commuter", firstTxn?.passengerName || "Passenger");
+    appendRow("", role === "SENIOR_CITIZEN" ? "Senior Citizen" : role.charAt(0) + role.slice(1).toLowerCase());
   }
-  if (firstTxn?.transactionId) {
-    appendRow("Ticket ID:", firstTxn.transactionId.slice(-14));
-  }
-
-  appendDivider("-");
 
   // 4. ROUTE INFO
-  if (firstTxn?.from && firstTxn?.to) {
-    appendRow("From:", firstTxn.from);
-    appendRow("To:", firstTxn.to);
-    if (firstTxn.distance) {
-      appendRow("Barangays:", `${firstTxn.distance} traveled`);
-    }
+  if (settings?.showRoute !== false && firstTxn?.from && firstTxn?.to) {
+    appendDivider("-");
+    appendRow("From", firstTxn.from);
+    appendRow("To", firstTxn.to);
   }
 
-  appendDivider("-");
-
-  // 5. COMMUTER BREAKDOWN
-  const isGroup = txns.length > 1 || (options.totalPassengers ?? 1) > 1;
-  if (txns.length > 1) {
-    const breakdown = new Map<string, { quantity: number; subtotal: number }>();
-    for (const transaction of txns) {
-      const role = transaction.passengerRole ?? "REGULAR";
-      const line = breakdown.get(role) ?? { quantity: 0, subtotal: 0 };
-      line.quantity++; line.subtotal += transaction.finalAmount; breakdown.set(role, line);
-    }
-    for (const [role, line] of breakdown) appendRow(`${role} x${line.quantity}`, `P${line.subtotal.toFixed(2)}`);
-    appendRow("Passengers:", String(txns.length));
-  } else if (isGroup && options.passengerBreakdown && options.passengerBreakdown.length > 0) {
-    for (const b of options.passengerBreakdown) {
-      if (b.quantity > 0) {
-        appendRow(`${b.passengerType} x${b.quantity}`, `P${b.subtotal.toFixed(2)}`);
-      }
-    }
-  } else {
-    const role = firstTxn?.passengerRole || "REGULAR";
-    appendRow("Passenger:", role);
-    appendRow("Base Fare:", `P${(firstTxn?.baseFare ?? firstTxn?.finalAmount ?? 0).toFixed(2)}`);
-    if (firstTxn?.discountAmount && firstTxn.discountAmount > 0) {
-      appendRow("Discount:", `-P${firstTxn.discountAmount.toFixed(2)}`);
-    }
+  // Each printed receipt represents one passenger transaction.
+  if (settings?.showFareBreakdown !== false) {
+    appendDivider("-");
+    appendRow("Base fare", `P${(firstTxn?.baseFare ?? firstTxn?.finalAmount ?? 0).toFixed(2)}`);
+    appendRow("Passengers", "1");
+    appendRow("Gross fare", `P${(firstTxn?.baseFare ?? firstTxn?.finalAmount ?? 0).toFixed(2)}`);
+    if (firstTxn?.discountAmount && firstTxn.discountAmount > 0) appendRow("Discount", `-P${firstTxn.discountAmount.toFixed(2)}`);
   }
 
   appendDivider("=");
 
   // 6. TOTAL AMOUNT (Enlarged / Bold)
-  const totalAmount = txns.reduce((sum, t) => sum + (t.finalAmount || 0), 0);
+  const totalAmount = firstTxn?.finalAmount ?? 0;
   parts.push(CMD.ALIGN_LEFT);
   parts.push(CMD.BOLD_ON);
   parts.push(CMD.DOUBLE_SIZE_ON);
   parts.push(encodeText(`TOTAL: P${totalAmount.toFixed(2)}\n`));
   parts.push(CMD.DOUBLE_SIZE_OFF);
   parts.push(CMD.BOLD_OFF);
-  textBuffer += formatRow("TOTAL:", `P${totalAmount.toFixed(2)}`);
+  textBuffer += formatRow("TOTAL", `P${totalAmount.toFixed(2)}`, lineWidth);
 
   const paymentMethod = firstTxn?.paymentMethod || "Cash";
-  appendRow("Payment:", paymentMethod.toUpperCase(), true);
+  appendRow("Paid via", paymentMethod, true);
 
   if (firstTxn?.voucherCode) {
     appendRow("Voucher:", firstTxn.voucherCode);
@@ -285,28 +270,33 @@ export function buildGoojprtReceiptBytes(
   if (qrToken && (showQr || showCode)) {
     appendDivider("-");
     if (showQr) {
-      appendText(centerText("SCAN IN REWARDS TO CLAIM RIDE"), true);
       parts.push(buildEscPosQrCode(qrToken));
     }
     if (showCode) {
-      appendText(centerText("REWARD CLAIM CODE"), true);
-      for (let offset = 0; offset < qrToken.length; offset += GOOJPRT_LINE_WIDTH) {
-        appendText(centerText(qrToken.slice(offset, offset + GOOJPRT_LINE_WIDTH)), true);
+      appendText(centerText("Receipt code", lineWidth), true);
+      for (let offset = 0; offset < qrToken.length; offset += lineWidth) {
+        appendText(centerText(qrToken.slice(offset, offset + lineWidth), lineWidth), true);
       }
     }
+    appendCenteredWrapped(showQr && showCode ? "Scan or enter code in Rewards: +1 ride." : showQr ? "Scan in Rewards: +1 ride." : "Enter code in Rewards: +1 ride.");
   }
 
   // 8. FOOTER & FEED
   appendDivider("-");
-  appendText(centerText(footerNote), true);
-  appendText(centerText("Visit chatco.online"), true);
-  appendText(centerText("Goojprt 58mm Belt Receipt"), true);
+  if (footerNote) appendCenteredWrapped(footerNote);
+  appendText(centerText("Visit E-CHATCO at chatco.online", lineWidth), true);
   parts.push(CMD.FEED_5); // Feed 5 lines past tear bar
 
   return {
     bytes: concatBytes(...parts),
     text: textBuffer,
   };
+}
+
+/** One print dispatch, with a complete receipt and tear gap for each passenger. */
+export function buildGoojprtReceiptBatchBytes(txns: Transaction[], options: ReceiptOptions = {}): { bytes: Uint8Array; text: string } {
+  const receipts = txns.map(transaction => buildGoojprtReceiptBytes([transaction], options));
+  return { bytes: concatBytes(...receipts.map(receipt => receipt.bytes)), text: receipts.map(receipt => receipt.text).join("") };
 }
 
 // Build Diagnostic Test Ticket for Goojprt

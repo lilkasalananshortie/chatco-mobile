@@ -2,7 +2,7 @@ import { appStorage } from "../../core/storage/app-storage";
 
 export const LOCATION_NOTICE_VERSION = "2026-10-26";
 export const LOCATION_NOTICE_SECTIONS = [
-  { title: "During your active shift", text: "ChatCo collects this vehicle's location during your active shift, including when the app is minimized or not in use, to show the unit to commuters and Admin and support route and safety monitoring." },
+  { title: "During your active shift", text: "E-CHATCO collects this vehicle's location during your active shift, including when the app is minimized or not in use, to show the unit to commuters and Admin and support route and safety monitoring." },
   { title: "From this device", text: "Tracking is limited to the authorized operating device. Device and network restrictions may interrupt updates." },
   { title: "You stay in control", text: "You can change location permission in device Settings." },
 ];

@@ -43,7 +43,9 @@ export function SlideToConfirm({ label, onComplete, disabled = false, trackColor
   const [trackWidth, setTrackWidth] = useState(0);
   const [completed, setCompleted] = useState(false);
   const [activationReady, setActivationReady] = useState(false);
-  const activation = useAnimatedToggle(activationReady, 200, isLowFidelity || reduceMotion);
+  // This value drives background and border colors, which the native driver
+  // cannot animate on Android.
+  const activation = useAnimatedToggle(activationReady, 200, isLowFidelity || reduceMotion, false);
   const activationTrack = activation.interpolate({ inputRange: [0, 1], outputRange: [trackColor ?? colors.surface2, isLofi ? "#DBEAFE" : "rgba(16,185,129,0.15)"] });
   const activationBorder = activation.interpolate({ inputRange: [0, 1], outputRange: [colors.border, isLofi ? "#1A5FB4" : "rgba(52,211,153,0.45)"] });
   const activationFill = activation.interpolate({ inputRange: [0, 1], outputRange: [handleColor ?? colors.primary, isLofi ? "#1A5FB4" : "rgba(16,185,129,0.45)"] });

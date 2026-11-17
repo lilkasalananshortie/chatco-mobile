@@ -87,7 +87,7 @@ export function TransactionReceipt({
     <View style={[receiptStyles.container, { width }]}>
       <View style={receiptStyles.header}>
         <Text style={receiptStyles.businessName}>
-          {settings.businessName || "CHATCO"}
+          {settings.businessName || "E-CHATCO"}
         </Text>
         {settings.addressLine ? (
           <Text style={receiptStyles.addressLine}>{settings.addressLine}</Text>
@@ -104,10 +104,7 @@ export function TransactionReceipt({
       {settings.showTransactionId && transactionId ? (
         <Row label="Ref" value={transactionId} />
       ) : null}
-
-      {multiplePaymentReference ? (
-        <Row label="Group ref" value={multiplePaymentReference} />
-      ) : null}
+      {multiplePaymentReference ? <Row label="Group ref" value={multiplePaymentReference} /> : null}
 
       {settings.showUnit && unitNumber ? (
         <Row label="Unit" value={unitNumber} />
@@ -185,11 +182,9 @@ export function TransactionReceipt({
           {showQr && <View style={receiptStyles.qrContainer}>
             <QRCode value={receiptQrToken} size={112} />
           </View>}
-          {showCode && <Text style={receiptStyles.tokenText}>
-            CLAIM CODE: {receiptQrToken}
-          </Text>}
+          {showCode && <><Text style={receiptStyles.qrHint}>Receipt code</Text><Text style={receiptStyles.tokenText}>{receiptQrToken}</Text></>}
           <Text style={receiptStyles.qrHint}>
-            {showQr && showCode ? "Scan in Rewards or enter the code to claim this cash ride." : showQr ? "Scan in Rewards to claim this cash ride." : "Enter the code in Rewards to claim this cash ride."}
+            {showQr && showCode ? "Scan or enter code in Rewards: +1 ride." : showQr ? "Scan in Rewards: +1 ride." : "Enter code in Rewards: +1 ride."}
           </Text>
         </>
       ) : null}
@@ -201,10 +196,7 @@ export function TransactionReceipt({
       ) : null}
 
       <Text style={receiptStyles.officialNotice}>
-        Visit ChatCo at chatco.online
-      </Text>
-      <Text style={receiptStyles.officialNotice}>
-        This serves as your official receipt.
+        Visit E-CHATCO at chatco.online
       </Text>
     </View>
   );

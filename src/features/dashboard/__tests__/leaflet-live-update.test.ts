@@ -16,7 +16,7 @@ function setup() {
   const context = { L, window, document, map: {}, neutral: "#fff" };
   runInNewContext(LEAFLET_LIVE_UPDATE, context);
   const update = (changes: object = {}) => runInNewContext(leafletUpdateScript({
-    latitude: 14.8, longitude: 120.9, vehicleIconHtml: "<svg></svg>", canOperate: true,
+    latitude: 14.8, longitude: 120.9, vehicleIconHtml: "<svg></svg>", hailMarkerHtml: "<svg>commuter pin</svg>",
     hails: [{ id: "h1", latitude: 14.81, longitude: 120.91, commuterName: "Rider" }], ...changes,
   }), context);
   return { L, layer, window, elements, update };
@@ -37,22 +37,22 @@ test("GPS updates reuse map layers and preserve unchanged passenger popups", () 
   expect(layer.clearLayers).toHaveBeenCalledTimes(2);
 });
 
-test("hail actions post the selected identity and become disabled for view-only devices", () => {
-  const { window, elements, update } = setup();
+test("waiting commuter uses the web-style pin and a label-only popup", () => {
+  const { L, window, elements, update } = setup();
   update();
-  const accept = elements.find(element => element.tag === "button" && element.textContent === "Accept");
-  accept.onclick();
-  expect(JSON.parse(window.ReactNativeWebView.postMessage.mock.calls[0][0])).toEqual({ type: "hail", id: "h1", action: "accept" });
-  update({ canOperate: false });
-  const latestAccept = elements.filter(element => element.tag === "button" && element.textContent === "Accept").pop();
-  expect(latestAccept.disabled).toBe(true);
-  latestAccept.onclick();
-  expect(window.ReactNativeWebView.postMessage).toHaveBeenCalledTimes(1);
+  expect(elements.find(element => element.tag === "strong")?.textContent).toBe("Commuter");
+  expect(elements.some(element => element.tag === "button")).toBe(false);
+  expect(L.divIcon).toHaveBeenCalledWith(expect.objectContaining({ className: "chatco-hail-marker", html: "<svg>commuter pin</svg>" }));
+  expect(L.marker).toHaveBeenCalledWith([14.81, 120.91], expect.objectContaining({ zIndexOffset: 1000 }));
+  expect(L.marker.mock.results[1]!.value.bindPopup).toHaveBeenCalledWith(
+    expect.anything(), expect.objectContaining({ closeButton: false }),
+  );
+  expect(window.ReactNativeWebView.postMessage).not.toHaveBeenCalled();
 });
 
-test("passenger labels and quotes remain data inside the JavaScript bridge", () => {
+test("passenger data stays escaped inside the JavaScript bridge", () => {
   const { elements, update } = setup();
   const label = '</script><script>throw new Error("unexpected")</script>\u2028';
   update({ hails: [{ id: "quote'", latitude: 14.8, longitude: 120.9, commuterName: label }] });
-  expect(elements.find(element => element.tag === "strong").textContent).toBe(label);
+  expect(elements.find(element => element.tag === "strong").textContent).toBe("Commuter");
 });

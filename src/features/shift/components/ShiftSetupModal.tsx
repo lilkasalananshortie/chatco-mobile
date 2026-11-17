@@ -61,7 +61,7 @@ export function ShiftSetupModal({
         <Ionicons name="warning-outline" size={16} color={colors.muted} accessible={false} />
         <Text style={{ flex: 1, color: colors.muted, fontSize: 11, lineHeight: 16, fontWeight: "500" }}>
           {isOfflineDepot
-            ? "Connect to CHATCO to verify the approved assignment and start this shift."
+            ? "Connect to E-CHATCO to verify the approved assignment and start this shift."
             : "Action cannot be undone without admin assistance."}
         </Text>
       </View>

@@ -8,6 +8,8 @@ import type { FareInfo, SelectedPaymentMethod, Step } from "../payment-types";
 import { LocationBottomBar } from "./LocationBottomBar";
 import { LocationPointsList } from "./LocationPointsList";
 import { LocationSelectorCards } from "./LocationSelectorCards";
+import { pointSelectionComplete } from "../fare-helpers";
+import { FareNotice } from "./FareNotice";
 
 export interface LocationPickerStepProps {
   visible: boolean;
@@ -132,7 +134,7 @@ export function LocationPickerStep({
           </View>
         </View>
 
-        {fareNotice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.text, paddingHorizontal: 16, paddingVertical: 10 }}>{fareNotice}</Text> : null}
+        {fareNotice ? <FareNotice message={fareNotice} /> : null}
         {/* Location Selector Cards Header Section */}
         <LocationSelectorCards
           styles={styles}
@@ -146,7 +148,9 @@ export function LocationPickerStep({
           pickupLandmark={pickupLandmark}
           dropoffLandmark={dropoffLandmark}
           selectingField={selectingField}
-          setSelectingField={setSelectingField}
+          setSelectingField={field => {
+            if (field === "pickup" || pointSelectionComplete(pickupPoint, pickupLandmark)) setSelectingField(field);
+          }}
           isSameBarangay={isSameBarangay}
           pickupDotColor={pickupDotColor}
           dropoffDotColor={dropoffDotColor}

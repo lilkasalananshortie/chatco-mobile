@@ -111,7 +111,7 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
     });
   } catch (cause) {
     if (timedOut) {
-      throw new NetworkError(`The ChatCo server did not respond within ${REQUEST_TIMEOUT_MS / 1000}s. Check your connection and try again.`);
+      throw new NetworkError(`The E-CHATCO server did not respond within ${REQUEST_TIMEOUT_MS / 1000}s. Check your connection and try again.`);
     }
     if (cause instanceof Error && cause.name === "AbortError") {
       throw new NetworkError("The request was cancelled. Please try again.");
@@ -119,7 +119,7 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
     const errorDetail = cause instanceof Error ? cause.message : String(cause);
     console.warn(`[API Network Error] ${init.method ?? "GET"} ${API_URL}/api/v1${path}:`, cause);
     throw new NetworkError(
-      `Unable to reach the ChatCo server (${errorDetail}). Target: ${API_URL}. Check your internet connection or host settings.`
+      `Unable to reach the E-CHATCO server (${errorDetail}). Target: ${API_URL}. Check your internet connection or host settings.`
     );
   } finally {
     clearTimeout(timeout);

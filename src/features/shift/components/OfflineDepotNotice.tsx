@@ -42,7 +42,7 @@ export function OfflineDepotNotice({ isOfflineDepot, onRetry }: OfflineDepotNoti
             lineHeight: 15,
           }}
         >
-          Cached assignments cannot authorize a shift. Reconnect to verify the assignment with CHATCO.
+          Cached assignments cannot authorize a shift. Reconnect to verify the assignment with E-CHATCO.
         </Text>
         <Pressable accessibilityRole="button" onPress={onRetry} style={{ alignSelf: "flex-start", marginTop: 8 }}>
           <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>Retry connection</Text>

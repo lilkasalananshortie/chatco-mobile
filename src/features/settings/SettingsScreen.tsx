@@ -15,7 +15,7 @@ import { AccountSessionSection } from "./components/AccountSessionSection";
 import { thermalPrinter, type PrinterStatus } from "../../core/utils/thermal-printer";
 import { pickProfilePhotoSelection } from "./profile-photo";
 import { transactionSummary } from "../../core/domain/transaction-summary";
-import { loadScanSoundSetting, setScanSoundEnabled } from "../../core/utils/audio-cues";
+import { audioCues, initAudioCues, loadScanSoundSetting, setAudioCuesActive, setScanSoundEnabled } from "../../core/utils/audio-cues";
 
 export function SettingsScreen({
   user,
@@ -74,6 +74,7 @@ export function SettingsScreen({
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [history, setHistory] = useState<Remittance[]>([]);
   const [scanSound, setScanSound] = useState(true);
+  const [soundCues, setSoundCues] = useState(true);
   const [logoutCheckStatus, setLogoutCheckStatus] = useState<"loading" | "ready" | "error">("loading");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -89,16 +90,18 @@ export function SettingsScreen({
       .then(data => ({ data, ok: true }))
       .catch(() => ({ data: [] as Remittance[], ok: false }));
 
-    const [nextProfile, transactionResult, sound, remittanceResult] = await Promise.all([
+    const [nextProfile, transactionResult, sound, allSounds, remittanceResult] = await Promise.all([
       api.profile().catch(() => null),
       transactionRequest,
       loadScanSoundSetting(),
+      initAudioCues(),
       remittanceRequest,
     ]);
     if (!mounted.current) return;
     if (nextProfile) setProfile(nextProfile);
     setTransactions(transactionResult.data);
     setScanSound(sound);
+    setSoundCues(allSounds);
     setHistory(remittanceResult.data);
     setLogoutCheckStatus(transactionResult.ok && remittanceResult.ok ? "ready" : "error");
   }, [shift?.shiftId]);
@@ -181,6 +184,11 @@ export function SettingsScreen({
     const next = !scanSound;
     setScanSound(next);
     await setScanSoundEnabled(next);
+  };
+  const toggleSoundCues = async () => {
+    const next = !soundCues;
+    setSoundCues(next);
+    await setAudioCuesActive(next);
   };
 
   const logoutLocked = useMemo(() => {
@@ -299,6 +307,9 @@ export function SettingsScreen({
         styles={styles}
         scanSound={scanSound}
         onToggleScanSound={() => void toggleSound()}
+        soundCues={soundCues}
+        onToggleSoundCues={() => void toggleSoundCues()}
+        onTestSound={() => audioCues.playHailSound()}
         isLofi={isLowFidelity}
         onToggleLofi={() => void setLowFidelity(!isLowFidelity)}
       />

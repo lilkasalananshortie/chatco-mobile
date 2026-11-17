@@ -16,7 +16,7 @@ jest.mock("../../../shared/ui/useWebEntrance", () => ({ useReducedMotion: () => 
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeArea" }));
 jest.mock("../../../shared/ui/BrandText", () => ({ Text: "Text", TextInput: "Input" }));
 jest.mock("@expo/vector-icons/Ionicons", () => "Icon");
-jest.mock("../../../../assets/logo-transparent.png", () => "chatco-logo");
+jest.mock("../../../../assets/logo-e-chatco.png", () => "e-chatco-logo");
 jest.mock("../../../core/theme/ThemeProvider", () => ({ useAppTheme: () => ({ isLofi: mockLight, colors: { background: mockLight ? "light" : "dark", text: "text", muted: "muted", primary: "blue", border: "border", surface: "surface", surface2: "field", danger: "red" } }) }));
 jest.mock("../../../core/api/chatco-api", () => ({ api: { login: jest.fn() } }));
 jest.mock("../PasswordScreen", () => ({ PasswordScreen: "Recovery" }));

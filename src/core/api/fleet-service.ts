@@ -121,7 +121,7 @@ export const fleetService = {
     const rows = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
     return rows.map((row: any) => ({
       id: String(row.id),
-      title: row.title ?? "ChatCo notice",
+      title: row.title ?? "E-CHATCO notice",
       body: row.body ?? row.message ?? "",
       isRead: Boolean(row.is_read ?? row.isRead),
       createdAt: row.created_at ?? row.createdAt,

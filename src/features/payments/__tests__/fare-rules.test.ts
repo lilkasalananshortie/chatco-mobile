@@ -1,8 +1,16 @@
 /// <reference types="jest" />
-import { DEFAULT_FARE_CONFIG, getFareBetween } from "../fare-helpers";
+import { DEFAULT_FARE_CONFIG, getFareBetween, pointSelectionComplete } from "../fare-helpers";
 import type { FarePoint } from "../../../core/domain/types";
 
 const point = (n: number): FarePoint => ({ id: String(n), pointNumber: n, name: String(n), code: String(n), landmarks: [], regularFare: 17 + Math.max(0, n - 4) * 2.25, discountedFare: (17 + Math.max(0, n - 4) * 2.25) * .8 });
+
+test("a point with sub-stops requires a valid sub-stop before fare review", () => {
+  const boarding = { ...point(1), subStops: ["Gardenville", "Market"] };
+  expect(pointSelectionComplete(boarding, null)).toBe(false);
+  expect(pointSelectionComplete(boarding, "Other")).toBe(false);
+  expect(pointSelectionComplete(boarding, "Gardenville")).toBe(true);
+  expect(pointSelectionComplete(point(2), null)).toBe(true);
+});
 
 test("discount precedes quarter rounding", () => {
   const config = { ...DEFAULT_FARE_CONFIG, baseFareRegular: 17.35 };

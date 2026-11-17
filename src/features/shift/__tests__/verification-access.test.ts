@@ -11,7 +11,7 @@ jest.mock("react", () => ({ ...jest.requireActual("react"), useCallback: (fn: an
   useRef: (initial: any) => { const i = mockR++; return mockRefs[i] ?? (mockRefs[i] = { current: initial }); }, useEffect: (fn: any) => mockEffects.push(fn) }));
 jest.mock("react-native", () => ({ Alert: {}, Pressable: "Button", ScrollView: "Scroll", Text: "Text", View: "View", AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) } }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "Icon" }));
-jest.mock("../../../../assets/logo-transparent.png", () => "chatco-logo");
+jest.mock("../../../../assets/logo-e-chatco.png", () => "e-chatco-logo");
 jest.mock("../../../core/api/chatco-api", () => ({ api: { units: jest.fn(), drivers: jest.fn(), startShift: jest.fn() } }));
 jest.mock("../../../core/api/shift-access", () => ({ readShiftAccess: jest.fn() }));
 jest.mock("../../../core/theme/ThemeProvider", () => ({ useAppTheme: () => ({ styles: {}, colors: {} }) }));

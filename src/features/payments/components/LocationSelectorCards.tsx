@@ -1,5 +1,4 @@
-import { useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
@@ -60,30 +59,14 @@ export function LocationSelectorCards({
   swapLocations,
 }: LocationSelectorCardsProps) {
   const { colors, isLofi, isLowFidelity } = usePaymentTheme();
-  const standardSelection = selectedMethod === "Cash" || selectedMethod === "GCash";
-  const pickupAccent = isSameBarangay ? "#8B5CF6" : "#10B981";
-  const dropoffAccent = isSameBarangay ? "#8B5CF6" : "#F97316";
   const inactiveBackground = isLofi ? colors.surface2 : "rgba(255,255,255,0.05)";
-  const selectedBorder = standardSelection ? pickupAccent : isSameBarangay ? isLofi ? "#6D28D9" : "rgba(139, 92, 246, 0.5)" : isLofi ? colors.success : "rgba(16, 185, 129, 0.5)";
-  const selectedBackground = standardSelection ? colors.surface : isSameBarangay ? isLofi ? "rgba(109, 40, 217, 0.12)" : "rgba(139, 92, 246, 0.08)" : isLofi ? "rgba(22, 112, 90, 0.12)" : "rgba(16, 185, 129, 0.08)";
+  const selectedBorder = isLofi ? "#1A5FB4" : "#337DD2";
+  const selectedBackground = isLofi ? "#F0F7FF" : "#102E50";
   const reduceMotion = useReducedMotion();
-  const pickupBorder = useAnimatedColor(selectingField === "pickup" ? selectedBorder : colors.border, 200, isLowFidelity || reduceMotion);
-  const pickupBackground = useAnimatedColor(selectingField === "pickup" ? selectedBackground : inactiveBackground, 200, isLowFidelity || reduceMotion);
-  const dropoffBorder = useAnimatedColor(selectingField === "dropoff" ? (standardSelection ? dropoffAccent : selectedBorder) : colors.border, 200, isLowFidelity || reduceMotion);
-  const dropoffBackground = useAnimatedColor(selectingField === "dropoff" ? selectedBackground : inactiveBackground, 200, isLowFidelity || reduceMotion);
-  const warningPulse = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (!isSameBarangay || isLowFidelity || reduceMotion) {
-      warningPulse.setValue(1);
-      return;
-    }
-    const animation = Animated.loop(Animated.sequence([
-      Animated.timing(warningPulse, { toValue: 0.45, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(warningPulse, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-    ]));
-    animation.start();
-    return () => animation.stop();
-  }, [isSameBarangay, isLowFidelity, reduceMotion, warningPulse]);
+  const pickupBorder = useAnimatedColor(pickupPoint || selectingField === "pickup" ? selectedBorder : colors.border, 200, isLowFidelity || reduceMotion);
+  const pickupBackground = useAnimatedColor(pickupPoint || selectingField === "pickup" ? selectedBackground : inactiveBackground, 200, isLowFidelity || reduceMotion);
+  const dropoffBorder = useAnimatedColor(dropoffPoint || selectingField === "dropoff" ? selectedBorder : colors.border, 200, isLowFidelity || reduceMotion);
+  const dropoffBackground = useAnimatedColor(dropoffPoint || selectingField === "dropoff" ? selectedBackground : inactiveBackground, 200, isLowFidelity || reduceMotion);
 
   return (
     <View style={styles.locationSelectorSection}>
@@ -94,13 +77,11 @@ export function LocationSelectorCards({
           style={[styles.locationCard, { borderColor: pickupBorder, backgroundColor: pickupBackground }]}
         >
           <View style={styles.locationCardHeader}>
-            <View style={[styles.dot, { backgroundColor: standardSelection ? pickupAccent : pickupDotColor }]} />
+            <View style={[styles.dot, { backgroundColor: colors.muted }]} />
             <Text
               style={[
                 styles.locationCardLabel,
-                standardSelection ? { color: colors.muted } : isSameBarangay
-                  ? { color: isLofi ? "#6D28D9" : "#A78BFA" }
-                  : { color: isLofi ? colors.success : "#34D399" },
+                { color: colors.muted },
               ]}
             >
               PICKUP
@@ -122,8 +103,8 @@ export function LocationSelectorCards({
             </Text>
             {pickupPoint ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={[styles.brgyPill, { backgroundColor: standardSelection ? "transparent" : pickupBadgeBg }]}>
-                  <Text style={[styles.brgyPillText, { color: standardSelection ? pickupAccent : pickupBadgeText }]}>
+                <View style={[styles.brgyPill, { backgroundColor: "transparent" }]}>
+                  <Text style={[styles.brgyPillText, { color: colors.muted }]}>
                     Brgy {pickupPoint.pointNumber}
                   </Text>
                 </View>
@@ -161,13 +142,11 @@ export function LocationSelectorCards({
           style={[styles.locationCard, { borderColor: dropoffBorder, backgroundColor: dropoffBackground }]}
         >
           <View style={styles.locationCardHeader}>
-            <View style={[styles.dot, { backgroundColor: standardSelection ? dropoffAccent : dropoffDotColor }]} />
+            <View style={[styles.dot, { backgroundColor: colors.muted }]} />
             <Text
               style={[
                 styles.locationCardLabel,
-                standardSelection ? { color: colors.muted } : isSameBarangay
-                  ? { color: isLofi ? "#6D28D9" : "#A78BFA" }
-                  : { color: isLofi ? colors.success : "#34D399" },
+                { color: colors.muted },
               ]}
             >
               DROP-OFF
@@ -188,8 +167,8 @@ export function LocationSelectorCards({
                 : "Select drop-off location"}
             </Text>
             {dropoffPoint ? (
-              <View style={[styles.brgyPill, { backgroundColor: standardSelection ? "transparent" : dropoffBadgeBg }]}>
-                <Text style={[styles.brgyPillText, { color: standardSelection ? dropoffAccent : dropoffBadgeText }]}>
+              <View style={[styles.brgyPill, { backgroundColor: "transparent" }]}>
+                <Text style={[styles.brgyPillText, { color: colors.muted }]}>
                   Brgy {dropoffPoint.pointNumber}
                 </Text>
               </View>
@@ -214,8 +193,8 @@ export function LocationSelectorCards({
 
       {isSameBarangay ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: "#8B5CF6", borderRadius: 8, marginTop: 10 }}>
-          <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#A78BFA", opacity: warningPulse }} />
-          <Text style={{ flex: 1, color: isLofi ? "#6D28D9" : "#C4B5FD", fontSize: 10, fontWeight: "500" }}>Same pickup & drop-off — both locations shown in violet</Text>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#A78BFA" }} />
+          <Text style={{ flex: 1, color: isLofi ? "#6D28D9" : "#C4B5FD", fontSize: 10, fontWeight: "500" }}>Pickup and drop-off are in the same barangay</Text>
         </View>
       ) : null}
 

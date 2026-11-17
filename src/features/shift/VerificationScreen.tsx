@@ -209,10 +209,10 @@ export function VerificationScreen({
               marginBottom: 20,
             }}
           >
-            <View accessible accessibilityLabel="Chatco logo, Conductor Portal" style={{ flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1, minWidth: 0 }}>
-              <Image source={require("../../../assets/logo-transparent.png")} style={{ width: 40, height: 40 }} resizeMode="contain" accessible={false} />
+            <View accessible accessibilityLabel="E-CHATCO logo, Conductor Portal" style={{ flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1, minWidth: 0 }}>
+              <Image source={require("../../../assets/logo-e-chatco.png")} style={{ width: 40, height: 40 }} resizeMode="contain" accessible={false} />
               <View style={{ flexShrink: 1, minWidth: 0 }}>
-                <Text style={{ color: colors.text, fontSize: 24, fontWeight: "800", letterSpacing: -0.6 }}>CHATCO<Text style={{ color: colors.primaryLight }}>.</Text></Text>
+                <Text style={{ color: colors.text, fontSize: 24, fontWeight: "800", letterSpacing: -0.6 }}>E-CHATCO<Text style={{ color: colors.primaryLight }}>.</Text></Text>
                 <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "600", letterSpacing: 2, marginTop: 4 }}>CONDUCTOR PORTAL</Text>
               </View>
             </View>

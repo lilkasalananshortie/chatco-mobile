@@ -38,7 +38,7 @@ export async function initAudioCues(): Promise<boolean> {
 
 export function preloadAudioCues(): void {
   if (Platform.OS !== "web") {
-    void import("./native-audio").then(({ preloadNativeAudio }) => preloadNativeAudio()).catch(() => undefined);
+    void import("./native-audio").then(({ preloadNativeAudio }) => preloadNativeAudio()).catch(error => console.warn("Unable to preload conductor sounds", error));
   }
 }
 
@@ -99,7 +99,7 @@ function playTone(freq: number, type: OscillatorType, durationMs: number, delayM
 
 function playMobileCue(name: import("./native-audio").CueName): void {
   if (Platform.OS !== "web") {
-    void import("./native-audio").then(({ playNativeCue }) => playNativeCue(name)).catch(() => undefined);
+    void import("./native-audio").then(({ playNativeCue }) => playNativeCue(name)).catch(error => console.warn(`Unable to load ${name} conductor sound`, error));
   }
 }
 
@@ -111,8 +111,9 @@ export const audioCues = {
    * Unified Sound: Crisp Double Coin Clink ("Kalansing")
    */
   playPaymentSound() {
-    if (!isAudioEnabled || !isScanSoundEnabled) return;
+    if (!isScanSoundEnabled) return;
     appHaptics.success();
+    if (!isAudioEnabled) return;
     playMobileCue("payment");
     // High metallic coin harmonics
     playTone(2400, "sine", 70, 0, 0.25);
@@ -124,8 +125,8 @@ export const audioCues = {
    * Unified Sound: Solid Latch Click ("Tuk!")
    */
   playCapacitySound() {
-    if (!isAudioEnabled) return;
     appHaptics.medium();
+    if (!isAudioEnabled) return;
     playMobileCue("capacity");
     // Short mechanical low-mid thump
     playTone(220, "triangle", 45, 0, 0.35);
@@ -136,9 +137,9 @@ export const audioCues = {
    * Unified Sound: Jeepney Conductor Whistle ("Sipol")
    */
   playHailSound() {
-    if (!isAudioEnabled) return;
     appHaptics.medium();
     setTimeout(() => appHaptics.medium(), 85);
+    if (!isAudioEnabled) return;
     playMobileCue("hail");
     // High piercing double whistle chirp
     playTone(2100, "sine", 80, 0, 0.3);
@@ -150,8 +151,8 @@ export const audioCues = {
    * Unified Sound: Caution Warning Beep
    */
   playWarningSound() {
-    if (!isAudioEnabled) return;
     appHaptics.error();
+    if (!isAudioEnabled) return;
     playMobileCue("warning");
     // Urgent dual square-wave beeps
     playTone(880, "square", 80, 0, 0.25);
@@ -163,8 +164,8 @@ export const audioCues = {
    * Unified Sound: Resonant Departure Bell ("Ding-Dong!")
    */
   playDutySound() {
-    if (!isAudioEnabled) return;
     appHaptics.success();
+    if (!isAudioEnabled) return;
     playMobileCue("duty");
     // Transport two-tone bell chime (D5 then A4)
     playTone(587.33, "sine", 160, 0, 0.3);
@@ -176,8 +177,8 @@ export const audioCues = {
    * Unified Sound: Water-Drop Micro-Pop ("Plip!")
    */
   playSyncSound() {
-    if (!isAudioEnabled) return;
     appHaptics.light();
+    if (!isAudioEnabled) return;
     playMobileCue("sync");
     // Delicate upward sweep
     playTone(1100, "sine", 50, 0, 0.15);

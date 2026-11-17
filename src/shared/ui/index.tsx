@@ -18,6 +18,7 @@ import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { Screen } from "../../core/domain/types";
 import { useReducedMotion } from "./useWebEntrance";
 import { useAnimatedToggle } from "./useAnimatedFeedback";
+import { appHaptics } from "../../core/utils/haptics";
 
 export function Loading({ label = "Loading..." }: { label?: string }) {
   const { colors, styles } = useAppTheme();
@@ -115,10 +116,10 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
   return (
     <View style={[local.navSafe, { bottom: 8 }]}>
       <View style={[local.nav, { borderColor: colors.border, backgroundColor: colors.surface2 }]}>
-        {tabs.slice(0, 2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
+        {tabs.slice(0, 2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => { appHaptics.selection(); onNavigate(tab.id); }} />)}
         <Pressable
           style={[local.payWrap, isPaymentDisabled && { opacity: 0.55 }]}
-          onPress={onPayment}
+          onPress={() => { if (!isPaymentDisabled) { appHaptics.selection(); onPayment(); } }}
           onPressIn={() => setPaymentPressed(true)}
           onPressOut={() => setPaymentPressed(false)}
           accessibilityLabel={isPaymentDisabled ? "Payment (unavailable until the shift is active on this device)" : "Collect payment"}
@@ -139,7 +140,7 @@ export function BottomNav({ current, onNavigate, onPayment, isPaymentDisabled = 
             Payment
           </Text>
         </Pressable>
-        {tabs.slice(2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => onNavigate(tab.id)} />)}
+        {tabs.slice(2).map(tab => <NavItem key={tab.id} {...tab} active={current === tab.id} onPress={() => { appHaptics.selection(); onNavigate(tab.id); }} />)}
       </View>
     </View>
   );

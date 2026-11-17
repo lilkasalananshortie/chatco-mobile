@@ -109,12 +109,11 @@ function distanceMeters(a: [number, number], b: [number, number]) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, viewportInsets, tripDirection = "SOUTHBOUND", capacity = "AVAILABLE", isOnBreak = false, canOperate = false, onHail }: LiveMapProps) {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, viewportInsets, tripDirection = "SOUTHBOUND", capacity = "AVAILABLE", isOnBreak = false }: LiveMapProps) {
   const { colors, isLofi } = useAppTheme();
   const [tilesLoading, setTilesLoading] = useState(true);
   const initialTilesReady = useRef(false);
   const [tileError, setTileError] = useState(false);
-  const [hailBusyId, setHailBusyId] = useState<string | null>(null);
   useEffect(() => {
     const fallback = setTimeout(() => { initialTilesReady.current = true; setTilesLoading(false); }, 7000);
     return () => clearTimeout(fallback);
@@ -125,9 +124,9 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const vehiclePosition: [number, number] = latitude !== undefined && longitude !== undefined
     ? [latitude, longitude]
     : mapCenter;
-  const visibleHails = hails.filter(hail =>
+  const visibleHails = latitude !== undefined && longitude !== undefined && Number.isFinite(latitude) && Number.isFinite(longitude) ? hails.filter(hail =>
     distanceMeters(vehiclePosition, [hail.latitude, hail.longitude]) <= RADIUS_METERS
-  );
+  ) : [];
   const unitStatus = markerPresentation(capacity, isOnBreak);
   const popup = unitPopupPalette(isLofi, capacity, isOnBreak);
   const routeLabel = tripDirection === "SOUTHBOUND" ? "Calumpit → Meycauayan" : "Meycauayan → Calumpit";
@@ -222,19 +221,9 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
           </Popup>
         </Marker>
         {visibleHails.map(hail => (
-          <Marker key={hail.id} position={[hail.latitude, hail.longitude]} icon={hailingIcon}>
-            <Popup>
-              <div className="chatco-popup">
-                <strong style={{ color: "#FF6D3A" }}>{hail.commuterName}</strong>
-                <p>{hail.label || "Passenger waiting"}{hail.etaMinutes ? ` · ${hail.etaMinutes} min away` : ""}</p>
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  {(["accept", "reject"] as const).map(action => <button key={action} disabled={!canOperate || hailBusyId !== null} onClick={() => {
-                    if (!canOperate || hailBusyId) return;
-                    setHailBusyId(hail.id);
-                    void Promise.resolve(onHail?.(hail.id, action)).finally(() => setHailBusyId(null));
-                  }} style={{ flex: 1, padding: "6px 8px", borderRadius: 8, border: "1px solid #D1D5DB", background: action === "accept" ? "#1A5FB4" : "#FFFFFF", color: action === "accept" ? "#FFFFFF" : "#374151", fontSize: 12, fontWeight: 700 }}>{hailBusyId === hail.id && action === "accept" ? "Updating..." : action === "accept" ? "Accept" : "Reject"}</button>)}
-                </div>
-              </div>
+          <Marker key={hail.id} position={[hail.latitude, hail.longitude]} icon={hailingIcon} zIndexOffset={1000}>
+            <Popup className="chatco-hail-popup" closeButton={false}>
+              <div style={{ minWidth: 180 }}><strong style={{ color: "#FF6D3A" }}>Commuter</strong></div>
             </Popup>
           </Marker>
         ))}
@@ -254,6 +243,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         .chatco-map-shell .leaflet-popup-content-wrapper{background:${colors.surface};border:1px solid ${colors.border};border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.3)}
         .chatco-map-shell .leaflet-popup-content{margin:0;color:${colors.text};line-height:1.5;min-width:0}
         .chatco-map-shell .leaflet-popup-tip{background:${colors.surface}}
+        .chatco-map-shell .chatco-hail-popup .leaflet-popup-content{margin:0;padding:10px 14px;line-height:20px}
         .chatco-map-shell .chatco-unit-popup .leaflet-popup-content-wrapper{padding:0;overflow:hidden;background:${popup.background};border-color:${popup.border};border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.3)}
         .chatco-map-shell .chatco-unit-popup .leaflet-popup-content{margin:0;max-width:calc(100vw - 48px);color:${popup.text};font-family:Poppins-Regular,sans-serif;line-height:1.5}
         .chatco-map-shell .chatco-unit-popup .leaflet-popup-tip{background:${popup.background}}

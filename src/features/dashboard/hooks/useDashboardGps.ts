@@ -42,6 +42,7 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
   const [backgroundWarning, setBackgroundWarning] = useState("");
   const [gpsRetry, setGpsRetry] = useState(0);
   const [currentSpeedKmh, setCurrentSpeedKmh] = useState(0);
+  const [currentSpeedLimitKmh, setCurrentSpeedLimitKmh] = useState(50);
   const [isOverspeeding, setIsOverspeeding] = useState(false);
   const [isNearSpeedLimit, setIsNearSpeedLimit] = useState(false);
   const [corridorDeviationMeters, setCorridorDeviationMeters] = useState(0);
@@ -52,7 +53,10 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
   useEffect(() => {
     let active = true;
     const apply = (value: number) => {
-      if (active && Number.isFinite(value) && value > 0) speedLimit.current = value;
+      if (active && Number.isFinite(value) && value > 0) {
+        speedLimit.current = value;
+        setCurrentSpeedLimitKmh(value);
+      }
     };
     const load = async () => {
       if (!active || AppState.currentState === "background" || AppState.currentState === "inactive") return;
@@ -132,7 +136,7 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
         }
         setPermissionStatus("granted");
         subscription = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 10 },
+          { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
           (location) => {
             if (cancelled) return;
             setPosition({
@@ -182,35 +186,35 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
         if (Platform.OS === "web") return;
         try {
           if (!await TaskManager.isAvailableAsync()) {
-            if (!cancelled) setBackgroundWarning("Background tracking requires a development or installed app build. Keep CHATCO open for vehicle updates.");
+            if (!cancelled) setBackgroundWarning("Background tracking requires a development or installed app build. Keep E-CHATCO open for vehicle updates.");
             return;
           }
           if (cancelled) return;
           const background = await Location.requestBackgroundPermissionsAsync();
           if (cancelled) return;
           if (background.status !== "granted") {
-            setBackgroundWarning("Background location is off. Keep CHATCO open for vehicle updates, or enable background location in device Settings.");
+            setBackgroundWarning("Background location is off. Keep E-CHATCO open for vehicle updates, or enable background location in device Settings.");
             return;
           }
           await transitionBackground(async () => {
             if (cancelled) return;
             try {
               await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-                accuracy: Location.Accuracy.Balanced,
+                accuracy: Location.Accuracy.High,
                 timeInterval: 15000,
                 distanceInterval: 25,
                 pausesUpdatesAutomatically: false,
                 showsBackgroundLocationIndicator: true,
                 foregroundService: {
-                  notificationTitle: "CHATCO live shift",
-                  notificationBody: "CHATCO is sharing this vehicle's location during the active shift.",
+                  notificationTitle: "E-CHATCO live shift",
+                  notificationBody: "E-CHATCO is sharing this vehicle's location during the active shift.",
                 },
               });
               backgroundStarted = true;
               if (cancelled) { await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME); backgroundStarted = false; }
-            } catch { if (!cancelled) setBackgroundWarning("Background tracking could not start. Keep CHATCO open and retry tracking."); }
+            } catch { if (!cancelled) setBackgroundWarning("Background tracking could not start. Keep E-CHATCO open and retry tracking."); }
           });
-        } catch { if (!cancelled) setBackgroundWarning("Background location is unavailable. Keep CHATCO open for vehicle updates."); }
+        } catch { if (!cancelled) setBackgroundWarning("Background location is unavailable. Keep E-CHATCO open for vehicle updates."); }
       })
       .catch(() => {
         if (!cancelled) {
@@ -240,6 +244,7 @@ export function useDashboardGps({ shift, canOperate, refreshKey }: UseDashboardG
     lastUploadAt,
     retryTracking: () => setGpsRetry(value => value + 1),
     currentSpeedKmh,
+    currentSpeedLimitKmh,
     isOverspeeding,
     isNearSpeedLimit,
     corridorDeviationMeters,

@@ -30,6 +30,15 @@ function facingFor(bearing: number): BusFacing {
   return (["n", "ne", "e", "se", "s", "sw", "w", "nw"] as const)[Math.round(bearing / 45) % 8]!;
 }
 
+/** Keep the one status dot at the rear corner as the bus changes facing. */
+export function rearStatusDotPosition(facing: BusFacing) {
+  const bearing = (["n", "ne", "e", "se", "s", "sw", "w", "nw"] as const).indexOf(facing) * Math.PI / 4;
+  return {
+    x: 43 - 17 * Math.sin(bearing) - 8 * Math.cos(bearing),
+    y: 40 + 15 * Math.cos(bearing) - 8 * Math.sin(bearing),
+  };
+}
+
 /** Match the web map's route-oriented, eight-facing jeep artwork. */
 export function vehicleHeading(route: Coordinate[], position: Coordinate, direction: TripDirection = "SOUTHBOUND") {
   if (route.length < 2 || !position.every(Number.isFinite)) return { facing: "s" as BusFacing, arrow: null as number | null };
@@ -75,13 +84,14 @@ export function vehicleHeading(route: Coordinate[], position: Coordinate, direct
 export function vehicleMarkerSvg(capacity?: Capacity, onBreak?: boolean, direction: TripDirection = "SOUTHBOUND", route: Coordinate[] = [], position: Coordinate = [Number.NaN, Number.NaN]) {
   const { color } = markerPresentation(capacity, onBreak);
   const { facing, arrow } = vehicleHeading(route, position, direction);
+  const dot = rearStatusDotPosition(facing);
   const arrowMarkup = arrow === null ? "" : (() => {
     const x = 43 + 34 * Math.sin(arrow * Math.PI / 180) - 9;
     const y = 40 - 31 * Math.cos(arrow * Math.PI / 180) - 9;
     return `<svg x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="18" height="18" viewBox="0 0 24 24"><path d="M12 2.5 20 20 12 15.5 4 20Z" transform="rotate(${arrow} 12 12)" fill="#1A5FB4" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/></svg>`;
   })();
   const busMarkup = BUS_MARKER_SVGS[facing].replace(/^<svg[^>]*>/, "").replace("</svg>", "");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="86" height="80" viewBox="0 0 86 80"><svg x="17" y="17" width="52" height="46" viewBox="-48 -56 96 84">${busMarkup}</svg><circle cx="25" cy="25" r="6" fill="${color}" stroke="#071A2E" stroke-width="2"/>${arrowMarkup}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="86" height="80" viewBox="0 0 86 80"><svg x="17" y="17" width="52" height="46" viewBox="-48 -56 96 84">${busMarkup}</svg><circle cx="${dot.x.toFixed(1)}" cy="${dot.y.toFixed(1)}" r="6" fill="${color}" stroke="#071A2E" stroke-width="2"/>${arrowMarkup}</svg>`;
 }
 
 export function vehicleMarkerDataUri(...args: Parameters<typeof vehicleMarkerSvg>) {
@@ -94,4 +104,5 @@ export function vehicleMarkerHtml(capacity?: Capacity, onBreak?: boolean, _surfa
   return `<div aria-label="${label}" style="width:86px;height:80px;display:flex;align-items:center;justify-content:center"><img src="${image}" width="86" height="80" alt="" draggable="false" style="display:block;width:86px;height:80px;pointer-events:none" /></div>`;
 }
 
-export const HAIL_MARKER_HTML = `<div style="width:30px;height:30px;box-sizing:border-box;background:#FF6D3A;border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="${ACCOUNT_PATH}"/></svg></div>`;
+export const HAIL_MARKER_HTML = `<div style="width:30px;height:30px;box-sizing:border-box;background:#FF6D3A;border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5)"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="${ACCOUNT_PATH}"/></svg></div>`;
+export const HAIL_MARKER_DATA_URI = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="14" fill="#FF6D3A" stroke="#FFFFFF" stroke-width="2"/><svg x="6" y="6" width="18" height="18" viewBox="0 0 24 24"><path d="${ACCOUNT_PATH}" fill="#FFFFFF"/></svg></svg>`)}`;

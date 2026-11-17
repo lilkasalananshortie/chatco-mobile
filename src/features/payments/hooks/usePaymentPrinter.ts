@@ -69,7 +69,7 @@ export function usePaymentPrinter({
 
   // Direct auto-print helper: prints immediately without waiting or asking questions
   const autoPrintReceipt = (overrideTxns?: Transaction[]) => {
-    if (!thermalPrinter.isAutoPrintEnabled()) return;
+    if (!thermalPrinter.isAutoPrintEnabled() || receiptSettings?.autoPrint !== true) return;
 
     const txnsToPrint =
       overrideTxns && overrideTxns.length > 0
@@ -116,7 +116,7 @@ export function usePaymentPrinter({
 
   // Auto-print receipt on payment success if enabled
   useEffect(() => {
-    if (step === "success" && thermalPrinter.isAutoPrintEnabled()) {
+    if (step === "success" && thermalPrinter.isAutoPrintEnabled() && receiptSettings?.autoPrint === true) {
       autoPrintReceipt();
     }
   }, [

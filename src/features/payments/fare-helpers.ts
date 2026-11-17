@@ -42,6 +42,10 @@ export function selectedPointName(point: FarePoint, subPoint: string | null): st
   return subPoint ? `${point.name} · ${subPoint}` : point.name;
 }
 
+export function pointSelectionComplete(point: FarePoint | null, subPoint: string | null): point is FarePoint {
+  return Boolean(point && (subDropoffPoints(point).length === 0 || (subPoint && subDropoffPoints(point).includes(subPoint))));
+}
+
 export function getFareBetween(
   from: FarePoint,
   to: FarePoint,

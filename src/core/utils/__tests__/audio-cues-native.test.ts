@@ -1,7 +1,8 @@
 /// <reference types="jest" />
 import { Platform } from "react-native";
 import { appStorage } from "../../storage/app-storage";
-import { audioCues, loadScanSoundSetting, setScanSoundEnabled } from "../audio-cues";
+import { audioCues, loadScanSoundSetting, setAudioCuesActive, setScanSoundEnabled } from "../audio-cues";
+import { appHaptics } from "../haptics";
 import { playNativeCue } from "../native-audio";
 
 jest.mock("react-native", () => ({ Platform: { OS: "android" } }));
@@ -15,10 +16,11 @@ async function flushCue() {
 }
 
 beforeEach(async () => {
-  jest.clearAllMocks();
   (appStorage.getItem as jest.Mock).mockResolvedValue("on");
   (appStorage.setItem as jest.Mock).mockResolvedValue(undefined);
+  await setAudioCuesActive(true);
   await loadScanSoundSetting();
+  jest.clearAllMocks();
 });
 
 test("each operational cue reaches native playback", async () => {
@@ -35,9 +37,26 @@ test("each operational cue reaches native playback", async () => {
   ]);
 });
 
-test("scan sound preference blocks the native payment cue", async () => {
+test("scan sound preference blocks the native payment cue and its haptic", async () => {
   await setScanSoundEnabled(false);
   audioCues.playPaymentSound();
   await flushCue();
+  expect(playNativeCue).not.toHaveBeenCalled();
+  expect(appHaptics.success).not.toHaveBeenCalled();
+});
+
+test("all operational cues still vibrate when in-app sound is disabled", async () => {
+  await setAudioCuesActive(false);
+  audioCues.playPaymentSound();
+  audioCues.playCapacitySound();
+  audioCues.playHailSound();
+  audioCues.playWarningSound();
+  audioCues.playDutySound();
+  audioCues.playSyncSound();
+  await flushCue();
+  expect(appHaptics.success).toHaveBeenCalledTimes(2);
+  expect(appHaptics.medium).toHaveBeenCalled();
+  expect(appHaptics.error).toHaveBeenCalled();
+  expect(appHaptics.light).toHaveBeenCalled();
   expect(playNativeCue).not.toHaveBeenCalled();
 });

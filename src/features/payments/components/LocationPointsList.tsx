@@ -82,7 +82,7 @@ export function LocationPointsList({
         </View>
       </View>
 
-      <Text style={[styles.searchTip, { paddingHorizontal: 16, paddingBottom: 8 }]}>Tap your destination Point Area → then select a sub drop-off point · Auto-opens after selection</Text>
+      <Text style={[styles.searchTip, { paddingHorizontal: 16, paddingBottom: 8 }]}>{selectingField === "pickup" ? "Tap your boarding Point Area, then choose a sub pickup point" : "Tap your destination Point Area, then choose a sub drop-off point"}</Text>
       {/* Points List */}
       <ScrollView style={styles.pointsList} contentContainerStyle={styles.pointsListContent}>
         {filteredPoints.map((point) => {
@@ -126,9 +126,10 @@ export function LocationPointsList({
                   if (selectingField === "pickup") {
                     setPickupPoint(point);
                     setPickupLandmark(null);
-                    setSelectingField("dropoff");
                     if (pointSubDropoffs.length > 0) {
                       setExpandedBarangay(point.pointNumber);
+                    } else {
+                      setSelectingField("dropoff");
                     }
                   } else {
                     setDropoffPoint(point);
@@ -204,21 +205,6 @@ export function LocationPointsList({
                     Sub pickup/drop-off points in {point.name}{" "}
                     <Text style={{ color: colors.muted }}>· tap to select</Text>
                   </Text>
-
-                  {/* Use Point Area Only */}
-                  <Pressable
-                    onPress={() => {
-                      appHaptics.light();
-                      if (selectingField === "pickup") {
-                        setSelectingField("dropoff");
-                      }
-                      setExpandedBarangay(null);
-                    }}
-                    style={styles.usePointAreaButton}
-                  >
-                    <View style={[styles.miniDot, { backgroundColor: isLofi ? colors.warning : "#F59E0B" }]} />
-                    <Text style={styles.usePointAreaText}>Use Point Area only</Text>
-                  </Pressable>
 
                   {pointSubDropoffs.map((landmark, idx) => {
                     const isLmPickup =

@@ -65,7 +65,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode; colors: ErrorScr
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("CHATCO application error", error, info.componentStack);
+    console.error("E-CHATCO application error", error, info.componentStack);
   }
 
   private recover = async () => {
@@ -77,7 +77,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode; colors: ErrorScr
     if (!this.state.error) return this.props.children;
     return (
       <View style={{ flex: 1, backgroundColor: this.props.colors.background, padding: 28, justifyContent: "center" }}>
-        <Text style={{ color: this.props.colors.text, fontSize: 24, fontWeight: "900" }}>CHATCO could not open this screen</Text>
+        <Text style={{ color: this.props.colors.text, fontSize: 24, fontWeight: "900" }}>E-CHATCO could not open this screen</Text>
         <Text style={{ color: this.props.colors.muted, fontSize: 14, lineHeight: 21, marginTop: 10 }}>
           The app stayed open so this error can be reported.
         </Text>

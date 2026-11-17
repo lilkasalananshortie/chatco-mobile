@@ -62,10 +62,10 @@ export function LoginScreen({ onLogin }: { onLogin: (user: User) => void | Promi
           <View style={s.content}>
             {!keyboardVisible ? <>
               <View style={s.brandRow}>
-                <View style={s.brandLockup} accessible accessibilityLabel="Chatco logo">
-                  <Image source={require("../../../assets/logo-transparent.png")} style={s.logoMark} resizeMode="contain" accessible={false} />
+                <View style={s.brandLockup} accessible accessibilityLabel="E-CHATCO logo">
+                  <Image source={require("../../../assets/logo-e-chatco.png")} style={s.logoMark} resizeMode="contain" accessible={false} />
                   <View>
-                    <Text style={[s.wordmark, { color: colors.text }]}>CHATCO<Text style={{ color: colors.primaryLight }}>.</Text></Text>
+                    <Text style={[s.wordmark, { color: colors.text }]}>E-CHATCO<Text style={{ color: colors.primaryLight }}>.</Text></Text>
                     <Text style={[s.brandLabel, { color: colors.muted }]}>CONDUCTOR PORTAL</Text>
                   </View>
                 </View>

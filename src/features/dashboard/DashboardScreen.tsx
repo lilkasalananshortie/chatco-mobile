@@ -19,8 +19,8 @@ import { BreakConfirmModal } from "./components/BreakConfirmModal";
 import { completeAndAdvanceTrip, loadTripCycleState, saveTripCycleState, switchActiveTripDirection, undoLastTurnaround, type TripCycleState, type TripDirection } from "../../core/utils/trip-cycle-tracker";
 import { audioCues } from "../../core/utils/audio-cues";
 import { TripLogbookModal } from "./TripLogbookModal";
-import { RouteAdvisoryBanners } from "./components/RouteAdvisoryBanners";
 import { RouteDeviationNotice } from "./components/RouteDeviationNotice";
+import { OverspeedNotice } from "./components/OverspeedNotice";
 import { CORRIDOR_DEVIATION_THRESHOLD_METERS } from "../../core/utils/corridor-guard";
 import { TripDirectionModal } from "./components/TripDirectionModal";
 
@@ -138,17 +138,6 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
     </View> : null}
     {shiftData.syncState === "syncing" ? <View style={{ backgroundColor: colors.surface, paddingHorizontal: 16, paddingVertical: 8 }}><Text style={{ color: colors.text, fontSize: 12 }}>Syncing offline transactions…</Text></View> : null}
     <DeviceOwnershipBanner shift={shift} isOperatingDevice={shiftData.isOperatingDevice} canOperate={canOperate} ownsShift={shiftData.ownsShift} unclaimed={shiftData.unclaimed} recoveredByAdmin={shiftData.recoveredByAdmin} deviceBusy={shiftData.deviceBusy} deviceError={shiftData.deviceError} claimDevice={shiftData.claimDevice} releaseDevice={shiftData.releaseDevice} />
-    {Platform.OS !== "web" && !usesWebMapFallback && shiftData.hails.length ? <View style={{ marginHorizontal: 12, marginTop: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isLofi ? "#E5E7EB" : "rgba(255,255,255,0.1)", backgroundColor: isLofi ? "rgba(255,255,255,0.97)" : "rgba(7,26,46,0.97)", gap: 8 }}>
-      <Text style={{ color: isLofi ? "#374151" : "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase" }}>Passenger requests</Text>
-      {shiftData.hails.map(hail => <View key={hail.id} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ color: isLofi ? "#111827" : "#FFFFFF", fontSize: 12, fontWeight: "600" }}>{hail.commuterName}</Text>
-          <Text numberOfLines={1} style={{ color: isLofi ? "#6B7280" : "rgba(255,255,255,0.45)", fontSize: 10, marginTop: 2 }}>{hail.label || "Passenger waiting"}{hail.etaMinutes ? ` · ${hail.etaMinutes} min away` : ""}</Text>
-        </View>
-        <Pressable accessibilityRole="button" disabled={!canOperate} onPress={() => void shiftData.handleHail(hail.id, "reject")} style={{ minHeight: 34, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isLofi ? "#D1D5DB" : "rgba(255,255,255,0.15)", borderRadius: 8, opacity: canOperate ? 1 : 0.5 }}><Text style={{ color: isLofi ? "#374151" : "rgba(255,255,255,0.8)", fontSize: 11, fontWeight: "600" }}>Reject</Text></Pressable>
-        <Pressable accessibilityRole="button" disabled={!canOperate} onPress={() => void shiftData.handleHail(hail.id, "accept")} style={{ minHeight: 34, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#1A5FB4", borderRadius: 8, opacity: canOperate ? 1 : 0.5 }}><Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>Accept</Text></Pressable>
-      </View>)}
-    </View> : null}
     <DashboardHeaderCard
       profilePictureUrl={profilePictureUrl} shift={shift} dashStyles={dashStyles} colors={colors} isLofi={isLofi}
       canOperate={canOperate} isOnBreak={shiftData.isOnBreak} breakPending={shiftData.breakPending}
@@ -159,16 +148,18 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
       onOpenActions={() => setActions(true)}
       totals={shiftData.totals} pendingOfflineCount={shiftData.pendingOfflineCount} pendingOfflineError={shiftData.pendingOfflineError}
     />
-    <RouteAdvisoryBanners currentSpeedKmh={gpsData.currentSpeedKmh} isOverspeeding={gpsData.isOverspeeding} thermalState={{ enabled: false }} approachingStop={null} />
   </ScrollView>;
 
   return <View style={{ flex: 1, backgroundColor: colors.background }}>
     <View style={{ flex: 1 }}>
-      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} tripDirection={tripCycleState?.activeTrip.direction ?? "SOUTHBOUND"} viewportInsets={{ top: 0, bottom: bottomNavigationHeight + (routeDeviationActive ? 88 : 0) + (combinedError ? 60 : 0) }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} canOperate={canOperate} onHail={(id, action) => shiftData.handleHail(id, action)} />
+      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} tripDirection={tripCycleState?.activeTrip.direction ?? "SOUTHBOUND"} viewportInsets={{ top: 0, bottom: bottomNavigationHeight + (routeDeviationActive ? 88 : 0) + (gpsData.isOverspeeding ? 88 : 0) + (combinedError ? 60 : 0) }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} />
       <View renderToHardwareTextureAndroid style={{ pointerEvents: "box-none", position: "absolute", top: 0, left: 0, right: 0, maxHeight: dashboardMaxHeight, zIndex: 10, elevation: 10 }}>
         {dashboardContent}
       </View>
-      {routeDeviationActive ? <View pointerEvents="none" style={{ position: "absolute", left: 16, right: 16, bottom: bottomNavigationHeight + 16 + (combinedError ? 60 : 0), zIndex: 14, elevation: 14 }}><RouteDeviationNotice distanceMeters={gpsData.corridorDeviationMeters} /></View> : null}
+      {routeDeviationActive || gpsData.isOverspeeding ? <View pointerEvents="none" style={{ position: "absolute", left: 16, right: 16, bottom: bottomNavigationHeight + 16 + (combinedError ? 60 : 0), zIndex: 14, elevation: 14, gap: 10 }}>
+        {gpsData.isOverspeeding ? <OverspeedNotice speedKmh={gpsData.currentSpeedKmh} limitKmh={gpsData.currentSpeedLimitKmh} /> : null}
+        {routeDeviationActive ? <RouteDeviationNotice distanceMeters={gpsData.corridorDeviationMeters} /> : null}
+      </View> : null}
       {combinedError ? <View accessibilityRole="alert" style={{ position: "absolute", bottom: bottomNavigationHeight + 16, left: 16, right: 16, padding: 12, borderRadius: 8, backgroundColor: isLofi ? "#FEF2F2" : "#450A0A", zIndex: 15 }}><Text style={{ color: isLofi ? "#B91C1C" : "#FECACA", fontSize: 12 }}>{combinedError}</Text></View> : null}
     </View>
     <ModalShell visible={actions} title="Conductor actions" onClose={() => setActions(false)}>
@@ -179,7 +170,7 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
         <Text style={styles.subtitle}>{gpsData.permissionStatus === "inactive" ? "Tracking paused or awaiting location acknowledgement." : gpsData.lastUploadAt ? `Last foreground upload accepted: ${new Date(gpsData.lastUploadAt).toLocaleTimeString()}` : "No successful foreground upload confirmed for this tracking session yet."}</Text>
         {gpsData.backgroundWarning ? <Text style={[styles.subtitle, { color: colors.warning }]}>{gpsData.backgroundWarning}</Text> : null}
         <Pressable onPress={gpsData.retryTracking} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Retry tracking</Text></Pressable>
-        <Pressable onPress={() => void Linking.openSettings().catch(() => Alert.alert("Open device Settings", "Open CHATCO's permissions in device Settings to manage location access."))} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Device permissions</Text></Pressable>
+        <Pressable onPress={() => void Linking.openSettings().catch(() => Alert.alert("Open device Settings", "Open E-CHATCO's permissions in device Settings to manage location access."))} style={[styles.button, styles.secondaryButton]}><Text style={[styles.buttonText, styles.secondaryButtonText]}>Device permissions</Text></Pressable>
       </View>
     </ModalShell>
     {shiftData.breakConfirmOpen ? <BreakConfirmModal visible isOnBreak={shiftData.isOnBreak} breakPending={shiftData.breakPending} error={shiftData.error} onClose={() => shiftData.setBreakConfirmOpen(false)} onConfirm={shiftData.updateBreak} /> : null}

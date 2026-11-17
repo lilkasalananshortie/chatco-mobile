@@ -1,31 +1,39 @@
 {
   "expo": {
-    "name": "CHATCO Conductor",
+    "name": "E-CHATCO Conductor",
     "slug": "chatco-mobile",
     "scheme": "chatco-conductor",
     "version": "1.0.13",
-    "icon": "./assets/logo-transparent.png",
+    "icon": "./assets/logo-e-chatco.png",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "plugins": [
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CHATCO uses your location during an active shift so commuters can see the vehicle.",
+          "locationWhenInUsePermission": "E-CHATCO uses your location during an active shift so commuters can see the vehicle.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
           "isIosBackgroundLocationEnabled": true,
-          "locationAlwaysAndWhenInUsePermission": "CHATCO uses your location during an active shift, including when the app is minimized, so commuters can see the vehicle."
+          "locationAlwaysAndWhenInUsePermission": "E-CHATCO uses your location during an active shift, including when the app is minimized, so commuters can see the vehicle."
         }
       ],
       "expo-maps",
       "expo-font",
       "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#050F1A",
+          "image": "./assets/splash-transparent.png",
+          "imageWidth": 1
+        }
+      ],
       "expo-secure-store",
       [
         "expo-image-picker",
         {
-          "photosPermission": "CHATCO uses your photo library so you can add a conductor profile picture.",
+          "photosPermission": "E-CHATCO uses your photo library so you can add a conductor profile picture.",
           "cameraPermission": false,
           "microphonePermission": false
         }

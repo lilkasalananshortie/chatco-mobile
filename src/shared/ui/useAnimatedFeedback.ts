@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing } from "react-native";
 
-export function useAnimatedToggle(active: boolean, duration = 200, disabled = false) {
+export function useAnimatedToggle(active: boolean, duration = 200, disabled = false, useNativeDriver = true) {
   const value = useRef(new Animated.Value(active ? 1 : 0)).current;
   useEffect(() => {
     value.stopAnimation();
@@ -13,11 +13,11 @@ export function useAnimatedToggle(active: boolean, duration = 200, disabled = fa
       toValue: active ? 1 : 0,
       duration,
       easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
+      useNativeDriver,
     });
     animation.start();
     return () => animation.stop();
-  }, [active, disabled, duration, value]);
+  }, [active, disabled, duration, useNativeDriver, value]);
   return value;
 }
 

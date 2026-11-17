@@ -40,6 +40,7 @@ export function useDashboardShift({
 
   const operationalRefreshInFlight = useRef<Promise<void> | null>(null);
   const breakBusy = useRef(false);
+  const seenHailIds = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     void api.getDeviceId().then(setDeviceId);
@@ -119,12 +120,20 @@ export function useDashboardShift({
     let active = true;
     let running = false;
     const load = async () => {
-      if (!active || running || AppState.currentState === "background" || AppState.currentState === "inactive") return;
+      if (!active || running || !canOperate || !isOnline || isOnBreak || AppState.currentState === "background" || AppState.currentState === "inactive") return;
       running = true;
-      try { const records = await api.hails(); if (active) setHails(records); }
-      catch { /* Keep the last known hails during an outage. */ }
+      try {
+        const records = await api.hails();
+        if (active) {
+          const previous = seenHailIds.current ?? new Set<string>();
+          if (records.some(hail => !previous.has(hail.id))) audioCues.playHailSound();
+          seenHailIds.current = new Set([...previous, ...records.map(hail => hail.id)]);
+          setHails(records);
+        }
+      } catch { /* Keep visible hails until a successful refresh or an availability change. */ }
       finally { running = false; }
     };
+    if (!canOperate || !isOnline || isOnBreak) setHails([]);
     load();
     const timer = setInterval(load, 10000);
     const subscription = AppState.addEventListener("change", (state) => {
@@ -135,7 +144,7 @@ export function useDashboardShift({
       clearInterval(timer);
       subscription.remove();
     };
-  }, []);
+  }, [canOperate, isOnline, isOnBreak]);
 
   const updateCapacity = async (next: Capacity) => {
     if (!canOperate) return;
@@ -180,7 +189,6 @@ export function useDashboardShift({
     if (!canOperate) return;
     try {
       if (action === "accept") {
-        audioCues.playHailSound();
         await api.acceptHail(hailId);
       } else {
         await api.rejectHail(hailId);

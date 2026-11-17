@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { FarePoint } from "../../../core/domain/types";
 import type { FareInfo, SelectedPaymentMethod, Step } from "../payment-types";
-import { formatCurrency } from "../fare-helpers";
+import { formatCurrency, pointSelectionComplete } from "../fare-helpers";
 
 export interface LocationBottomBarProps {
   styles: any;
@@ -37,7 +37,7 @@ export function LocationBottomBar({
 }: LocationBottomBarProps) {
   const { colors } = usePaymentTheme();
   const isGCash = selectedMethod === "GCash";
-  const bothLocationsSelected = Boolean(pickupPoint && dropoffPoint);
+  const bothLocationsSelected = pointSelectionComplete(pickupPoint, pickupLandmark) && pointSelectionComplete(dropoffPoint, dropoffLandmark);
 
   return (
     <>
@@ -152,9 +152,13 @@ export function LocationBottomBar({
       {(!isGCash && !fareInfo) || (isGCash && !activeGcashTransaction && !bothLocationsSelected) ? (
         <View style={styles.bottomBarContainer}>
           <Text style={styles.bottomPlaceholderText}>
-            {isGCash
-              ? "Select both pickup and drop-off locations to generate QR code"
-              : "Select both pickup and drop-off to calculate fare"}
+            {pickupPoint && !pointSelectionComplete(pickupPoint, pickupLandmark)
+              ? "Choose a sub pickup point to continue"
+              : dropoffPoint && !pointSelectionComplete(dropoffPoint, dropoffLandmark)
+                ? "Choose a sub drop-off point to continue"
+                : isGCash
+                  ? "Select both pickup and drop-off locations to generate QR code"
+                  : "Select both pickup and drop-off to calculate fare"}
           </Text>
         </View>
       ) : null}

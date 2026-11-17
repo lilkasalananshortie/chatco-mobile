@@ -6,6 +6,9 @@ export interface AppPreferencesCardProps {
   styles: any;
   scanSound: boolean;
   onToggleScanSound: () => void;
+  soundCues: boolean;
+  onToggleSoundCues: () => void;
+  onTestSound: () => void;
   isLofi: boolean;
   onToggleLofi: () => void;
 }
@@ -14,6 +17,9 @@ export function AppPreferencesCard({
   styles,
   scanSound,
   onToggleScanSound,
+  soundCues,
+  onToggleSoundCues,
+  onTestSound,
   isLofi,
   onToggleLofi,
 }: AppPreferencesCardProps) {
@@ -21,12 +27,30 @@ export function AppPreferencesCard({
     <View style={styles.sectionCard}>
       <Text style={styles.sectionHeaderTitle}>App Preferences</Text>
 
-      {/* Scan Sound (1:1 with web: "Play sound on successful scan") */}
       <View style={[styles.infoRow, { marginTop: 12, paddingVertical: 10 }]}>
         <View style={{ flex: 1, paddingRight: 10 }}>
-          <Text style={styles.prefTitle}>Scan Sound</Text>
+          <Text style={styles.prefTitle}>Sound cues</Text>
+          <Text style={styles.prefSubtitle}>Play payment, hail, warning, duty, capacity, and sync sounds</Text>
+        </View>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityLabel="Sound cues"
+          accessibilityState={{ checked: soundCues }}
+          onPress={onToggleSoundCues}
+          style={[styles.toggleTrack, soundCues ? styles.toggleTrackActive : styles.toggleTrackInactive]}
+        >
+          <View style={[styles.toggleThumb, soundCues ? styles.toggleThumbActive : styles.toggleThumbInactive]} />
+        </Pressable>
+      </View>
+      <Pressable accessibilityRole="button" onPress={onTestSound} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start", paddingHorizontal: 12 }}>
+        <Text style={[styles.prefTitle, { color: "#3B82F6" }]}>Test sound and vibration</Text>
+      </Pressable>
+
+      <View style={[styles.infoRow, { marginTop: 12, paddingVertical: 10 }]}>
+        <View style={{ flex: 1, paddingRight: 10 }}>
+          <Text style={styles.prefTitle}>Payment sound</Text>
           <Text style={styles.prefSubtitle}>
-            Play sound and haptic on successful scan/payment
+            Play a sound and vibration when a payment is saved
           </Text>
         </View>
         <Pressable

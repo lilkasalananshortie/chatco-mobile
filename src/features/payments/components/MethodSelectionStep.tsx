@@ -3,6 +3,7 @@ import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import type { SelectedPaymentMethod } from "../payment-types";
+import { appHaptics } from "../../../core/utils/haptics";
 
 export interface MethodSelectionStepProps {
   styles: any;
@@ -84,7 +85,7 @@ export function MethodSelectionStep({
         {/* Cash Option */}
         <Pressable
           disabled={Boolean(blockedReason) || !fareReady}
-          onPress={() => onSelectMethod("Cash")}
+          onPress={() => { appHaptics.selection(); onSelectMethod("Cash"); }}
           style={[styles.methodOptionCard, { backgroundColor: methodSurface, borderColor: methodBorder }, blockedReason || !fareReady ? { opacity: 0.5 } : null]}
         >
           <View
@@ -111,6 +112,7 @@ export function MethodSelectionStep({
           disabled={!isOnline || Boolean(blockedReason) || !fareReady}
           onPress={() => {
             if (!isOnline) return;
+            appHaptics.selection();
             onSelectMethod("GCash");
           }}
           style={[

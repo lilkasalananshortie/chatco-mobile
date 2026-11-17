@@ -12,15 +12,14 @@ import Svg, { Path } from "react-native-svg";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { LiveMapProps } from "./LiveMap";
 import { distanceMeters, PICKUP_RADIUS_METERS, ROUTE_COORDINATES } from "./route-data";
-import { JEEPNEY_PATH, markerPresentation, unitPopupPalette, vehicleMarkerDataUri, vehicleMarkerHtml } from "./map-presentation";
+import { HAIL_MARKER_DATA_URI, HAIL_MARKER_HTML, JEEPNEY_PATH, markerPresentation, unitPopupPalette, vehicleMarkerDataUri, vehicleMarkerHtml } from "./map-presentation";
 
 /** Use the platform map over native UI; keep Leaflet as the configured fallback. */
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, tripDirection = "SOUTHBOUND", capacity = "AVAILABLE", isOnBreak = false, canOperate = false, onHail }: LiveMapProps) {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, tripDirection = "SOUTHBOUND", capacity = "AVAILABLE", isOnBreak = false }: LiveMapProps) {
   const { colors, isLofi } = useAppTheme();
   const googleMap = useRef<GoogleMapsTypes.MapView>(null);
   const appleMap = useRef<AppleMapsTypes.MapView>(null);
   const webView = useRef<WebView>(null);
-  const busy = useRef(false);
   const [loaded, setLoaded] = useState(Platform.OS === "ios");
   const [mapError, setMapError] = useState(false);
   const [unitInfoVisible, setUnitInfoVisible] = useState(false);
@@ -39,10 +38,10 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
     latitude: hasLivePosition ? latitude! : routeCenter.latitude,
     longitude: hasLivePosition ? longitude! : routeCenter.longitude,
   }), [hasLivePosition, latitude, longitude, routeCenter]);
-  const visibleHails = useMemo(() => hails.filter(hail =>
+  const visibleHails = useMemo(() => hasLivePosition ? hails.filter(hail =>
     Number.isFinite(hail.latitude) && Number.isFinite(hail.longitude)
       && distanceMeters(position, hail) <= PICKUP_RADIUS_METERS
-  ), [hails, position]);
+  ) : [], [hails, hasLivePosition, position]);
 
   const mapColor = colors.background;
   const routeColor = isLofi ? colors.primary : "#62A0EA";
@@ -54,6 +53,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const vehiclePosition: [number, number] = [position.latitude, position.longitude];
   const vehicleIconHtml = vehicleMarkerHtml(capacity, isOnBreak, isLofi ? colors.surface : "#071A2E", tripDirection, route, vehiclePosition);
   const vehicleIcon = useImage(vehicleMarkerDataUri(capacity, isOnBreak, tripDirection, route, vehiclePosition), { maxWidth: 86, maxHeight: 80 });
+  const hailIcon = useImage(HAIL_MARKER_DATA_URI, { maxWidth: 30, maxHeight: 30 });
   const lines = useMemo(() => [
     { id: "route-shadow", coordinates: route.map(([lat, lng]) => ({ latitude: lat, longitude: lng })), color: isLofi ? "rgba(26,95,180,0.2)" : "rgba(98,160,234,0.2)", width: 8, geodesic: true },
     { id: "route", coordinates: route.map(([lat, lng]) => ({ latitude: lat, longitude: lng })), color: routeColor, width: 4, geodesic: true },
@@ -72,13 +72,11 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
 
   const markersGoogle: GoogleMapsTypes.Marker[] = [
     { id: "vehicle", coordinates: position, title: `Unit ${unitNumber}`, snippet: isOnBreak ? "On Break" : capacity.replace("_", " "), showCallout: false, zIndex: 2, icon: vehicleIcon ?? undefined, anchor: { x: 0.5, y: 0.5 } },
-    ...visibleHails.map(hail => ({ id: `hail-${hail.id}`, coordinates: { latitude: hail.latitude, longitude: hail.longitude }, title: hail.commuterName, snippet: `${hail.label || "Passenger waiting"}${hail.etaMinutes ? ` · ${hail.etaMinutes} min away` : ""}`, showCallout: true, zIndex: 3 })),
-  ];
-  const markersApple: AppleMapsTypes.Marker[] = [
-    ...visibleHails.map(hail => ({ id: `hail-${hail.id}`, coordinates: { latitude: hail.latitude, longitude: hail.longitude }, title: `${hail.commuterName} · ${hail.label || "Passenger waiting"}`, systemImage: "figure.wave", tintColor: "#FF6D3A" })),
+    ...visibleHails.map(hail => ({ id: `hail-${hail.id}`, coordinates: { latitude: hail.latitude, longitude: hail.longitude }, title: "Commuter", showCallout: true, zIndex: 3, icon: hailIcon ?? undefined, anchor: { x: 0.5, y: 0.5 } })),
   ];
   const annotationsApple: AppleMapsTypes.Annotation[] = [
     { id: "vehicle", coordinates: position, title: `Unit ${unitNumber} · ${isOnBreak ? "On Break" : capacity.replace("_", " ")}`, icon: vehicleIcon ?? undefined },
+    ...visibleHails.map(hail => ({ id: `hail-${hail.id}`, coordinates: { latitude: hail.latitude, longitude: hail.longitude }, title: "Commuter", icon: hailIcon ?? undefined })),
   ];
   const circlesGoogle: GoogleMapsTypes.Circle[] = [{ id: "pickup-zone", center: position, radius: PICKUP_RADIUS_METERS, color: isLofi ? "rgba(26,95,180,0.05)" : "rgba(255,255,255,0.05)", lineColor: isLofi ? "rgba(7,26,46,0.3)" : "rgba(255,255,255,0.3)", lineWidth: 1.5 }];
   const circlesApple: NonNullable<AppleMapsTypes.MapProps["circles"]> = [{ id: "pickup-zone", center: position, radius: PICKUP_RADIUS_METERS, color: isLofi ? "rgba(26,95,180,0.05)" : "rgba(255,255,255,0.05)", lineColor: isLofi ? "rgba(7,26,46,0.3)" : "rgba(255,255,255,0.3)", lineWidth: 1.5 }];
@@ -86,7 +84,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const html = useMemo(() => {
     const apiKey = process.env.EXPO_PUBLIC_CARTO_API_KEY || Constants.expoConfig?.extra?.cartoApiKey as string | undefined;
     const tiles = `https://{s}.basemaps.cartocdn.com/${isLofi ? "rastertiles/voyager" : "dark_all"}/{z}/{x}/{y}{r}.png${apiKey ? `?key=${encodeURIComponent(apiKey)}` : ""}`;
-    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>html,body,#map{height:100%;width:100%;margin:0;background:${mapColor}}.map-tiles-mono{filter:grayscale(1)}.leaflet-control-attribution{display:none}.hail-actions{display:flex;gap:8px;margin-top:12px}.hail-actions button{flex:1;border-radius:8px;padding:6px 8px;font-size:12px;font-weight:700;border:1px solid #D1D5DB;background:white;color:#374151}.hail-actions button:first-child{border-color:#1A5FB4;background:#1A5FB4;color:white}.hail-actions button:disabled{opacity:.4}</style></head><body><div id="map"></div><script>
+    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>html,body,#map{height:100%;width:100%;margin:0;background:${mapColor}}.map-tiles-mono{filter:grayscale(1)}.leaflet-control-attribution{display:none}.chatco-hail-marker{background:transparent!important;border:0!important}.leaflet-popup-content-wrapper{background:white!important;border-radius:12px!important;padding:0!important}.leaflet-popup-content{margin:12px 16px!important;color:#071A2E!important}.leaflet-popup-tip{background:white!important}.chatco-hail-popup .leaflet-popup-content{margin:0!important;padding:10px 14px!important;line-height:20px}</style></head><body><div id="map"></div><script>
       var coords=${JSON.stringify(route)},bounds=L.latLngBounds(coords),map=L.map('map',{zoomControl:false,attributionControl:false,minZoom:11,maxBounds:bounds.pad(.5),maxBoundsViscosity:1});map.fitBounds(bounds,{padding:[20,20]});
       L.tileLayer(${JSON.stringify(tiles)},{className:${JSON.stringify(isLofi ? "" : "map-tiles-mono")},maxZoom:19}).addTo(map);
       var routeColor='${routeColor}',neutral='${neutralColor}';L.polyline(coords,{color:routeColor,weight:8,opacity:.2}).addTo(map);L.polyline(coords,{color:routeColor,weight:4,opacity:.9,dashArray:'10 10'}).addTo(map);
@@ -96,8 +94,8 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
   const webSource = useMemo(() => ({ html }), [html]);
   const liveScript = useMemo(() => leafletUpdateScript({
     latitude: position.latitude, longitude: position.longitude,
-    vehicleIconHtml, hails: visibleHails, canOperate,
-  }), [position, vehicleIconHtml, visibleHails, canOperate]);
+    vehicleIconHtml, hailMarkerHtml: HAIL_MARKER_HTML, hails: visibleHails,
+  }), [position, vehicleIconHtml, visibleHails]);
   useEffect(() => {
     if (loaded && !configured) webView.current?.injectJavaScript(liveScript);
   }, [loaded, configured, liveScript]);
@@ -133,9 +131,6 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
           try {
             const message = JSON.parse(event.nativeEvent.data);
             if (message.type === "vehicle") { setUnitInfoVisible(true); return; }
-            if (message.type !== "hail" || !canOperate || busy.current || !visibleHails.some(hail => hail.id === message.id) || !["accept", "reject"].includes(message.action)) return;
-            busy.current = true;
-            void Promise.resolve(onHail?.(message.id, message.action)).finally(() => { busy.current = false; });
           } catch { /* Ignore messages outside the map action bridge. */ }
         }} />
       {unitInfo}
@@ -159,7 +154,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
       onMapLoaded={() => { setLoaded(true); setMapError(false); }}
     /> : <AppleMaps.View
       ref={appleMap} style={StyleSheet.absoluteFill} cameraPosition={{ coordinates: routeCenter, zoom: 11.5 }}
-      markers={markersApple} annotations={annotationsApple} polylines={lines.map(line => ({ id: line.id, coordinates: line.coordinates, color: line.color, width: line.width, contourStyle: AppleMaps.ContourStyle.GEODESIC }))} circles={circlesApple}
+      annotations={annotationsApple} polylines={lines.map(line => ({ id: line.id, coordinates: line.coordinates, color: line.color, width: line.width, contourStyle: AppleMaps.ContourStyle.GEODESIC }))} circles={circlesApple}
       onAnnotationClick={event => { if (event.id === "vehicle") setUnitInfoVisible(true); }}
       properties={{ isMyLocationEnabled: hasLivePosition, mapType: AppleMaps.MapType.STANDARD, selectionEnabled: true }}
       uiSettings={{ compassEnabled: true, myLocationButtonEnabled: hasLivePosition, scaleBarEnabled: true }}

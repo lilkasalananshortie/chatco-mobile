@@ -240,7 +240,7 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
   const printReport = async (record: Remittance) => {
     const body = officialReportText(record, shift);
     if (Platform.OS === "ios") {
-      await Share.share({ title: "CHATCO Official Report", message: body });
+      await Share.share({ title: "E-CHATCO Official Report", message: body });
       return;
     }
     const result = await thermalPrinter.printReportText(body);

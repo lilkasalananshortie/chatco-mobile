@@ -21,6 +21,7 @@ import {
   formatCurrency,
   getBarangaysTraversed,
   getFareBetween,
+  pointSelectionComplete,
   selectedPointName,
   subDropoffPoints,
 } from "../fare-helpers";
@@ -166,7 +167,7 @@ export function usePaymentFlow({
 
   // Fare calculations
   const fareInfo: FareInfo | null = useMemo(() => {
-    if (!fareReady || !pickupPoint || !dropoffPoint) return null;
+    if (!fareReady || !pointSelectionComplete(pickupPoint, pickupLandmark) || !pointSelectionComplete(dropoffPoint, dropoffLandmark)) return null;
 
     const isDiscounted = commuterType !== "REGULAR";
     const barangaysTraveled = getBarangaysTraversed(pickupPoint, dropoffPoint);
@@ -186,7 +187,7 @@ export function usePaymentFlow({
       succeedingCount,
       baseBarangayCount: fareConfig.baseBarangayCount,
     };
-  }, [fareReady, pickupPoint, dropoffPoint, commuterType, fareConfig]);
+  }, [fareReady, pickupPoint, pickupLandmark, dropoffPoint, dropoffLandmark, commuterType, fareConfig]);
 
   // Group passengers calculations
   const enteredGroupPassengers = useMemo(() => {

@@ -102,7 +102,7 @@ export function GcashQrStep({
                 />
               </View>
               <Text style={{ marginTop: 10, color: muted, fontSize: 11, lineHeight: 16 }}>
-                Commuter scans this with the CHATCO app to pay through GCash.
+                Commuter scans this with the E-CHATCO app to pay through GCash.
               </Text>
             </>
           ) : (

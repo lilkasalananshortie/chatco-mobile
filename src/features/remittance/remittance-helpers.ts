@@ -38,7 +38,7 @@ export function officialReportText(item: Remittance, shift: Shift): string {
   const cash = Number(item.cash_total) || 0;
   const gcash = Number(item.gcash_total) || 0;
   return [
-    "CHATCO OFFICIAL SHIFT REPORT",
+    "E-CHATCO OFFICIAL SHIFT REPORT",
     `Date: ${item.date ?? item.remitted_at ?? "—"}`,
     `Shift ID: ${item.shift_id ?? "—"}`,
     `Unit: ${item.unit_number ?? shift.unitNumber}`,

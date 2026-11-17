@@ -150,15 +150,15 @@ export function PaymentSuccessStep({
               {summary.method}
             </Text>
           </View>
-          {gcashInitiation && selectedMethod === "GCash" ? (
+          {receiptTransactions.length === 1 || (gcashInitiation && selectedMethod === "GCash" && !receiptTransactions.length) ? (
             <View style={styles.confirmRow}>
               <Text style={styles.confirmRowLabel}>Ref ID</Text>
               <Text style={[styles.confirmRowValue, { fontSize: 10, color: colors.muted }]}>
-                {receiptTransactions[0]?.transactionId ?? gcashInitiation.transactionId}
+                {receiptTransactions[0]?.transactionId ?? gcashInitiation?.transactionId}
               </Text>
             </View>
           ) : null}
-          {showReceiptDetails && selectedMethod === "Cash" && receiptSettings?.showManualCode !== false && (receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken) ? (
+          {showReceiptDetails && selectedMethod === "Cash" && receiptTransactions.length <= 1 && receiptSettings?.showManualCode !== false && (receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken) ? (
             <View
               accessible
               accessibilityLabel={`Reward Claim Code: ${receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken}`}
@@ -189,6 +189,16 @@ export function PaymentSuccessStep({
           ) : null}
         </View>
 
+        {receiptTransactions.length > 1 ? <View style={[styles.successSummaryCard, { marginTop: 12 }]}>
+          {receiptTransactions.map((transaction, index) => <View key={transaction.transactionId} style={styles.confirmRow}>
+            <Text style={styles.confirmRowLabel}>{getCommuterTypeLabel((transaction.passengerRole ?? "REGULAR") as CommuterType)} {index + 1}</Text>
+            <View style={{ alignItems: "flex-end", flexShrink: 1 }}>
+              <Text style={styles.confirmRowValue}>{formatCurrency(transaction.finalAmount)}</Text>
+              <Text style={{ color: colors.muted, fontSize: 10 }}>Ref {transaction.transactionId}</Text>
+            </View>
+          </View>)}
+        </View> : null}
+
         {/* Receipt Details Toggle */}
         <Pressable
           accessibilityRole="button"
@@ -201,8 +211,8 @@ export function PaymentSuccessStep({
             <Text style={styles.receiptAccordionTitle}>Receipt Details</Text>
             <Text style={styles.receiptAccordionSubtitle}>
               {showReceiptDetails
-                ? `${Math.max(1, receiptTransactions.length)} receipt shown`
-                : `Tap to view ${Math.max(1, receiptTransactions.length)} receipt`}
+                ? `${Math.max(1, receiptTransactions.length)} ${receiptTransactions.length === 1 ? "receipt" : "receipts"} shown`
+                : `Tap to view ${Math.max(1, receiptTransactions.length)} ${receiptTransactions.length === 1 ? "receipt" : "receipts"}`}
             </Text>
           </View>
           <Animated.View style={{ transform: [{ rotate: receiptChevron.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }) }] }}>
@@ -239,12 +249,13 @@ export function PaymentSuccessStep({
         {/* Thermal Receipt Content */}
         {showReceiptDetails ? (
           <View style={styles.receiptContainer}>
+            {(receiptTransactions.length ? receiptTransactions : [undefined]).map((transaction, index) => <View key={transaction?.transactionId ?? "pending"} style={index ? { marginTop: 16 } : undefined}>
             <TransactionReceipt
               settings={
                 receiptSettings ?? {
-                  businessName: "CHATCO",
+                  businessName: "E-CHATCO",
                   addressLine: "",
-                  footerNote: "Thank you for riding with Chatco!",
+                  footerNote: "Thank you for riding with E-CHATCO!",
                   paperWidth: "58",
                   autoPrint: true,
                   showDateTime: true,
@@ -256,44 +267,37 @@ export function PaymentSuccessStep({
                   showFareBreakdown: true,
                 }
               }
-              transactionId={
-                receiptTransactions[0]?.transactionId ?? gcashInitiation?.transactionId
-              }
-              timestamp={receiptTransactions[0]?.timestamp ?? Date.now()}
-              unitNumber={receiptTransactions[0]?.unitNumber || shift.unitNumber || "—"}
+              transactionId={transaction?.transactionId ?? gcashInitiation?.transactionId}
+              timestamp={transaction?.timestamp ?? Date.now()}
+              unitNumber={transaction?.unitNumber || shift.unitNumber || "—"}
               conductorName={
-                receiptTransactions[0]?.conductorName || shift.conductorName || "—"
+                transaction?.conductorName || shift.conductorName || "—"
               }
               passengerType={
-                receiptTransactions[0]?.passengerRole ||
+                transaction?.passengerRole ||
                 getCommuterTypeLabel(commuterType)
               }
               passengerName={
-                selectedMethod === "Cash" ? "Passenger" : receiptTransactions[0]?.passengerName
+                selectedMethod === "Cash" ? "Passenger" : transaction?.passengerName
               }
-              from={receiptTransactions[0]?.from || (pickupPoint ? selectedPointName(pickupPoint, pickupLandmark) : gcashInitiation?.from ?? "")}
-              to={receiptTransactions[0]?.to || (dropoffPoint ? selectedPointName(dropoffPoint, dropoffLandmark) : gcashInitiation?.to ?? "")}
-              baseFare={receiptTransactions[0]?.baseFare ?? fareInfo?.regularFare ?? 0}
-              discountAmount={receiptTransactions.length ? summary.discount : fareInfo?.discountAmount ?? 0}
-              finalFare={
-                summary.amount
-              }
-              paymentMethod={summary.method}
+              from={transaction?.from || (pickupPoint ? selectedPointName(pickupPoint, pickupLandmark) : gcashInitiation?.from ?? "")}
+              to={transaction?.to || (dropoffPoint ? selectedPointName(dropoffPoint, dropoffLandmark) : gcashInitiation?.to ?? "")}
+              baseFare={transaction?.baseFare ?? fareInfo?.regularFare ?? 0}
+              discountAmount={transaction?.discountAmount ?? fareInfo?.discountAmount ?? 0}
+              finalFare={transaction?.finalAmount ?? summary.amount}
+              paymentMethod={transaction?.paymentMethod ?? summary.method}
               receiptQrToken={
                 selectedMethod === "Cash"
-                  ? receiptTransactions[0]?.receiptQrToken ?? cashReceiptToken
+                  ? transaction?.receiptQrToken ?? (receiptTransactions.length === 1 ? cashReceiptToken : null)
                   : null
               }
-              multiplePaymentReference={
-                receiptTransactions[0]?.multiplePaymentReference ??
-                gcashInitiation?.multiplePaymentReference ??
-                null
-              }
-              driverName={receiptTransactions[0]?.driverName || shift.driverName}
-              totalPassengers={receiptTransactions.length ? summary.passengerCount : isGroupMode ? groupPassengerCount : 1}
-              grossFare={receiptTransactions.length ? summary.gross : isGroupMode ? groupGrossFare : fareInfo?.regularFare}
-              passengerBreakdown={receiptTransactions.length > 1 ? summary.breakdown : []}
+              multiplePaymentReference={transaction?.multiplePaymentReference ?? gcashInitiation?.multiplePaymentReference ?? null}
+              driverName={transaction?.driverName || shift.driverName}
+              totalPassengers={1}
+              grossFare={transaction?.baseFare ?? fareInfo?.regularFare}
+              passengerBreakdown={[]}
             />
+            </View>)}
           </View>
         ) : null}
 

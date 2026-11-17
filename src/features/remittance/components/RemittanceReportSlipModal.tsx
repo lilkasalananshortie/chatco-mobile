@@ -57,7 +57,7 @@ export function RemittanceReportSlipModal({ selected, onClose, shift }: Remittan
           {selected ? (
             <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20 }}>
               <View style={{ alignItems: "center", marginBottom: 4 }}>
-                <Text style={{ color: colors.text, fontSize: 20, fontWeight: "800", letterSpacing: 1.5 }}>CHATCO</Text>
+                <Text style={{ color: colors.text, fontSize: 20, fontWeight: "800", letterSpacing: 1.5 }}>E-CHATCO</Text>
                 <Text style={[styles.label, { marginTop: 3 }]}>End-of-day remittance report</Text>
               </View>
               <View style={{ height: 1, backgroundColor: colors.border, marginTop: 16, marginBottom: 15 }} />

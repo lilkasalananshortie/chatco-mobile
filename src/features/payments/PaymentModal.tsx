@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Modal, StyleSheet, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Text } from "../../shared/ui/BrandText";
 import type { Shift } from "../../core/domain/types";
 import { usePaymentTheme } from "../../core/theme/payment-theme";
 import { createPaymentStyles } from "./payment-styles";
 import { usePaymentFlow } from "./hooks/usePaymentFlow";
 import { MethodSelectionStep } from "./components/MethodSelectionStep";
 import { LocationPickerStep } from "./components/LocationPickerStep";
+import { FareNotice } from "./components/FareNotice";
 import { PassengerGroupStep } from "./components/PassengerGroupStep";
 import { PaymentConfirmationStep } from "./components/PaymentConfirmationStep";
 import { GcashQrStep } from "./components/GcashQrStep";
@@ -156,7 +156,7 @@ export function PaymentModal({
     <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
       <SafeAreaView edges={["top", "bottom"]} style={[styles.modalBackdrop, displayStep === "method" && !centeredPanel ? { padding: 0, alignItems: "stretch" } : null, { justifyContent: centeredPanel || displayStep === "qr_code" ? "center" : "flex-end", backgroundColor: "transparent" }]}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: displayStep === "qr_code" ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.6)" }, backdropEntrance, { opacity: Animated.multiply(backdropEntrance.opacity, backdropExitOpacity) }]} />
-        {displayStep !== "method" && flow.fareNotice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.text, backgroundColor: colors.surface, padding: 12, marginBottom: 8 }}>{flow.fareNotice}</Text> : null}
+        {displayStep !== "method" && flow.fareNotice ? <FareNotice message={flow.fareNotice} /> : null}
         <Animated.View style={[{ width: "100%", alignItems: "center" }, entrance, width >= 1280 ? { opacity: Animated.multiply(entrance.opacity, exitOpacity), transform: [...entrance.transform, { translateY: exitProgress.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }) }, { scale: exitProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.95] }) }] } : null]}>
         {displayStep === "method" ? (
           <MethodSelectionStep

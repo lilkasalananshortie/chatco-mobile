@@ -35,21 +35,20 @@ test("all passenger types have visible, pressable tiles that increment their cou
   }
   nodes.find(element => element.props.accessibilityLabel === "Add Regular, 0 added")!.props.onPress();
   expect(setGroupCounts.mock.calls[0][0](counts).REGULAR).toBe(1);
-  nodes.find(element => element.props.accessibilityLabel === "Number of Student passengers")!.props.onChangeText("12");
-  expect(setGroupCounts.mock.calls[1][0](counts).STUDENT).toBe(12);
+  nodes.find(element => element.props.accessibilityLabel === "Add Student, 0 added")!.props.onPress();
+  expect(setGroupCounts.mock.calls[1][0](counts).STUDENT).toBe(1);
   expect(nodes.some(element => element.props.children === "Companion passenger types")).toBe(false);
   expect(appHaptics.medium).toHaveBeenCalled();
 });
 
-test("GCash group quantity controls are visible and active QR review returns to the existing payment", () => {
+test("GCash group tiles are visible and active QR review returns to the existing payment", () => {
   const counts = { REGULAR: 0, SENIOR_CITIZEN: 0, STUDENT: 0, PWD: 0 };
   const group = walk(PassengerGroupStep({ styles: {}, selectedMethod: "GCash", pickupPoint: { name: "A" } as any,
     dropoffPoint: { name: "B" } as any, groupCounts: counts, setGroupCounts: jest.fn(), groupEnteredCount: 0,
     groupDiscount: 0, groupTotalFare: 0, fareInfo: null, isInitiatingGcash: false,
     handleConfirmPayment: jest.fn(), setStep: jest.fn() }));
-  expect(group.some(element => element.props.children === "Companion passenger types")).toBe(true);
   for (const label of ["Regular", "Senior", "Student", "PWD"])
-    expect(group.some(element => element.props.accessibilityLabel === `Number of ${label} passengers`)).toBe(true);
+    expect(group.some(element => element.props.accessibilityLabel === `Add ${label}, 0 added`)).toBe(true);
 
   const setStep = jest.fn();
   const bar = walk(LocationBottomBar({ styles: { bottomBarContainer: {}, gcashActionButton: {}, gcashActionButtonText: {}, bottomHintText: {} },

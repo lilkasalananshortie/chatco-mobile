@@ -3,19 +3,14 @@ import { View } from "react-native";
 import { Text } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../core/theme/ThemeProvider";
-import { SPEED_LIMIT_KMH } from "../../../core/utils/corridor-guard";
 import type { ThermalGuardState } from "../../../core/utils/thermal-guard";
 
 interface RouteAdvisoryBannersProps {
-  currentSpeedKmh: number;
-  isOverspeeding: boolean;
   thermalState?: Partial<ThermalGuardState>;
   approachingStop?: string | null;
 }
 
 export function RouteAdvisoryBanners({
-  currentSpeedKmh,
-  isOverspeeding,
   thermalState,
   approachingStop,
 }: RouteAdvisoryBannersProps) {
@@ -23,33 +18,6 @@ export function RouteAdvisoryBanners({
 
   return (
     <>
-      {/* Real-Time Overspeed Warning Banner */}
-      {isOverspeeding ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            backgroundColor: isLofi ? "#FEE2E2" : "rgba(239, 68, 68, 0.2)",
-            borderColor: isLofi ? "#DC2626" : "rgba(248, 113, 113, 0.6)",
-            borderWidth: 1.5,
-            borderRadius: isLowFidelity ? 4 : 12,
-            padding: 10,
-            marginBottom: 10,
-          }}
-        >
-          <Ionicons name="speedometer" size={22} color={isLofi ? "#DC2626" : "#F87171"} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", color: isLofi ? "#991B1B" : "#FCA5A5" }}>
-              OVERSPEED WARNING: {currentSpeedKmh} KM/H (LIMIT: {SPEED_LIMIT_KMH} KM/H)
-            </Text>
-            <Text style={{ fontSize: 11, color: isLofi ? "#7F1D1D" : "#FECACA", marginTop: 2 }}>
-              Vehicle exceeds franchise speed threshold. Please slow down.
-            </Text>
-          </View>
-        </View>
-      ) : null}
-
       {/* Tropical Sun & Battery Thermal Advisory Banner */}
       {thermalState?.enabled && thermalState.thermalWarningMessage ? (
         <View

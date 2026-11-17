@@ -146,9 +146,9 @@ export const paymentService = {
       const getBool = (v: any, fallback = true) =>
         v === undefined || v === null ? fallback : v === "true" || v === true;
       const settings: ReceiptSettings = {
-        businessName: d.receipt_business_name ?? "CHATCO",
+        businessName: d.receipt_business_name ?? "E-CHATCO",
         addressLine: d.receipt_address_line ?? "",
-        footerNote: d.receipt_footer_note ?? "Thank you for riding with Chatco!",
+        footerNote: d.receipt_footer_note ?? "Thank you for riding with E-CHATCO!",
         paperWidth: d.receipt_paper_width === "80" ? "80" : "58",
         autoPrint: getBool(d.receipt_auto_print, true),
         showDateTime: getBool(d.receipt_show_datetime, true),
@@ -170,9 +170,9 @@ export const paymentService = {
         if (settings && typeof settings.businessName === "string" && typeof settings.showQrCode === "boolean" && typeof settings.showManualCode === "boolean") return settings;
       } catch { /* No usable saved settings: preserve legacy defaults below. */ }
       return {
-        businessName: "CHATCO",
+        businessName: "E-CHATCO",
         addressLine: "",
-        footerNote: "Thank you for riding with Chatco!",
+        footerNote: "Thank you for riding with E-CHATCO!",
         paperWidth: "58",
         autoPrint: true,
         showDateTime: true,

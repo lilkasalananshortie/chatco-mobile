@@ -9,6 +9,7 @@ import {
   centerText,
   dividerLine,
   buildGoojprtReceiptBytes,
+  buildGoojprtReceiptBatchBytes,
   buildGoojprtTestTicket,
   type ReceiptOptions,
 } from "./thermal-escpos-builder";
@@ -20,6 +21,7 @@ export {
   centerText,
   dividerLine,
   buildGoojprtReceiptBytes,
+  buildGoojprtReceiptBatchBytes,
   buildGoojprtTestTicket,
   type ReceiptOptions,
 };
@@ -360,7 +362,8 @@ class GoojprtPrinterManager {
     txns: Transaction[],
     options: ReceiptOptions = {}
   ): Promise<{ success: boolean; isDirectBluetooth: boolean; error?: string }> {
-    const { bytes } = buildGoojprtReceiptBytes(txns, options);
+    if (!txns.length) return { success: false, isDirectBluetooth: false, error: "No passenger receipts to print." };
+    const { bytes } = buildGoojprtReceiptBatchBytes(txns, options);
 
     // 1. If native Android, dispatch directly to RawBT print service
     // RawBT will automatically send to whichever printer is currently connected and active!

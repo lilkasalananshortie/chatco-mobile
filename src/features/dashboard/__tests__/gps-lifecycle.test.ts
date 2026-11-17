@@ -5,16 +5,18 @@ import * as TaskManager from "expo-task-manager";
 import { api } from "../../../core/api/chatco-api";
 import { NetworkError } from "../../../core/api/chatco-api";
 import { evaluateSpeedWarning, getDistanceToCorridorMeters } from "../../../core/utils/corridor-guard";
+import { fleetService } from "../../../core/api/fleet-service";
+import { appStorage } from "../../../core/storage/app-storage";
 let mockEffects: Array<() => any> = [];
 let mockSetters: jest.Mock[] = [];
 jest.mock("react", () => ({ useState: (value: any) => { const setter = jest.fn(); mockSetters.push(setter); return [typeof value === "function" ? value() : value, setter]; }, useRef: (value: any) => ({ current: value }), useEffect: (fn: () => any) => mockEffects.push(fn) }));
-jest.mock("react-native", () => ({ Platform: { OS: "android" }, AppState: { addEventListener: jest.fn() } }));
-jest.mock("expo-location", () => ({ requestForegroundPermissionsAsync: jest.fn(), requestBackgroundPermissionsAsync: jest.fn(), watchPositionAsync: jest.fn(), startLocationUpdatesAsync: jest.fn(), stopLocationUpdatesAsync: jest.fn(), hasStartedLocationUpdatesAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
+jest.mock("react-native", () => ({ Platform: { OS: "android" }, AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) } }));
+jest.mock("expo-location", () => ({ requestForegroundPermissionsAsync: jest.fn(), requestBackgroundPermissionsAsync: jest.fn(), watchPositionAsync: jest.fn(), startLocationUpdatesAsync: jest.fn(), stopLocationUpdatesAsync: jest.fn(), hasStartedLocationUpdatesAsync: jest.fn(), Accuracy: { Balanced: 3, High: 4 } }));
 jest.mock("expo-task-manager", () => ({ isAvailableAsync: jest.fn().mockResolvedValue(true) }));
 jest.mock("../location-task", () => ({ LOCATION_TASK_NAME: "test-location" }));
 jest.mock("../../../core/api/chatco-api", () => ({ NetworkError: class NetworkError extends Error {}, api: { location: jest.fn().mockResolvedValue({}) } }));
-jest.mock("../../../core/api/fleet-service", () => ({ fleetService: {} }));
-jest.mock("../../../core/storage/app-storage", () => ({ appStorage: {} }));
+jest.mock("../../../core/api/fleet-service", () => ({ fleetService: { safetySettings: jest.fn() } }));
+jest.mock("../../../core/storage/app-storage", () => ({ appStorage: { getItem: jest.fn(), setItem: jest.fn() } }));
 jest.mock("../../../core/utils/corridor-guard", () => ({ evaluateSpeedWarning: jest.fn(), getDistanceToCorridorMeters: jest.fn() }));
 jest.mock("../../../core/utils/audio-cues", () => ({ audioCues: {} }));
 const settle = async () => { for (let i = 0; i < 18; i++) await Promise.resolve(); };
@@ -25,6 +27,9 @@ beforeEach(() => {
   (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: "granted" });
   (Location.requestBackgroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: "denied" });
   (api.location as jest.Mock).mockResolvedValue({});
+  (fleetService.safetySettings as jest.Mock).mockResolvedValue({ speed_limit_kmh: 50 });
+  (appStorage.getItem as jest.Mock).mockResolvedValue(null);
+  (appStorage.setItem as jest.Mock).mockResolvedValue(undefined);
   (evaluateSpeedWarning as jest.Mock).mockReturnValue({ speedKmh: 0, isOverspeed: false, isNearLimit: false });
   (getDistanceToCorridorMeters as jest.Mock).mockReturnValue(0);
 });
@@ -44,6 +49,12 @@ test("normal shift cleanup stops its foreground watcher", async () => {
   const remove = jest.fn(); (Location.watchPositionAsync as jest.Mock).mockResolvedValue({ remove });
   const cleanup = start(); await settle(); cleanup(); await settle(); expect(remove).toHaveBeenCalledTimes(1);
 });
+test("active shift requests high accuracy fixes needed for admin overspeed events", async () => {
+  (Location.watchPositionAsync as jest.Mock).mockResolvedValue({ remove: jest.fn() });
+  const cleanup = start(); await settle();
+  expect(Location.watchPositionAsync).toHaveBeenCalledWith(expect.objectContaining({ accuracy: Location.Accuracy.High }), expect.any(Function));
+  cleanup();
+});
 test("tracking remains off before disclosure acceptance or when device cannot operate", async () => {
   useDashboardGps({ shift: { shiftId: "shift" } as any, canOperate: false, refreshKey: 0 });
   mockEffects[2]!(); await settle();
@@ -60,7 +71,7 @@ test("foreground denial is visible and never requests background permission", as
 test("background denial keeps foreground watcher and explains the limitation", async () => {
   const remove = jest.fn(); (Location.watchPositionAsync as jest.Mock).mockResolvedValue({ remove });
   const cleanup = start(); await settle();
-  expect(mockSetters[7]).toHaveBeenLastCalledWith(expect.stringContaining("Keep CHATCO open"));
+  expect(mockSetters[7]).toHaveBeenLastCalledWith(expect.stringContaining("Keep E-CHATCO open"));
   expect(remove).not.toHaveBeenCalled(); cleanup();
 });
 
@@ -75,6 +86,18 @@ test("Expo Go keeps foreground tracking without requesting unsupported backgroun
   cleanup();
 });
 const fix = { coords: { latitude: 14.8, longitude: 120.8, speed: 0, heading: 0, accuracy: 5 }, timestamp: 10000 };
+test("configured speed limit drives both detection and the displayed notice value", async () => {
+  (fleetService.safetySettings as jest.Mock).mockResolvedValue({ speed_limit_kmh: 35 });
+  (Location.watchPositionAsync as jest.Mock).mockResolvedValue({ remove: jest.fn() });
+  useDashboardGps({ shift: { shiftId: "shift" } as any, canOperate: true, refreshKey: 0 });
+  const cleanupSettings = mockEffects[0]!();
+  const cleanupGps = mockEffects[2]!();
+  await settle();
+  (Location.watchPositionAsync as jest.Mock).mock.calls[0][1]({ ...fix, coords: { ...fix.coords, speed: 42 / 3.6 } });
+  expect(evaluateSpeedWarning).toHaveBeenCalledWith(42 / 3.6, 35);
+  expect(mockSetters[10]).toHaveBeenLastCalledWith(35);
+  cleanupGps(); cleanupSettings();
+});
 test("GPS fixes are not reported as uploaded until the backend confirms, and requests do not overlap", async () => {
   let finish!: () => void;
   (api.location as jest.Mock).mockReturnValue(new Promise<void>(resolve => { finish = resolve; }));

@@ -11,6 +11,9 @@ interface TransactionListItemProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   reduceMotion?: boolean;
+  onPrint?: () => void;
+  printing?: boolean;
+  printDisabled?: boolean;
 }
 
 const formatPeso = (amount: number) =>
@@ -28,7 +31,7 @@ function Detail({ label, value, mono = false }: { label: string; value: string; 
   );
 }
 
-export function TransactionListItem({ transaction, isExpanded, onToggleExpand, reduceMotion = false }: TransactionListItemProps) {
+export function TransactionListItem({ transaction, isExpanded, onToggleExpand, reduceMotion = false, onPrint, printing = false, printDisabled = false }: TransactionListItemProps) {
   const { isLofi, isLowFidelity } = useAppTheme();
   const chevron = useAnimatedToggle(isExpanded, 150, isLowFidelity || reduceMotion);
   const text = isLofi ? "#111827" : "#FFFFFF";
@@ -87,6 +90,17 @@ export function TransactionListItem({ transaction, isExpanded, onToggleExpand, r
             <Detail label="Recorded" value={`${displayDate}, ${displayTime}`} />
             <Detail label="Txn ID" value={transaction.transactionId} mono />
           </View>
+          {onPrint ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: printDisabled, busy: printing }}
+              disabled={printDisabled}
+              onPress={onPrint}
+              style={{ minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: isLofi ? "#D1D5DB" : "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center", opacity: printDisabled && !printing ? 0.5 : 1 }}
+            >
+              <Text style={{ color: text, fontSize: 13, fontWeight: "600" }}>{printing ? "Printing…" : "Print receipt"}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>

@@ -102,7 +102,7 @@ export function PaymentModal({
   }, [visible, showHistory, shift.shiftId, shift.timeIn]);
 
   if (!visible) return null;
-  if (showHistory) return <TransactionHistoryModal visible shiftId={shift.shiftId} tripCycleState={historyTrips} onClose={() => { setShowHistory(false); onClose(); }} />;
+  if (showHistory) return <TransactionHistoryModal visible shiftId={shift.shiftId} shift={shift} tripCycleState={historyTrips} onClose={() => { setShowHistory(false); onClose(); }} />;
   const displayStep = flow.step === "qr_code" && !flow.gcashInitiation ? "method" : flow.step;
 
   // STEP: select (TRUE FULLSCREEN LOCATION PICKER 1:1 WITH WEB)

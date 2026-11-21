@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../core/api/chatco-api";
-import type { Transaction } from "../../core/domain/types";
+import type { ReceiptSettings, Shift, Transaction } from "../../core/domain/types";
+import { thermalPrinter } from "../../core/utils/thermal-printer";
 import type { TripCycleState } from "../../core/utils/trip-cycle-tracker";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { Text } from "../../shared/ui/BrandText";
@@ -41,12 +42,14 @@ function periodLabel(preset: DatePreset, from: string, to: string) {
 export function TransactionHistoryModal({
   visible,
   shiftId,
+  shift = null,
   transactions: initialTransactions = [],
   tripCycleState = null,
   onClose,
 }: {
   visible: boolean;
   shiftId?: string;
+  shift?: Shift | null;
   transactions?: Transaction[];
   tripCycleState?: TripCycleState | null;
   onClose: () => void;
@@ -97,6 +100,36 @@ export function TransactionHistoryModal({
     return () => animation.stop();
   }, [historyView, isLowFidelity, reduceMotion, tabSelection]);
   const requestSeqRef = useRef(0);
+  const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings | null>(null);
+  const [receiptSettingsReady, setReceiptSettingsReady] = useState(false);
+  const [printingId, setPrintingId] = useState<string | null>(null);
+  const printInFlight = useRef(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    setReceiptSettingsReady(false);
+    api.receiptSettings()
+      .then(settings => { if (active) setReceiptSettings(settings); })
+      .catch(() => undefined) // The printer falls back to the default receipt layout.
+      .finally(() => { if (active) setReceiptSettingsReady(true); });
+    return () => { active = false; };
+  }, [visible]);
+
+  const printReceipt = async (transaction: Transaction) => {
+    if (printInFlight.current) return;
+    printInFlight.current = true;
+    setPrintingId(transaction.transactionId);
+    try {
+      const result = await thermalPrinter.printReceipt([transaction], { shift, settings: receiptSettings });
+      if (!result.success) Alert.alert("Unable to print receipt", result.error || "Check the paired printer and try again.");
+    } catch (cause) {
+      Alert.alert("Unable to print receipt", cause instanceof Error ? cause.message : "Check the paired printer and try again.");
+    } finally {
+      printInFlight.current = false;
+      setPrintingId(null);
+    }
+  };
 
   const loadData = useCallback(
     async (page: number, currentFilter: Filter, from: string, to: string) => {
@@ -332,6 +365,9 @@ export function TransactionHistoryModal({
                       transaction={transaction}
                       isExpanded={expanded === transaction.transactionId}
                       onToggleExpand={() => setExpanded(expanded === transaction.transactionId ? null : transaction.transactionId)}
+                      onPrint={() => void printReceipt(transaction)}
+                      printing={printingId === transaction.transactionId}
+                      printDisabled={!receiptSettingsReady || printingId !== null}
                     />
                     {index < items.length - 1 ? <View style={{ height: 1, backgroundColor: hairline, marginHorizontal: 20 }} /> : null}
                   </View>

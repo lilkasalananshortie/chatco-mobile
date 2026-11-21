@@ -5,6 +5,7 @@ import { api, NetworkError } from "../../../core/api/chatco-api";
 import type { Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../../core/domain/types";
 import { appHaptics } from "../../../core/utils/haptics";
 import { audioCues } from "../../../core/utils/audio-cues";
+import { connectVehicleHails } from "../../../core/api/hail-realtime";
 import { ACCEPTED_HOLD_MS, activeHails, applyLocalAccepts, isAcceptedHail, nextAcceptedExpiry, withoutReleasedAccepts } from "../hail-state";
 
 export interface UseDashboardShiftProps {
@@ -135,37 +136,62 @@ export function useDashboardShift({
   useEffect(() => {
     let active = true;
     let running = false;
+    let rerun = false;
+    let liveUpdates = false;
+    let lastLoadAt = 0;
     const load = async () => {
-      if (!active || running || !canOperate || !isOnline || isOnBreak || AppState.currentState === "background" || AppState.currentState === "inactive") return;
+      if (!active || !canOperate || !isOnline || isOnBreak || AppState.currentState === "background" || AppState.currentState === "inactive") return;
+      if (running) {
+        // An event can arrive after this request read the database, so read again.
+        rerun = true;
+        return;
+      }
       running = true;
+      lastLoadAt = Date.now();
       try {
-        const fetched = await api.hails();
-        if (active) {
-          const records = withoutReleasedAccepts(activeHails(applyLocalAccepts(fetched, localAccepts.current)), releasedAccepts.current);
-          const previous = seenHailIds.current ?? new Set<string>();
-          if (records.some(hail => !isAcceptedHail(hail) && !previous.has(hail.id))) audioCues.playHailSound();
-          seenHailIds.current = new Set([...previous, ...records.map(hail => hail.id)]);
-          setHails(records);
-        }
+        do {
+          rerun = false;
+          const fetched = await api.hails();
+          if (active) {
+            const records = withoutReleasedAccepts(activeHails(applyLocalAccepts(fetched, localAccepts.current)), releasedAccepts.current);
+            const previous = seenHailIds.current ?? new Set<string>();
+            if (records.some(hail => !isAcceptedHail(hail) && !previous.has(hail.id))) audioCues.playHailSound();
+            seenHailIds.current = new Set([...previous, ...records.map(hail => hail.id)]);
+            setHails(records);
+          }
+        } while (active && rerun);
       } catch { /* Keep visible hails until a successful refresh or an availability change. */ }
       finally { running = false; }
     };
     refreshHails.current = load;
-    if (!canOperate || !isOnline || isOnBreak) {
+    const available = canOperate && isOnline && !isOnBreak;
+    if (!available) {
       localAccepts.current.clear();
       setHails([]);
     }
     load();
-    const timer = setInterval(load, 10000);
+    const realtime = available && shift.vehicleId
+      ? connectVehicleHails(shift.vehicleId, api.authorizeBroadcast, {
+          onChange: () => void load(),
+          onSubscribedChange: subscribed => { liveUpdates = subscribed; },
+        })
+      : null;
+    // A connected socket doesn't guarantee delivery, so keep a slower check while live.
+    const timer = setInterval(() => {
+      const refreshMs = liveUpdates ? 60000 : 10000;
+      if (Date.now() - lastLoadAt >= refreshMs - 250) void load();
+    }, 10000);
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") load();
+      realtime?.setActive(state === "active");
+      if (state === "active") void load();
     });
     return () => {
       active = false;
       clearInterval(timer);
       subscription.remove();
+      realtime?.stop();
     };
-  }, [canOperate, isOnline, isOnBreak]);
+  }, [canOperate, isOnline, isOnBreak, shift.vehicleId]);
 
   // Hide an accepted pin the moment its hold ends instead of at the next poll.
   useEffect(() => {

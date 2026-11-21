@@ -29,6 +29,7 @@ export const mapShift = (s: any): Shift => ({
   unitNumber: s.unit_number,
   route: s.route?.name ?? "",
   routeId: s.route_id ?? s.route?.id ?? undefined,
+  vehicleId: s.vehicle_id == null ? undefined : String(s.vehicle_id),
   driverName: s.driver_name,
   timeIn: s.time_in,
   timeOut: s.time_out ?? null,
@@ -71,4 +72,12 @@ export const mapTransaction = (t: any): Transaction => ({
     t.payment_group?.reference_number ?? t.multiple_payment_reference ?? null,
   groupPosition: t.group_position ?? null,
   totalPassengers: Number(t.total_passengers) || 1,
+  payerName: t.payer_name_snapshot ?? t.payer_name ?? null,
+  passengerBreakdown: Array.isArray(t.passenger_breakdown)
+    ? t.passenger_breakdown.map((line: any) => ({
+        passengerType: String(line.passenger_type),
+        quantity: Number(line.quantity) || 0,
+        subtotal: Number(line.subtotal) || 0,
+      }))
+    : undefined,
 });

@@ -23,6 +23,7 @@ import {
   CACHED_UNITS_KEY,
   CACHED_USER_KEY,
   NetworkError,
+  authorizeBroadcast,
   setSessionEndedHandler,
 } from "./api-client";
 import { authService } from "./auth-service";
@@ -101,6 +102,7 @@ export const api = {
   breakStatus: fleetService.breakStatus,
   routeGeometry: fleetService.routeGeometry,
   hails: fleetService.hails,
+  authorizeBroadcast,
   acceptHail: fleetService.acceptHail,
   rejectHail: fleetService.rejectHail,
   capacity: fleetService.capacity,

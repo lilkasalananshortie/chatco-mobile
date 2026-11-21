@@ -8,7 +8,7 @@ import type { Remittance, Shift, ShiftEarnings, Transaction } from "../../core/d
 import { useReportTheme } from "./report-styles";
 import { ReportPage } from "./ReportPage";
 import { thermalPrinter } from "../../core/utils/thermal-printer";
-import { isLateRemittance, money, officialReportText } from "./remittance-helpers";
+import { money, officialReportText } from "./remittance-helpers";
 import { RemittanceConfirmModal } from "./components/RemittanceConfirmModal";
 import { RemittanceSuccessModal } from "./components/RemittanceSuccessModal";
 import { RemittanceReportSlipModal } from "./components/RemittanceReportSlipModal";
@@ -28,7 +28,7 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
   canOperate: boolean;
   onEnded: () => void;
   onBack?: () => void;
-  /** Replaces Back while settling an earlier day's shift. */
+  /** Replaces Back while settling a closed shift. */
   onSignOut?: () => void | Promise<void>;
   onSubmitting?: (value: boolean) => void;
 }) {
@@ -74,7 +74,9 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
   const preparing = useRef(false);
   const completed = useRef(false);
   const hasOutstanding = Boolean(outstanding);
-  const returnToVerification = outstanding ? isLateRemittance(outstanding) : false;
+  // Like the web, any closed shift still holding cash is settled here, then the
+  // conductor continues to unit verification.
+  const returnToVerification = hasOutstanding;
 
   useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
 
@@ -316,7 +318,7 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
     <RemittanceReportSlipModal selected={selected} onClose={() => setSelected(null)} shift={shift} />
   </>;
 
-  if (outstanding && returnToVerification) {
+  if (outstanding) {
     return (
       <ReportPage title="Pending Remittance" headerAction={signOutAction}>
         <PastShiftRemittance
@@ -347,8 +349,8 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
 
       <RemittanceCollectionsCard
         totalAmount={accountableTotals.all}
-        totalPassengers={outstanding ? Number(outstanding.total_passengers ?? 0) : totalPassengers}
-        transactionCount={outstanding ? undefined : transactions.length}
+        totalPassengers={totalPassengers}
+        transactionCount={transactions.length}
         shiftTimeIn={shift.timeIn}
       />
 

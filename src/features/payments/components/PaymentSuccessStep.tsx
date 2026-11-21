@@ -293,9 +293,11 @@ export function PaymentSuccessStep({
               }
               multiplePaymentReference={transaction?.multiplePaymentReference ?? gcashInitiation?.multiplePaymentReference ?? null}
               driverName={transaction?.driverName || shift.driverName}
-              totalPassengers={1}
-              grossFare={transaction?.baseFare ?? fareInfo?.regularFare}
-              passengerBreakdown={[]}
+              payerName={transaction?.payerName}
+              groupPosition={transaction?.groupPosition}
+              totalPassengers={transaction?.totalPassengers ?? (receiptTransactions.length || 1)}
+              grossFare={transaction?.grossAmount ?? transaction?.baseFare ?? fareInfo?.regularFare}
+              passengerBreakdown={transaction?.passengerBreakdown ?? []}
             />
             </View>)}
           </View>

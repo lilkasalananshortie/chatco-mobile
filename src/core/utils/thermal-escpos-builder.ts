@@ -224,8 +224,14 @@ export function buildGoojprtReceiptBytes(
 
   const role = firstTxn?.passengerRole || "REGULAR";
   if (settings?.showPassenger !== false) {
-    appendRow("Commuter", firstTxn?.passengerName || "Passenger");
+    const groupPosition = firstTxn?.groupPosition ?? 0;
+    // Like the web, a cash receipt never prints the name of whoever claimed it.
+    const commuterName = groupPosition > 1 || firstTxn?.paymentMethod === "Cash"
+      ? "Passenger"
+      : firstTxn?.passengerName || firstTxn?.payerName || "Passenger";
+    appendRow("Commuter", commuterName);
     appendRow("", role === "SENIOR_CITIZEN" ? "Senior Citizen" : role.charAt(0) + role.slice(1).toLowerCase());
+    if (groupPosition > 1 && firstTxn?.payerName) appendRow("", `Paid by: ${firstTxn.payerName}`);
   }
 
   // 4. ROUTE INFO
@@ -235,12 +241,21 @@ export function buildGoojprtReceiptBytes(
     appendRow("To", firstTxn.to);
   }
 
-  // Each printed receipt represents one passenger transaction.
+  // Same fare lines as the web receipt, from the transaction's saved values.
   if (settings?.showFareBreakdown !== false) {
     appendDivider("-");
-    appendRow("Base fare", `P${(firstTxn?.baseFare ?? firstTxn?.finalAmount ?? 0).toFixed(2)}`);
-    appendRow("Passengers", "1");
-    appendRow("Gross fare", `P${(firstTxn?.baseFare ?? firstTxn?.finalAmount ?? 0).toFixed(2)}`);
+    const baseFare = firstTxn?.baseFare ?? firstTxn?.finalAmount ?? 0;
+    const fareLines = (firstTxn?.passengerBreakdown ?? []).filter(line => line.quantity > 0);
+    if (fareLines.length) {
+      for (const line of fareLines) {
+        const type = line.passengerType === "SENIOR" || line.passengerType === "SENIOR_CITIZEN"
+          ? "Senior Citizen"
+          : line.passengerType.charAt(0) + line.passengerType.slice(1).toLowerCase();
+        appendRow(`${type} x ${line.quantity}`, `P${line.subtotal.toFixed(2)}`);
+      }
+    } else appendRow("Base fare", `P${baseFare.toFixed(2)}`);
+    appendRow("Passengers", String(firstTxn?.totalPassengers ?? options.totalPassengers ?? 1));
+    appendRow("Gross fare", `P${(firstTxn?.grossAmount ?? options.grossFare ?? baseFare).toFixed(2)}`);
     if (firstTxn?.discountAmount && firstTxn.discountAmount > 0) appendRow("Discount", `-P${firstTxn.discountAmount.toFixed(2)}`);
   }
 

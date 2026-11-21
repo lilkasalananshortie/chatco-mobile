@@ -84,6 +84,16 @@ test("an earlier shift gets the focused screen with sign out instead of back", a
   expect(signOut).toHaveBeenCalledTimes(1);
   expect(back).not.toHaveBeenCalled();
 });
+test("a closed shift from today also gets the focused screen", async () => {
+  const today = { ...record, date: new Date().toISOString().slice(0, 10) };
+  mockIndex = 0; mockRefIndex = 0; mockEffects = [];
+  ReportScreen({ shift, outstanding: today, refreshKey: 0, canOperate: false, onEnded: ended, onSignOut: jest.fn() });
+  mockEffects[2]!(); await settle();
+  mockIndex = 0; mockRefIndex = 0; mockEffects = [];
+  const nodes = walk(ReportScreen({ shift, outstanding: today, refreshKey: 0, canOperate: false, onEnded: ended, onSignOut: jest.fn() }));
+  expect(nodes.some(e => e.type === "PastShift")).toBe(true);
+  expect(nodes.find(e => e.type === "Success").props.late).toBe(true);
+});
 test("today's report keeps the normal screen and back button", async () => {
   await mount();
   const back = jest.fn();

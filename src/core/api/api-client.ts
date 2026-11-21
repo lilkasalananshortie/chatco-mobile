@@ -156,6 +156,33 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
   return payload?.data as T;
 }
 
+/** Signs a private realtime channel. Laravel answers this route without the API envelope. */
+export async function authorizeBroadcast(socketId: string, channelName: string): Promise<string> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in your .env file.");
+  const token = await appStorage.getItem(TOKEN_KEY);
+  if (!token) throw new Error("Sign in to receive live updates.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${API_URL}/api/v1/broadcasting/auth`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: `socket_id=${encodeURIComponent(socketId)}&channel_name=${encodeURIComponent(channelName)}`,
+    });
+    if (!response.ok) throw new Error(`Live update authorization failed (${response.status}).`);
+    const payload = (await response.json()) as { auth?: unknown };
+    if (typeof payload?.auth !== "string") throw new Error("Live update authorization was incomplete.");
+    return payload.auth;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export const post = <T>(path: string, body?: unknown) => {
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   return request<T>(path, {

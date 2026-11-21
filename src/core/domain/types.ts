@@ -32,6 +32,7 @@ export interface Shift {
   unitNumber: string;
   route: string;
   routeId?: string;
+  vehicleId?: string;
   driverName: string;
   timeIn: string;
   timeOut: string | null;
@@ -74,6 +75,8 @@ export interface Transaction {
   multiplePaymentReference?: string | null;
   groupPosition?: number | null;
   totalPassengers?: number;
+  payerName?: string | null;
+  passengerBreakdown?: Array<{ passengerType: string; quantity: number; subtotal: number }>;
 }
 
 export interface ShiftEarnings {

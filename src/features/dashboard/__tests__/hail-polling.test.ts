@@ -2,6 +2,7 @@
 import { useDashboardShift } from "../hooks/useDashboardShift";
 import { api } from "../../../core/api/chatco-api";
 import { audioCues } from "../../../core/utils/audio-cues";
+import { connectVehicleHails } from "../../../core/api/hail-realtime";
 import { acceptedHailsOutOfRange, activeHails, applyLocalAccepts, formatHailCountdown, hailIdFromMarker, nextAcceptedExpiry } from "../hail-state";
 import type { HailRequest } from "../../../core/domain/types";
 
@@ -23,6 +24,7 @@ jest.mock("react-native", () => ({ AppState: { currentState: "active", addEventL
 jest.mock("../../../core/api/chatco-api", () => ({ api: { getSyncState: () => "idle", hails: jest.fn(), acceptHail: jest.fn(), capacity: jest.fn(), breakStatus: jest.fn() } }));
 jest.mock("../../../core/utils/audio-cues", () => ({ audioCues: { playHailSound: jest.fn(), playCapacitySound: jest.fn(), playDutySound: jest.fn() } }));
 jest.mock("../../../core/utils/haptics", () => ({ appHaptics: { error: jest.fn() } }));
+jest.mock("../../../core/api/hail-realtime", () => ({ connectVehicleHails: jest.fn() }));
 
 const hail = (id: string, data: Partial<HailRequest> = {}): HailRequest => ({ id, commuterName: "Commuter", latitude: 14.8, longitude: 120.9, status: "PENDING", ...data });
 const settle = async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); };
@@ -45,6 +47,38 @@ test("a failed hail refresh keeps the last visible requests", async () => {
 
   expect(api.hails).toHaveBeenCalledTimes(1);
   expect(setters[6]).not.toHaveBeenCalled();
+  (cleanup as () => void)?.();
+});
+
+test("a live event during a request triggers one follow-up refresh", async () => {
+  const stop = jest.fn();
+  (connectVehicleHails as jest.Mock).mockReturnValue({ setActive: jest.fn(), stop });
+  let finishFirst!: (value: HailRequest[]) => void;
+  (api.hails as jest.Mock)
+    .mockReturnValueOnce(new Promise<HailRequest[]>(resolve => { finishFirst = resolve; }))
+    .mockResolvedValue([hail("new")]);
+  effects = []; setters = [];
+  useDashboardShift({ shift: { shiftId: "shift", vehicleId: "v1", isOnBreak: false } as any, refreshKey: 0, canOperate: true, isOnline: true });
+
+  const cleanup = effects[5]!();
+  const { onChange } = (connectVehicleHails as jest.Mock).mock.calls[0]![2];
+  expect((connectVehicleHails as jest.Mock).mock.calls[0]![0]).toBe("v1");
+  onChange();
+  onChange();
+  finishFirst([]);
+  await settle();
+
+  expect(api.hails).toHaveBeenCalledTimes(2);
+  (cleanup as () => void)?.();
+  expect(stop).toHaveBeenCalledTimes(1);
+});
+
+test("no live connection opens when this device cannot operate the shift", () => {
+  (api.hails as jest.Mock).mockResolvedValue([]);
+  effects = []; setters = [];
+  useDashboardShift({ shift: { shiftId: "shift", vehicleId: "v1", isOnBreak: false } as any, refreshKey: 0, canOperate: false, isOnline: true });
+  const cleanup = effects[5]!();
+  expect(connectVehicleHails).not.toHaveBeenCalled();
   (cleanup as () => void)?.();
 });
 

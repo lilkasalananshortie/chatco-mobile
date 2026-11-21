@@ -5,6 +5,7 @@ import { api, NetworkError } from "../../../core/api/chatco-api";
 import type { Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../../core/domain/types";
 import { appHaptics } from "../../../core/utils/haptics";
 import { audioCues } from "../../../core/utils/audio-cues";
+import { ACCEPTED_HOLD_MS, activeHails, applyLocalAccepts, isAcceptedHail, nextAcceptedExpiry, withoutReleasedAccepts } from "../hail-state";
 
 export interface UseDashboardShiftProps {
   shift: Shift;
@@ -37,10 +38,25 @@ export function useDashboardShift({
   const [deviceBusy, setDeviceBusy] = useState(false);
   const [deviceError, setDeviceError] = useState("");
   const [error, setError] = useState("");
+  const [hailBusyId, setHailBusyId] = useState<string | null>(null);
 
   const operationalRefreshInFlight = useRef<Promise<void> | null>(null);
   const breakBusy = useRef(false);
   const seenHailIds = useRef<Set<string> | null>(null);
+  const hailActionBusy = useRef(false);
+  const localAccepts = useRef(new Map<string, string>());
+  const refreshHails = useRef<() => Promise<void>>(async () => undefined);
+  const releasedAccepts = useRef(new Set<string>());
+
+  // This unit can no longer pick these commuters up, so their cooldown has ended.
+  const releaseAcceptedHails = useCallback((hailIds: string[]) => {
+    if (!hailIds.length) return;
+    for (const id of hailIds) {
+      releasedAccepts.current.add(id);
+      localAccepts.current.delete(id);
+    }
+    setHails(current => withoutReleasedAccepts(current, releasedAccepts.current));
+  }, []);
 
   useEffect(() => {
     void api.getDeviceId().then(setDeviceId);
@@ -123,17 +139,22 @@ export function useDashboardShift({
       if (!active || running || !canOperate || !isOnline || isOnBreak || AppState.currentState === "background" || AppState.currentState === "inactive") return;
       running = true;
       try {
-        const records = await api.hails();
+        const fetched = await api.hails();
         if (active) {
+          const records = withoutReleasedAccepts(activeHails(applyLocalAccepts(fetched, localAccepts.current)), releasedAccepts.current);
           const previous = seenHailIds.current ?? new Set<string>();
-          if (records.some(hail => !previous.has(hail.id))) audioCues.playHailSound();
+          if (records.some(hail => !isAcceptedHail(hail) && !previous.has(hail.id))) audioCues.playHailSound();
           seenHailIds.current = new Set([...previous, ...records.map(hail => hail.id)]);
           setHails(records);
         }
       } catch { /* Keep visible hails until a successful refresh or an availability change. */ }
       finally { running = false; }
     };
-    if (!canOperate || !isOnline || isOnBreak) setHails([]);
+    refreshHails.current = load;
+    if (!canOperate || !isOnline || isOnBreak) {
+      localAccepts.current.clear();
+      setHails([]);
+    }
     load();
     const timer = setInterval(load, 10000);
     const subscription = AppState.addEventListener("change", (state) => {
@@ -146,6 +167,14 @@ export function useDashboardShift({
     };
   }, [canOperate, isOnline, isOnBreak]);
 
+  // Hide an accepted pin the moment its hold ends instead of at the next poll.
+  useEffect(() => {
+    const next = nextAcceptedExpiry(hails);
+    if (next === null) return;
+    const timer = setTimeout(() => setHails(current => activeHails(current)), Math.max(0, next - Date.now()) + 50);
+    return () => clearTimeout(timer);
+  }, [hails]);
+
   const updateCapacity = async (next: Capacity) => {
     if (!canOperate) return;
     audioCues.playCapacitySound();
@@ -154,6 +183,7 @@ export function useDashboardShift({
     setError("");
     try {
       await api.capacity(next);
+      if (next === "FULL") releaseAcceptedHails(hails.filter(isAcceptedHail).map(hail => hail.id));
     } catch (cause) {
       setCapacity(previous);
       appHaptics.error();
@@ -166,12 +196,15 @@ export function useDashboardShift({
     breakBusy.current = true;
     setBreakPending(true);
     const next = !isOnBreak;
+    // Captured now: starting a break clears the visible list before the server answers.
+    const acceptedBeforeBreak = hails.filter(isAcceptedHail).map(hail => hail.id);
     setError("");
     setIsOnBreak(next);
     try {
       const updated = await api.breakStatus(next);
       audioCues.playDutySound();
       setIsOnBreak(Boolean(updated.isOnBreak));
+      if (updated.isOnBreak) releaseAcceptedHails(acceptedBeforeBreak);
       onShiftUpdated?.(updated);
       return true;
     } catch (cause) {
@@ -186,19 +219,41 @@ export function useDashboardShift({
   };
 
   const handleHail = async (hailId: string, action: "accept" | "reject") => {
-    if (!canOperate) return;
+    if (!canOperate || hailActionBusy.current) return;
+    hailActionBusy.current = true;
+    setHailBusyId(hailId);
+    setError("");
+    const patchHail = (patch: Partial<HailRequest>) =>
+      setHails((current) => current.map((hail) => (hail.id === hailId ? { ...hail, ...patch } : hail)));
+    const previousExpiresAt = hails.find((hail) => hail.id === hailId)?.expiresAt;
     try {
       if (action === "accept") {
-        await api.acceptHail(hailId);
+        // Turn the pin blue now; the server's answer brings the exact hide time.
+        const estimatedEnd = new Date(Date.now() + ACCEPTED_HOLD_MS).toISOString();
+        localAccepts.current.set(hailId, estimatedEnd);
+        patchHail({ status: "ACCEPTED", expiresAt: estimatedEnd });
+        const accepted = await api.acceptHail(hailId);
+        const expiresAt = accepted.expiresAt ?? estimatedEnd;
+        localAccepts.current.set(hailId, expiresAt);
+        patchHail({ status: "ACCEPTED", expiresAt });
+        if (capacity === "FULL") releaseAcceptedHails([hailId]);
+        void refreshHails.current();
       } else {
         await api.rejectHail(hailId);
+        setHails((current) => current.filter((hail) => hail.id !== hailId));
       }
-      setHails((current) => current.filter((hail) => hail.id !== hailId));
     } catch (cause) {
       appHaptics.error();
-      // A commuter may cancel a hail while it is still displayed locally.
-      void api.hails().then(setHails).catch(() => undefined);
+      if (action === "accept") {
+        localAccepts.current.delete(hailId);
+        patchHail({ status: "PENDING", expiresAt: previousExpiresAt });
+      }
+      // Another unit may have accepted, or the commuter may have cancelled.
+      void refreshHails.current();
       setError(cause instanceof Error ? cause.message : "Unable to update pickup request.");
+    } finally {
+      hailActionBusy.current = false;
+      setHailBusyId(null);
     }
   };
 
@@ -266,6 +321,7 @@ export function useDashboardShift({
     breakConfirmOpen,
     setBreakConfirmOpen,
     hails,
+    hailBusyId,
     pendingOfflineCount,
     pendingOfflineError,
     syncState,
@@ -277,6 +333,7 @@ export function useDashboardShift({
     updateCapacity,
     updateBreak,
     handleHail,
+    releaseAcceptedHails,
     claimDevice,
     releaseDevice,
     transactionTotals,

@@ -104,5 +104,13 @@ export function vehicleMarkerHtml(capacity?: Capacity, onBreak?: boolean, _surfa
   return `<div aria-label="${label}" style="width:86px;height:80px;display:flex;align-items:center;justify-content:center"><img src="${image}" width="86" height="80" alt="" draggable="false" style="display:block;width:86px;height:80px;pointer-events:none" /></div>`;
 }
 
-export const HAIL_MARKER_HTML = `<div style="width:30px;height:30px;box-sizing:border-box;background:#FF6D3A;border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5)"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="${ACCOUNT_PATH}"/></svg></div>`;
-export const HAIL_MARKER_DATA_URI = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="14" fill="#FF6D3A" stroke="#FFFFFF" stroke-width="2"/><svg x="6" y="6" width="18" height="18" viewBox="0 0 24 24"><path d="${ACCOUNT_PATH}" fill="#FFFFFF"/></svg></svg>`)}`;
+export const HAIL_PENDING_COLOR = "#FF6D3A";
+export const HAIL_ACCEPTED_COLOR = "#1A5FB4";
+
+const hailMarkerHtml = (color: string) => `<div style="width:30px;height:30px;box-sizing:border-box;background:${color};border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5)"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="${ACCOUNT_PATH}"/></svg></div>`;
+const hailMarkerDataUri = (color: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="14" fill="${color}" stroke="#FFFFFF" stroke-width="2"/><svg x="6" y="6" width="18" height="18" viewBox="0 0 24 24"><path d="${ACCOUNT_PATH}" fill="#FFFFFF"/></svg></svg>`)}`;
+
+export const HAIL_MARKER_HTML = hailMarkerHtml(HAIL_PENDING_COLOR);
+export const HAIL_MARKER_DATA_URI = hailMarkerDataUri(HAIL_PENDING_COLOR);
+export const ACCEPTED_HAIL_MARKER_HTML = hailMarkerHtml(HAIL_ACCEPTED_COLOR);
+export const ACCEPTED_HAIL_MARKER_DATA_URI = hailMarkerDataUri(HAIL_ACCEPTED_COLOR);

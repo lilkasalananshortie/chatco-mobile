@@ -4,25 +4,22 @@ import { runInNewContext } from "node:vm";
 import { LEAFLET_LIVE_UPDATE, leafletUpdateScript } from "../leaflet-live-update";
 
 function setup() {
-  const elements: any[] = [];
-  const document = { createElement: (tag: string) => {
-    const element: any = { tag, style: {}, children: [], appendChild(child: any) { this.children.push(child); }, querySelectorAll() { return this.children; } };
-    elements.push(element); return element;
-  } };
   const layer = { addTo: jest.fn().mockReturnThis(), clearLayers: jest.fn() };
   const makeMarker = () => ({ addTo: jest.fn().mockReturnThis(), on: jest.fn().mockReturnThis(), setLatLng: jest.fn().mockReturnThis(), setIcon: jest.fn().mockReturnThis(), bindPopup: jest.fn().mockReturnThis() });
   const L = { layerGroup: jest.fn(() => layer), marker: jest.fn(makeMarker), circle: jest.fn(makeMarker), divIcon: jest.fn(value => value) };
   const window: any = { ReactNativeWebView: { postMessage: jest.fn() } };
-  const context = { L, window, document, map: {}, neutral: "#fff" };
+  const context = { L, window, map: {}, neutral: "#fff", JSON };
   runInNewContext(LEAFLET_LIVE_UPDATE, context);
   const update = (changes: object = {}) => runInNewContext(leafletUpdateScript({
-    latitude: 14.8, longitude: 120.9, vehicleIconHtml: "<svg></svg>", hailMarkerHtml: "<svg>commuter pin</svg>",
-    hails: [{ id: "h1", latitude: 14.81, longitude: 120.91, commuterName: "Rider" }], ...changes,
+    latitude: 14.8, longitude: 120.9, vehicleIconHtml: "<svg></svg>", hailMarkerHtml: "<svg>commuter pin</svg>", acceptedHailMarkerHtml: "<svg>accepted pin</svg>",
+    hails: [{ id: "h1", latitude: 14.81, longitude: 120.91, status: "PENDING" }], ...changes,
   }), context);
-  return { L, layer, window, elements, update };
+  return { L, layer, window, update };
 }
+const hailClick = (L: ReturnType<typeof setup>["L"], index = 1) =>
+  L.marker.mock.results[index]!.value.on.mock.calls.find(([event]: [string]) => event === "click")![1] as () => void;
 
-test("GPS updates reuse map layers and preserve unchanged passenger popups", () => {
+test("GPS updates reuse map layers and preserve unchanged passenger pins", () => {
   const { L, layer, update } = setup();
   update();
   const vehicle = L.marker.mock.results[0]!.value;
@@ -37,22 +34,28 @@ test("GPS updates reuse map layers and preserve unchanged passenger popups", () 
   expect(layer.clearLayers).toHaveBeenCalledTimes(2);
 });
 
-test("waiting commuter uses the web-style pin and a label-only popup", () => {
-  const { L, window, elements, update } = setup();
+test("a waiting commuter uses the orange pin and reports its tap to the app", () => {
+  const { L, window, update } = setup();
   update();
-  expect(elements.find(element => element.tag === "strong")?.textContent).toBe("Commuter");
-  expect(elements.some(element => element.tag === "button")).toBe(false);
   expect(L.divIcon).toHaveBeenCalledWith(expect.objectContaining({ className: "chatco-hail-marker", html: "<svg>commuter pin</svg>" }));
   expect(L.marker).toHaveBeenCalledWith([14.81, 120.91], expect.objectContaining({ zIndexOffset: 1000 }));
-  expect(L.marker.mock.results[1]!.value.bindPopup).toHaveBeenCalledWith(
-    expect.anything(), expect.objectContaining({ closeButton: false }),
-  );
   expect(window.ReactNativeWebView.postMessage).not.toHaveBeenCalled();
+  hailClick(L)();
+  expect(JSON.parse(window.ReactNativeWebView.postMessage.mock.calls[0][0])).toEqual({ type: "hail", id: "h1" });
 });
 
-test("passenger data stays escaped inside the JavaScript bridge", () => {
-  const { elements, update } = setup();
-  const label = '</script><script>throw new Error("unexpected")</script>\u2028';
-  update({ hails: [{ id: "quote'", latitude: 14.8, longitude: 120.9, commuterName: label }] });
-  expect(elements.find(element => element.tag === "strong").textContent).toBe("Commuter");
+test("an accepted hail redraws with the accepted pin", () => {
+  const { L, layer, update } = setup();
+  update();
+  update({ hails: [{ id: "h1", latitude: 14.81, longitude: 120.91, status: "ACCEPTED" }] });
+  expect(layer.clearLayers).toHaveBeenCalledTimes(2);
+  expect(L.divIcon).toHaveBeenCalledWith(expect.objectContaining({ className: "chatco-hail-marker", html: "<svg>accepted pin</svg>" }));
+});
+
+test("hail ids stay escaped inside the JavaScript bridge", () => {
+  const { L, window, update } = setup();
+  const id = '</script><script>throw new Error("unexpected")</script> ';
+  update({ hails: [{ id, latitude: 14.8, longitude: 120.9, status: "PENDING" }] });
+  hailClick(L)();
+  expect(JSON.parse(window.ReactNativeWebView.postMessage.mock.calls[0][0]).id).toBe(id);
 });

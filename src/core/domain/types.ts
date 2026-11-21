@@ -158,6 +158,10 @@ export interface HailRequest {
   longitude: number;
   label?: string;
   etaMinutes?: number;
+  /** ACCEPTED: this unit took the hail, and its pin stays until expiresAt. */
+  status?: "PENDING" | "ACCEPTED";
+  /** ISO time from the server: end of the hail, or of the 2-minute accepted hold. */
+  expiresAt?: string;
 }
 
 export interface FarePoint {

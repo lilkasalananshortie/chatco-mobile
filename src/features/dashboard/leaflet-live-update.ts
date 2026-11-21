@@ -14,16 +14,17 @@ window.updateLiveMap=function(state){
   if(signature===lastHails)return;
   lastHails=signature;hailLayer.clearLayers();
   state.hails.forEach(function(h){
-    var box=document.createElement('div'),title=document.createElement('strong');
-    title.textContent='Commuter';title.style.color='#FF6D3A';box.style.minWidth='180px';box.appendChild(title);
-    var icon=L.divIcon({className:'chatco-hail-marker',html:state.hailMarkerHtml,iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-19]});
-    L.marker([h.latitude,h.longitude],{icon:icon,zIndexOffset:1000}).bindPopup(box,{className:'chatco-hail-popup',closeButton:false}).addTo(hailLayer);
+    var html=h.status==='ACCEPTED'?state.acceptedHailMarkerHtml:state.hailMarkerHtml;
+    var icon=L.divIcon({className:'chatco-hail-marker',html:html,iconSize:[30,30],iconAnchor:[15,15]});
+    L.marker([h.latitude,h.longitude],{icon:icon,zIndexOffset:1000}).on('click',function(){
+      if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'hail',id:h.id}));
+    }).addTo(hailLayer);
   });
 };`;
 
 export function leafletUpdateScript(state: {
   latitude: number; longitude: number; vehicleIconHtml: string;
-  hails: unknown[]; hailMarkerHtml: string;
+  hails: unknown[]; hailMarkerHtml: string; acceptedHailMarkerHtml: string;
 }): string {
   // Escape script delimiters as well as JS line separators in passenger labels.
   const data = JSON.stringify(state).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");

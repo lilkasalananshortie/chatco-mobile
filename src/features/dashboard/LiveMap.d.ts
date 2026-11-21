@@ -13,6 +13,7 @@ export interface LiveMapProps {
   viewportInsets?: { top: number; bottom: number };
   capacity?: Capacity;
   isOnBreak?: boolean;
+  onHailPress?: (hailId: string) => void;
 }
 
 export const LiveMap: ComponentType<LiveMapProps>;

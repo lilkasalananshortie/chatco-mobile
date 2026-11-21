@@ -23,6 +23,9 @@ import { RouteDeviationNotice } from "./components/RouteDeviationNotice";
 import { OverspeedNotice } from "./components/OverspeedNotice";
 import { CORRIDOR_DEVIATION_THRESHOLD_METERS } from "../../core/utils/corridor-guard";
 import { TripDirectionModal } from "./components/TripDirectionModal";
+import { HailPickupSheet } from "./components/HailPickupSheet";
+import { distanceMeters, PICKUP_RADIUS_METERS } from "./route-data";
+import { acceptedHailsOutOfRange } from "./hail-state";
 
 export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShiftUpdated, onShiftEnded }: {
   shift: Shift; refreshKey: number; canOperate: boolean; isOnline: boolean;
@@ -44,8 +47,22 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const [tripCycleState, setTripCycleState] = useState<TripCycleState | null>(null);
   const tripCycleStateRef = useRef<TripCycleState | null>(null);
   const directionMutationRef = useRef(false);
+  const [selectedHailId, setSelectedHailId] = useState<string | null>(null);
   const shiftData = useDashboardShift({ shift, refreshKey, canOperate, isOnline, onShiftUpdated, onShiftEnded });
   const gpsData = useShiftGps();
+  // Matches the map: a hail that expired or moved out of the 1 km range closes its card.
+  const selectedHail = shiftData.hails.find(hail => hail.id === selectedHailId
+    && (!gpsData.position || distanceMeters(gpsData.position, hail) <= PICKUP_RADIUS_METERS)) ?? null;
+
+  useEffect(() => {
+    if (selectedHailId && !selectedHail) setSelectedHailId(null);
+  }, [selectedHail, selectedHailId]);
+
+  // Driving past an accepted commuter ends their cooldown, so the pin must not return.
+  const { hails: dashboardHails, releaseAcceptedHails } = shiftData;
+  useEffect(() => {
+    releaseAcceptedHails(acceptedHailsOutOfRange(dashboardHails, gpsData.position));
+  }, [dashboardHails, gpsData.position, releaseAcceptedHails]);
 
   useEffect(() => {
     let active = true, running = false;
@@ -132,6 +149,7 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
   const routeDeviationActive = gpsData.corridorDeviationMeters > CORRIDOR_DEVIATION_THRESHOLD_METERS;
   const openAction = (action: () => void) => { setActions(false); action(); };
   const hasStatusBanner = !isOnline || shiftData.syncState === "syncing";
+  const mapBottomInset = bottomNavigationHeight + (routeDeviationActive ? 88 : 0) + (gpsData.isOverspeeding ? 88 : 0) + (combinedError ? 60 : 0);
   const dashboardContent = <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" stickyHeaderIndices={hasStatusBanner ? [0] : []} style={usesWebMapFallback ? { maxHeight: dashboardMaxHeight, flexGrow: 0, flexShrink: 1 } : undefined}>
     {!isOnline ? <View style={{ backgroundColor: colors.surface, borderBottomWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 8 }}>
       <Text accessibilityLiveRegion="polite" style={{ color: colors.text, textAlign: "center", fontSize: 12, fontWeight: "500", lineHeight: 18 }}>Offline mode: cash payments use saved route fares and sync when the connection returns. GCash is unavailable.</Text>
@@ -152,7 +170,7 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
 
   return <View style={{ flex: 1, backgroundColor: colors.background }}>
     <View style={{ flex: 1 }}>
-      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} tripDirection={tripCycleState?.activeTrip.direction ?? "SOUTHBOUND"} viewportInsets={{ top: 0, bottom: bottomNavigationHeight + (routeDeviationActive ? 88 : 0) + (gpsData.isOverspeeding ? 88 : 0) + (combinedError ? 60 : 0) }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} />
+      <LiveMap fill latitude={gpsData.position?.latitude} longitude={gpsData.position?.longitude} hails={shiftData.hails} unitNumber={shift.unitNumber} routeCoordinates={gpsData.routeCoordinates} routeSource={gpsData.routeSource} tripDirection={tripCycleState?.activeTrip.direction ?? "SOUTHBOUND"} viewportInsets={{ top: 0, bottom: mapBottomInset }} capacity={shiftData.capacity} isOnBreak={shiftData.isOnBreak} onHailPress={setSelectedHailId} />
       <View renderToHardwareTextureAndroid style={{ pointerEvents: "box-none", position: "absolute", top: 0, left: 0, right: 0, maxHeight: dashboardMaxHeight, zIndex: 10, elevation: 10 }}>
         {dashboardContent}
       </View>
@@ -161,6 +179,7 @@ export function DashboardScreen({ shift, refreshKey, canOperate, isOnline, onShi
         {routeDeviationActive ? <RouteDeviationNotice distanceMeters={gpsData.corridorDeviationMeters} /> : null}
       </View> : null}
       {combinedError ? <View accessibilityRole="alert" style={{ position: "absolute", bottom: bottomNavigationHeight + 16, left: 16, right: 16, padding: 12, borderRadius: 8, backgroundColor: isLofi ? "#FEF2F2" : "#450A0A", zIndex: 15 }}><Text style={{ color: isLofi ? "#B91C1C" : "#FECACA", fontSize: 12 }}>{combinedError}</Text></View> : null}
+      {selectedHail ? <HailPickupSheet hail={selectedHail} bottom={mapBottomInset + 16} canOperate={canOperate} busy={shiftData.hailBusyId === selectedHail.id} onAccept={() => void shiftData.handleHail(selectedHail.id, "accept")} onClose={() => setSelectedHailId(null)} /> : null}
     </View>
     <ModalShell visible={actions} title="Conductor actions" onClose={() => setActions(false)}>
       <Text style={styles.subtitle}>Unit {shift.unitNumber} · {shift.conductorName}</Text>

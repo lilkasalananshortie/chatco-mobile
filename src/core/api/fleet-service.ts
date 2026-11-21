@@ -11,6 +11,17 @@ import { post, request } from "./api-client";
 import { mapShift } from "./api-mappers";
 import { normalizeRatings, normalizeRatingSummary } from "./rating-mapper";
 
+const mapHail = (h: any): HailRequest => ({
+  id: String(h.id),
+  commuterName: h.commuter?.name ?? h.commuter_name ?? "Commuter",
+  latitude: Number(h.commuter_lat ?? h.latitude),
+  longitude: Number(h.commuter_lng ?? h.longitude),
+  label: h.label,
+  etaMinutes: Number(h.eta_minutes) || undefined,
+  status: h.status === "ACCEPTED" ? "ACCEPTED" : "PENDING",
+  expiresAt: h.expires_at ?? undefined,
+});
+
 export const fleetService = {
   safetySettings: () => request<{ speed_limit_kmh: number }>("/mobile/conductor/safety-settings"),
   breakStatus: async (isOnBreak: boolean) => {
@@ -59,21 +70,14 @@ export const fleetService = {
   },
 
   hails: async (): Promise<HailRequest[]> =>
-    (await request<any[]>("/mobile/conductor/hails")).map(h => ({
-      id: String(h.id),
-      commuterName: h.commuter?.name ?? h.commuter_name ?? "Commuter",
-      latitude: Number(h.commuter_lat ?? h.latitude),
-      longitude: Number(h.commuter_lng ?? h.longitude),
-      label: h.label,
-      etaMinutes: Number(h.eta_minutes) || undefined,
-    })),
+    (await request<any[]>("/mobile/conductor/hails")).map(mapHail),
 
-  acceptHail: async (id: string) => {
+  acceptHail: async (id: string): Promise<HailRequest> => {
     const deviceId = await getConductorDeviceId();
-    return post(`/mobile/conductor/hails/${encodeURIComponent(id)}/accept`, {
+    return mapHail(await post<any>(`/mobile/conductor/hails/${encodeURIComponent(id)}/accept`, {
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,
-    });
+    }));
   },
 
   rejectHail: async (id: string) => {

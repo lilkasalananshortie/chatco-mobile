@@ -5,7 +5,8 @@ import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from
 import "./leaflet-base.css";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import type { LiveMapProps } from "./LiveMap";
-import { HAIL_MARKER_HTML, JEEPNEY_PATH, vehicleMarkerHtml, markerPresentation, unitPopupPalette } from "./map-presentation";
+import { ACCEPTED_HAIL_MARKER_HTML, HAIL_MARKER_HTML, JEEPNEY_PATH, vehicleMarkerHtml, markerPresentation, unitPopupPalette } from "./map-presentation";
+import { isAcceptedHail } from "./hail-state";
 
 const CARTO_API_KEY =
   process.env.EXPO_PUBLIC_CARTO_API_KEY ||
@@ -109,7 +110,7 @@ function distanceMeters(a: [number, number], b: [number, number]) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, viewportInsets, tripDirection = "SOUTHBOUND", capacity = "AVAILABLE", isOnBreak = false }: LiveMapProps) {
+export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill = false, routeCoordinates, viewportInsets, tripDirection = "SOUTHBOUND", capacity = "AVAILABLE", isOnBreak = false, onHailPress }: LiveMapProps) {
   const { colors, isLofi } = useAppTheme();
   const [tilesLoading, setTilesLoading] = useState(true);
   const initialTilesReady = useRef(false);
@@ -152,7 +153,12 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
     html: HAIL_MARKER_HTML,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
-    popupAnchor: [0, -19],
+  }), []);
+  const acceptedHailIcon = useMemo(() => L.divIcon({
+    className: "chatco-hail-marker",
+    html: ACCEPTED_HAIL_MARKER_HTML,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
   }), []);
 
   return (
@@ -221,11 +227,7 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
           </Popup>
         </Marker>
         {visibleHails.map(hail => (
-          <Marker key={hail.id} position={[hail.latitude, hail.longitude]} icon={hailingIcon} zIndexOffset={1000}>
-            <Popup className="chatco-hail-popup" closeButton={false}>
-              <div style={{ minWidth: 180 }}><strong style={{ color: "#FF6D3A" }}>Commuter</strong></div>
-            </Popup>
-          </Marker>
+          <Marker key={hail.id} position={[hail.latitude, hail.longitude]} icon={isAcceptedHail(hail) ? acceptedHailIcon : hailingIcon} zIndexOffset={1000} eventHandlers={{ click: () => onHailPress?.(hail.id) }} />
         ))}
       </MapContainer>
       {tilesLoading ? <div className="chatco-map-loading"><span></span><strong>Loading route map…</strong></div> : null}
@@ -243,7 +245,6 @@ export function LiveMap({ latitude, longitude, hails, unitNumber = "—", fill =
         .chatco-map-shell .leaflet-popup-content-wrapper{background:${colors.surface};border:1px solid ${colors.border};border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.3)}
         .chatco-map-shell .leaflet-popup-content{margin:0;color:${colors.text};line-height:1.5;min-width:0}
         .chatco-map-shell .leaflet-popup-tip{background:${colors.surface}}
-        .chatco-map-shell .chatco-hail-popup .leaflet-popup-content{margin:0;padding:10px 14px;line-height:20px}
         .chatco-map-shell .chatco-unit-popup .leaflet-popup-content-wrapper{padding:0;overflow:hidden;background:${popup.background};border-color:${popup.border};border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.3)}
         .chatco-map-shell .chatco-unit-popup .leaflet-popup-content{margin:0;max-width:calc(100vw - 48px);color:${popup.text};font-family:Poppins-Regular,sans-serif;line-height:1.5}
         .chatco-map-shell .chatco-unit-popup .leaflet-popup-tip{background:${popup.background}}

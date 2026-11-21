@@ -32,6 +32,36 @@ export function notifySyncState(state: SyncState, count: number) {
   }
 }
 
+const REJECTED_STOP_ID = /^transactions\.(\d+)\.(pickup_stop_id|dropoff_stop_id)$/;
+
+/**
+ * The server rejects a whole batch when one queued ticket names a stop that no
+ * longer exists. Dropping only that ID lets it match the stop by its saved name;
+ * a ticket it still can't match fails alone instead of holding back the others.
+ */
+export function withoutRejectedStopIds<T extends object>(payloads: T[], cause: unknown): T[] | null {
+  const failure = cause as { status?: number; response?: { data?: { errors?: Record<string, unknown> | null } } };
+  const errors = failure?.status === 422 ? failure.response?.data?.errors : null;
+  const fields = errors ? Object.keys(errors) : [];
+  if (!fields.length || !fields.every(field => REJECTED_STOP_ID.test(field))) return null;
+  const retry = payloads.map(payload => ({ ...payload })) as Array<T & Record<string, unknown>>;
+  for (const field of fields) {
+    const [, index, stopField] = REJECTED_STOP_ID.exec(field)!;
+    if (retry[Number(index)]) delete retry[Number(index)]![stopField!];
+  }
+  return retry;
+}
+
+type CashSyncBatchResult = {
+  synced_count: number;
+  failed_count: number;
+  items?: Array<{ idempotency_key: string; status: string; error?: string }>;
+  results?: Record<string, { status: string; error?: string }>;
+};
+
+const postCashBatch = (transactions: object[]) =>
+  post<CashSyncBatchResult>("/mobile/conductor/transactions/sync", { transactions });
+
 /** Retry durable offline cash writes in order. */
 let syncInFlight: Promise<number> | null = null;
 
@@ -70,14 +100,14 @@ export async function syncPendingCashTransactions(): Promise<number> {
           }));
 
           try {
-            const batchResult = await post<{
-              synced_count: number;
-              failed_count: number;
-              items?: Array<{ idempotency_key: string; status: string; error?: string }>;
-              results?: Record<string, { status: string; error?: string }>;
-            }>("/mobile/conductor/transactions/sync", {
-              transactions: payloadList,
-            });
+            let batchResult: CashSyncBatchResult;
+            try {
+              batchResult = await postCashBatch(payloadList);
+            } catch (cause) {
+              const retry = withoutRejectedStopIds(payloadList, cause);
+              if (!retry) throw cause;
+              batchResult = await postCashBatch(retry);
+            }
 
             for (const item of chunk) {
               const itemResult = cashSyncOutcome(batchResult, item.idempotencyKey, item.id);

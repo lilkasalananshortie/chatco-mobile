@@ -56,6 +56,38 @@ describe("durable cash sync against the backend batch contract", () => {
     expect(removePendingCash).not.toHaveBeenCalled();
   });
 
+  test("a deleted stop ID is dropped from only its ticket and retried once", async () => {
+    jest.mocked(getPendingCash).mockResolvedValue(["one", "two"].map(key => ({
+      id: `pending-${key}`, idempotencyKey: key, shiftId: "SHF-ORIGINAL", kind: "single" as const,
+      payload: { idempotency_key: key, shift_id: "SHF-ORIGINAL", pickup_name: "Calumpit", pickup_stop_id: `stop-${key}`, dropoff_stop_id: `drop-${key}` },
+      localTransactions: [{}] as any, createdAt: Date.now(), deviceId: "mobile-test-device",
+    })));
+    const rejected = Object.assign(new Error("Validation failed"), {
+      status: 422, response: { data: { errors: { "transactions.1.pickup_stop_id": ["The selected stop is invalid."] } } },
+    });
+    jest.mocked(post).mockRejectedValueOnce(rejected).mockResolvedValueOnce({ items: [
+      { idempotency_key: "one", status: "synced" }, { idempotency_key: "two", status: "synced" },
+    ] });
+
+    expect(await syncPendingCashTransactions()).toBe(2);
+
+    expect(post).toHaveBeenCalledTimes(2);
+    const retried = (jest.mocked(post).mock.calls[1]![1] as { transactions: any[] }).transactions;
+    expect(retried[0]).toMatchObject({ idempotency_key: "one", pickup_stop_id: "stop-one", dropoff_stop_id: "drop-one" });
+    expect(retried[1]).toMatchObject({ idempotency_key: "two", pickup_name: "Calumpit", dropoff_stop_id: "drop-two" });
+    expect(retried[1]).not.toHaveProperty("pickup_stop_id");
+  });
+
+  test("other validation failures are not retried and keep every ticket", async () => {
+    jest.mocked(post).mockRejectedValue(Object.assign(new Error("Validation failed"), {
+      status: 422, response: { data: { errors: { "transactions.0.pickup_stop_id": ["Invalid."], "transactions.1.shift_id": ["Required."] } } },
+    }));
+    expect(await syncPendingCashTransactions()).toBe(0);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(removePendingCash).not.toHaveBeenCalled();
+    expect(updatePendingCash).toHaveBeenCalledTimes(2);
+  });
+
   test("simultaneous synchronization shares one request and preserves shift and keys", async () => {
     jest.mocked(post).mockResolvedValue({ items: [
       { idempotency_key: "one", status: "synced" }, { idempotency_key: "two", status: "synced" },

@@ -302,6 +302,20 @@ function AppRoot() {
     } else setRemitting(false);
   };
 
+  const signOutWithOutstanding = async () => {
+    if (remitting.current) return;
+    try {
+      await api.logout();
+    } catch (cause) {
+      Alert.alert("Notice", cause instanceof Error ? cause.message : "Signed out.");
+    } finally {
+      setOutstanding(null);
+      setShift(null);
+      setScreen("verify");
+      setUser(null);
+    }
+  };
+
   if (booting || !ready) return <Loading label="Restoring secure session..." />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
   if (remittanceBusy && !shift && !outstanding) return <Loading label="Signing out…" />;
@@ -312,6 +326,7 @@ function AppRoot() {
     refreshKey={refreshKey} canOperate={false}
     onSubmitting={setRemitting}
     onBack={() => { if (!remitting.current) { setOutstanding(null); setScreen("verify"); } }}
+    onSignOut={signOutWithOutstanding}
     onEnded={() => { void finishRemittance(isLateRemittance(outstanding)); }} />;
   if (!shift && screen === "report") return <><RemittanceOverview onBack={() => setScreen("verify")} />{reminder}</>;
   if (!shift && screen === "metrics") return <><MetricsScreen onBack={() => setScreen("verify")} />{reminder}</>;

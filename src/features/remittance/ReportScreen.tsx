@@ -14,19 +14,22 @@ import { RemittanceSuccessModal } from "./components/RemittanceSuccessModal";
 import { RemittanceReportSlipModal } from "./components/RemittanceReportSlipModal";
 import { RemittanceCollectionsCard } from "./components/RemittanceCollectionsCard";
 import { RemittanceHistorySection, type RemittanceHistoryFilter } from "./components/RemittanceHistorySection";
+import { PastShiftRemittance } from "./components/PastShiftRemittance";
 import { transactionSummary } from "../../core/domain/transaction-summary";
 import { readShiftAccess, remittanceTotals } from "../../core/api/shift-access";
 import { useReducedMotion } from "../../shared/ui/useWebEntrance";
 
 type ReportLoadState = "loading" | "success" | "error";
 
-export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnded, onBack, onSubmitting }: {
+export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnded, onBack, onSignOut, onSubmitting }: {
   shift: Shift;
   outstanding?: Remittance;
   refreshKey: number;
   canOperate: boolean;
   onEnded: () => void;
   onBack?: () => void;
+  /** Replaces Back while settling an earlier day's shift. */
+  onSignOut?: () => void | Promise<void>;
   onSubmitting?: (value: boolean) => void;
 }) {
   const { colors, isLofi, isLowFidelity, styles } = useReportTheme();
@@ -63,6 +66,7 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [submittedTotals, setSubmittedTotals] = useState<{ cash: number; gcash: number; all: number } | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const loadInFlight = useRef<Promise<void> | null>(null);
   const endedRef = useRef(false);
   const onEndedRef = useRef(onEnded);
@@ -254,9 +258,23 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
     void onEndedRef.current();
   };
 
+  const handleSignOut = async () => {
+    if (!onSignOut || signingOut || submitting.current || completed.current) return;
+    setSigningOut(true);
+    try { await onSignOut(); }
+    finally { setSigningOut(false); }
+  };
+  const signOutLocked = signingOut || busy || success;
+  const signOutAction = onSignOut ? (
+    <Pressable accessibilityRole="button" accessibilityState={{ disabled: signOutLocked, busy: signingOut }} disabled={signOutLocked} onPress={() => void handleSignOut()} style={{ minHeight: 40, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: signOutLocked ? 0.5 : 1 }}>
+      <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>{signingOut ? "Signing out…" : "Sign out"}</Text>
+    </Pressable>
+  ) : undefined;
+  const pageNavigation = returnToVerification ? { headerAction: signOutAction } : { onBack };
+
   if (reportState === "loading") {
     return (
-      <ReportPage onBack={onBack}>
+      <ReportPage {...pageNavigation}>
         {[80, 112, 192, 128, 56].map((height, index) => (
           <Animated.View key={index} style={[styles.card, { height, marginTop: index === 0 ? 4 : 12, opacity: skeletonOpacity }]} />
         ))}
@@ -266,11 +284,50 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
 
   if (reportState === "error") {
     return (
-      <ReportPage onBack={onBack}>
+      <ReportPage {...pageNavigation}>
         <Pressable accessibilityRole="button" onPress={() => { setReportState("loading"); void load(); }} style={[styles.card, { paddingVertical: 32, alignItems: "center" }]}>
           <Text style={styles.error}>{error}</Text>
           <Text style={[styles.subtitle, { marginTop: 8 }]}>Tap to retry.</Text>
         </Pressable>
+      </ReportPage>
+    );
+  }
+
+  const remittanceModals = <>
+    <RemittanceConfirmModal
+      visible={confirm}
+      onClose={() => { if (!submitting.current) setConfirm(false); }}
+      busy={busy}
+      error={error}
+      shiftInfo={{ driverName: shift.driverName, unitNumber: shift.unitNumber }}
+      totalPassengers={outstanding ? Number(outstanding.total_passengers ?? 0) : totalPassengers}
+      accountableTotals={accountableTotals}
+      onConfirm={submit}
+    />
+
+    <RemittanceSuccessModal
+      visible={success}
+      late={returnToVerification}
+      accountableTotals={submittedTotals ?? accountableTotals}
+      unitNumber={shift.unitNumber}
+      onClose={exitAfterRemittance}
+    />
+
+    <RemittanceReportSlipModal selected={selected} onClose={() => setSelected(null)} shift={shift} />
+  </>;
+
+  if (outstanding && returnToVerification) {
+    return (
+      <ReportPage title="Pending Remittance" headerAction={signOutAction}>
+        <PastShiftRemittance
+          record={outstanding}
+          shift={shift}
+          totals={accountableTotals}
+          disabled={!canRemit || busy || success || signingOut}
+          onRemit={() => void handlePressRemit()}
+        />
+        {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
+        {remittanceModals}
       </ReportPage>
     );
   }
@@ -358,26 +415,7 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
 
       {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
 
-      <RemittanceConfirmModal
-        visible={confirm}
-        onClose={() => { if (!submitting.current) setConfirm(false); }}
-        busy={busy}
-        error={error}
-        shiftInfo={{ driverName: shift.driverName, unitNumber: shift.unitNumber }}
-        totalPassengers={outstanding ? Number(outstanding.total_passengers ?? 0) : totalPassengers}
-        accountableTotals={accountableTotals}
-        onConfirm={submit}
-      />
-
-      <RemittanceSuccessModal
-        visible={success}
-        late={returnToVerification}
-        accountableTotals={submittedTotals ?? accountableTotals}
-        unitNumber={shift.unitNumber}
-        onClose={exitAfterRemittance}
-      />
-
-      <RemittanceReportSlipModal selected={selected} onClose={() => setSelected(null)} shift={shift} />
+      {remittanceModals}
     </ReportPage>
   );
 }

@@ -23,6 +23,7 @@ jest.mock("../components/RemittanceSuccessModal", () => ({ RemittanceSuccessModa
 jest.mock("../components/RemittanceReportSlipModal", () => ({ RemittanceReportSlipModal: "Slip" }));
 jest.mock("../components/RemittanceCollectionsCard", () => ({ RemittanceCollectionsCard: "Collections" }));
 jest.mock("../components/RemittanceHistorySection", () => ({ RemittanceHistorySection: "History" }));
+jest.mock("../components/PastShiftRemittance", () => ({ PastShiftRemittance: "PastShift" }));
 const shift = { shiftId: "old", isActive: true, timeIn: "2026-11-09T04:00:00+08:00" } as any;
 const record = { shift_id: "old", cash_total: 850, gcash_total: 120, remittance_status: "PENDING", date: "2026-11-08" };
 const ended = jest.fn(), submitting = jest.fn();
@@ -62,10 +63,35 @@ test("recorded transactions enable the remittance action", async () => {
 test("an outstanding remittance remains actionable without current transactions", async () => {
   (api.transactions as jest.Mock).mockResolvedValue([]);
   await mount(true);
-  const button = render(true).find(e => e.type === "Button" && walk(e).some(child => child.props.children === "Remit to Admin"));
-  expect(button.props.disabled).toBe(false);
+  const pastShift = render(true).find(e => e.type === "PastShift");
+  expect(pastShift.props.disabled).toBe(false);
+  expect(pastShift.props.totals).toMatchObject({ cash: 850, gcash: 120, all: 970 });
+  pastShift.props.onRemit(); await settle();
+  expect(render(true).find(e => e.type === "Confirm").props.visible).toBe(true);
   await confirm(true);
   expect(api.remit).toHaveBeenCalledWith(shift, 850, 120);
+});
+test("an earlier shift gets the focused screen with sign out instead of back", async () => {
+  await mount(true);
+  const signOut = jest.fn(), back = jest.fn();
+  mockIndex = 0; mockRefIndex = 0; mockEffects = [];
+  const nodes = walk(ReportScreen({ shift, outstanding: record, refreshKey: 0, canOperate: false, onEnded: ended, onBack: back, onSignOut: signOut }));
+  const page = nodes.find(e => e.type === "Page");
+  expect(nodes.some(e => e.type === "PastShift")).toBe(true);
+  expect(nodes.some(e => e.type === "History")).toBe(false);
+  expect(page.props.onBack).toBeUndefined();
+  page.props.headerAction.props.onPress(); await settle();
+  expect(signOut).toHaveBeenCalledTimes(1);
+  expect(back).not.toHaveBeenCalled();
+});
+test("today's report keeps the normal screen and back button", async () => {
+  await mount();
+  const back = jest.fn();
+  mockIndex = 0; mockRefIndex = 0; mockEffects = [];
+  const nodes = walk(ReportScreen({ shift, refreshKey: 0, canOperate: true, onEnded: ended, onBack: back, onSignOut: jest.fn() }));
+  expect(nodes.some(e => e.type === "PastShift")).toBe(false);
+  expect(nodes.find(e => e.type === "Page").props.onBack).toBe(back);
+  expect(nodes.find(e => e.type === "Page").props.headerAction).toBeUndefined();
 });
 test("late remittance uses original totals, skips empty earnings, and keeps signed-in navigation", async () => {
   await mount(true); await confirm(true);

@@ -125,6 +125,11 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
     clearTimeout(timeout);
   }
   const payload = (await response.json().catch(() => null)) as Envelope<T> | null;
+  // The API always answers in JSON. A Wi-Fi login page, a data-promo redirect,
+  // or a gateway error page means the server was not actually reached.
+  if (payload === null && response.status !== 204 && (response.ok || response.status >= 500)) {
+    throw new NetworkError("Unable to reach the E-CHATCO server. Check your internet connection.");
+  }
   if (!response.ok) {
     if (response.status === 429) {
       const header = response.headers?.get("Retry-After")?.trim();

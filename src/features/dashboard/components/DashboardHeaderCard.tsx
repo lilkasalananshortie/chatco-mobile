@@ -115,8 +115,8 @@ export function DashboardHeaderCard({ profilePictureUrl, shift, dashStyles: s, i
           </View>)}
         </View>
       </View>
-      {pendingOfflineCount > 0 ? <View style={{ gap: 3 }}>
-        <Text style={{ color: muted, fontSize: 10 }}>{pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync</Text>
+      {pendingOfflineCount > 0 || pendingOfflineError ? <View style={{ gap: 3 }}>
+        {pendingOfflineCount > 0 ? <Text style={{ color: muted, fontSize: 10 }}>{pendingOfflineCount} cash transaction{pendingOfflineCount === 1 ? "" : "s"} waiting to sync</Text> : null}
         {pendingOfflineError ? <Text accessibilityRole="alert" style={{ color: isLofi ? "#B91C1C" : "#FECACA", fontSize: 10 }}>Sync needs attention: {pendingOfflineError}</Text> : null}
       </View> : null}
     </View>

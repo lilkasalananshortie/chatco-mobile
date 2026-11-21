@@ -13,6 +13,7 @@ jest.mock("react-native", () => ({ AppState: { addEventListener: jest.fn(() => (
 jest.mock("../../../core/api/chatco-api", () => ({ api: { getSyncState: () => "idle", getDeviceId: jest.fn().mockResolvedValue("device") } }));
 jest.mock("../../../core/utils/audio-cues", () => ({ audioCues: {} }));
 jest.mock("../../../core/utils/haptics", () => ({ appHaptics: {} }));
+jest.mock("../../../core/storage/offline-shift-cache", () => ({ rememberedCapacity: () => "AVAILABLE", loadRememberedCapacity: async () => null, rememberCapacity: async () => {} }));
 
 beforeEach(() => { mockEffects = []; jest.clearAllMocks(); });
 

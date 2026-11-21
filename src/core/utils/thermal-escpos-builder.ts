@@ -42,10 +42,24 @@ export const GOOJPRT_NAME_PREFIXES = [
   "Bluetooth",
 ];
 
-// Helper: Text encoding (ASCII / UTF-8)
+const ACCENTED = "ÁÀÂÄÃÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜÑáàâäãéèêëíìîïóòôöõúùûüñ";
+const UNACCENTED = "AAAAAEEEEIIIIOOOOOUUUUNaaaaaeeeeiiiiooooouuuun";
+const PRINTER_SYMBOLS: Record<string, string> = {
+  "₱": "P", "·": "-", "•": "-", "–": "-", "—": "-", "−": "-", "→": ">",
+  "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...",
+};
+
+/** These printers use a single-byte code page, so anything outside ASCII prints as garbage. */
+export function printableText(text: string): string {
+  return text.replace(/[^\x20-\x7E\n]/gu, character => {
+    const accented = ACCENTED.indexOf(character);
+    return accented >= 0 ? UNACCENTED[accented]! : PRINTER_SYMBOLS[character] ?? "?";
+  });
+}
+
+// Helper: Text encoding (ASCII)
 export function encodeText(text: string): Uint8Array {
-  // Thermal printers in CP437/PC850 don't support Unicode Peso sign (₱), replace with 'P' to prevent garbage chars
-  const sanitized = text.replace(/₱/g, "P");
+  const sanitized = printableText(text);
   if (typeof TextEncoder !== "undefined") {
     return new TextEncoder().encode(sanitized);
   }
@@ -73,19 +87,40 @@ export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
 
 // Format 32-character row (left-aligned label, right-aligned value)
 export function formatRow(label: string, value: string, width = GOOJPRT_LINE_WIDTH): string {
-  const cleanLabel = label.replace(/₱/g, "P").trim();
-  const cleanValue = value.replace(/₱/g, "P").trim();
-  const available = width - cleanValue.length;
-  if (cleanLabel.length >= available) {
-    return `${cleanLabel.slice(0, Math.max(0, available - 1))} ${cleanValue}\n`;
+  const cleanLabel = printableText(label).trim();
+  const cleanValue = printableText(value).trim();
+  const gap = cleanLabel ? 1 : 0;
+  if (cleanLabel.length + gap + cleanValue.length <= width) {
+    const spaces = " ".repeat(width - cleanLabel.length - cleanValue.length);
+    return `${cleanLabel}${spaces}${cleanValue}\n`;
   }
-  const spaces = " ".repeat(width - cleanLabel.length - cleanValue.length);
-  return `${cleanLabel}${spaces}${cleanValue}\n`;
+  // Too long for one row: keep the label and wrap the value under it.
+  const lines = wrapWords(cleanValue, width).map(line => line.padStart(width));
+  return `${[...(cleanLabel ? [cleanLabel.slice(0, width)] : []), ...lines].join("\n")}\n`;
+}
+
+function wrapWords(text: string, width: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/)) {
+    if (line && line.length + 1 + word.length > width) {
+      lines.push(line);
+      line = "";
+    }
+    let rest = word;
+    while (rest.length > width) {
+      lines.push(rest.slice(0, width));
+      rest = rest.slice(width);
+    }
+    line = line ? `${line} ${rest}` : rest;
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
 // Format centered line
 export function centerText(text: string, width = GOOJPRT_LINE_WIDTH): string {
-  const clean = text.replace(/₱/g, "P").trim();
+  const clean = printableText(text).trim();
   if (clean.length >= width) return `${clean.slice(0, width)}\n`;
   const padLeft = Math.floor((width - clean.length) / 2);
   const padRight = width - clean.length - padLeft;
@@ -209,6 +244,7 @@ export function buildGoojprtReceiptBytes(
   if (settings?.showDateTime !== false) appendRow("Date", dateStr);
 
   if (settings?.showTransactionId !== false && firstTxn?.transactionId) appendRow("Ref", firstTxn.transactionId, true);
+  if (settings?.showTransactionId !== false && firstTxn?.offlineTicketRef) appendRow("Offline ref", firstTxn.offlineTicketRef);
   if (firstTxn?.multiplePaymentReference) appendRow("Group ref", firstTxn.multiplePaymentReference);
 
   const unitNum = firstTxn?.unitNumber || shift?.unitNumber || "-";
@@ -294,6 +330,10 @@ export function buildGoojprtReceiptBytes(
       }
     }
     appendCenteredWrapped(showQr && showCode ? "Scan or enter code in Rewards: +1 ride." : showQr ? "Scan in Rewards: +1 ride." : "Enter code in Rewards: +1 ride.");
+  } else if (firstTxn?.offlinePending && (showQr || showCode)) {
+    // The server issues the reward code, so an offline receipt can't carry one yet.
+    appendDivider("-");
+    appendCenteredWrapped("Offline ticket. Reward code is available on a reprint after it syncs.");
   }
 
   // 8. FOOTER & FEED

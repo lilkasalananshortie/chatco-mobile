@@ -38,6 +38,19 @@ export function subDropoffPoints(point: FarePoint): string[] {
   );
 }
 
+/** Keeps only what the point-number search accepts, including from a paste. */
+export function pointSearchDigits(text: string): string {
+  return text.replace(/\D/g, "").slice(0, 3);
+}
+
+/** Exact match, so 2 finds point 2 and not 12 or 20. */
+export function pointsMatchingNumber(points: FarePoint[], query: string): FarePoint[] {
+  const digits = pointSearchDigits(query);
+  if (!digits) return points;
+  const wanted = Number(digits);
+  return points.filter((point) => point.pointNumber === wanted);
+}
+
 export function selectedPointName(point: FarePoint, subPoint: string | null): string {
   return subPoint ? `${point.name} · ${subPoint}` : point.name;
 }

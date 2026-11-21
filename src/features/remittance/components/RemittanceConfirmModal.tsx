@@ -6,6 +6,7 @@ import { ConductorIcon } from "../../../shared/ui/ConductorIcon";
 import { SlideToConfirm } from "../../../shared/ui/SlideToConfirm";
 import { useReportTheme } from "../report-styles";
 import { money } from "../remittance-helpers";
+import type { CashReviewTicket } from "../../../core/storage/offline-cash-queue";
 
 export interface RemittanceConfirmModalProps {
   visible: boolean; onClose: () => void; busy: boolean;
@@ -13,10 +14,13 @@ export interface RemittanceConfirmModalProps {
   accountableTotals: { all: number; cash: number; gcash: number };
   onConfirm: () => void | Promise<void>;
   error?: string;
+  /** Saved cash the server refused, so it isn't part of this remittance. */
+  excludedTickets?: CashReviewTicket[];
 }
 
-export function RemittanceConfirmModal({ visible, onClose, busy, shiftInfo, totalPassengers, accountableTotals, onConfirm, error }: RemittanceConfirmModalProps) {
+export function RemittanceConfirmModal({ visible, onClose, busy, shiftInfo, totalPassengers, accountableTotals, onConfirm, error, excludedTickets = [] }: RemittanceConfirmModalProps) {
   const { colors: c, isLofi, isLowFidelity } = useReportTheme();
+  const excludedTotal = excludedTickets.reduce((sum, ticket) => sum + ticket.amount, 0);
   const { height } = useWindowDimensions();
   const entrance = useWebEntrance(visible, isLowFidelity, height, 320);
   const backdropEntrance = useWebEntrance(visible, isLowFidelity, 0, 200);
@@ -52,8 +56,13 @@ export function RemittanceConfirmModal({ visible, onClose, busy, shiftInfo, tota
             <ConductorIcon name="info" size={16} color={c.muted} strokeWidth={2} />
             <Text style={{ flex: 1, color: c.secondary, fontSize: 11, lineHeight: 18 }}>Hand over <Text style={{ color: c.text, fontWeight: "700" }}>{money(accountableTotals.cash)}</Text> in cash to admin. They'll count it and record the official Cash Declaration for this shift.</Text>
           </View>
+          {excludedTickets.length > 0 ? <View accessibilityRole="alert" style={{ gap: 4, borderWidth: 1, borderColor: c.danger, padding: 12, borderRadius: 12 }}>
+            <Text style={{ color: c.danger, fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{excludedTickets.length} ticket{excludedTickets.length === 1 ? "" : "s"} ({money(excludedTotal)}) not included</Text>
+            <Text style={{ color: c.secondary, fontSize: 11, lineHeight: 18 }}>The server refused {excludedTickets.length === 1 ? "this ticket" : "these tickets"}. Keep this cash separate and show the admin: {excludedTickets.map(ticket => ticket.ticketId).join(", ")}.</Text>
+            <Text style={{ color: c.muted, fontSize: 11, lineHeight: 18 }}>Reason: {excludedTickets[0]!.reason}</Text>
+          </View> : null}
           <View style={{ gap: 12 }}>
-            {!!error && <Text accessibilityRole="alert" style={{ color: c.danger, fontSize: 13, lineHeight: 20 }}>{error}</Text>}
+            {!!error &&<Text accessibilityRole="alert" style={{ color: c.danger, fontSize: 13, lineHeight: 20 }}>{error}</Text>}
             <SlideToConfirm rounded commitRatio={0.9} activationFeedback label="Slide to confirm remittance" disabledLabel="Processing..." disabled={busy} onComplete={onConfirm} trackColor={isLofi ? "#F3F4F6" : c.surface2} handleColor="#1A5FB4" textColor={c.muted} style={{ marginTop: 0, borderWidth: 1, borderColor: c.border }} />
             <Pressable accessibilityRole="button" disabled={busy} onPress={onClose} style={{ paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: c.border, backgroundColor: isLofi ? "#F3F4F6" : c.surface2, alignItems: "center", opacity: busy ? 0.5 : 1 }}><Text style={{ color: c.secondary, fontSize: 14, fontWeight: "600" }}>Cancel</Text></Pressable>
           </View>

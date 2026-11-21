@@ -16,7 +16,7 @@ jest.mock("../../../shared/ui/ConductorIcon", () => ({ ConductorIcon: "Icon" }))
 jest.mock("../ReportPage", () => ({ ReportPage: "Page" }));
 jest.mock("../report-styles", () => ({ useReportTheme: () => ({ colors: {}, styles: {} }) }));
 jest.mock("../../../core/utils/thermal-printer", () => ({ thermalPrinter: {} }));
-jest.mock("../../../core/api/chatco-api", () => ({ api: { transactions: jest.fn(), earnings: jest.fn(), pendingCashCount: jest.fn(), remit: jest.fn() }, syncPendingCashTransactions: jest.fn() }));
+jest.mock("../../../core/api/chatco-api", () => ({ api: { transactions: jest.fn(), earnings: jest.fn(), pendingCashCount: jest.fn(), cashNeedingReview: jest.fn().mockResolvedValue([]), remit: jest.fn() }, syncPendingCashTransactions: jest.fn() }));
 jest.mock("../../../core/api/shift-access", () => ({ ...jest.requireActual("../../../core/domain/shift-access"), readShiftAccess: jest.fn() }));
 jest.mock("../components/RemittanceConfirmModal", () => ({ RemittanceConfirmModal: "Confirm" }));
 jest.mock("../components/RemittanceSuccessModal", () => ({ RemittanceSuccessModal: "Success" }));

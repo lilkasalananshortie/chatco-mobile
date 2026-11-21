@@ -24,6 +24,7 @@ jest.mock("react-native", () => ({ AppState: { currentState: "active", addEventL
 jest.mock("../../../core/api/chatco-api", () => ({ api: { getSyncState: () => "idle", hails: jest.fn(), acceptHail: jest.fn(), capacity: jest.fn(), breakStatus: jest.fn() } }));
 jest.mock("../../../core/utils/audio-cues", () => ({ audioCues: { playHailSound: jest.fn(), playCapacitySound: jest.fn(), playDutySound: jest.fn() } }));
 jest.mock("../../../core/utils/haptics", () => ({ appHaptics: { error: jest.fn() } }));
+jest.mock("../../../core/storage/offline-shift-cache", () => ({ rememberedCapacity: () => "AVAILABLE", loadRememberedCapacity: async () => null, rememberCapacity: async () => {} }));
 jest.mock("../../../core/api/hail-realtime", () => ({ connectVehicleHails: jest.fn() }));
 
 const hail = (id: string, data: Partial<HailRequest> = {}): HailRequest => ({ id, commuterName: "Commuter", latitude: 14.8, longitude: 120.9, status: "PENDING", ...data });

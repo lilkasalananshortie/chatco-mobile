@@ -235,8 +235,8 @@ export function useGcashPayment({
       const barangaysTraveled = getBarangaysTraversed(pickupPoint, dropoffPoint);
       const amount = isGroupMode ? groupTotalFare : regularFare;
 
-      const serverFrom = pickupPoint.serverName || (pickupLandmark && pickupPoint.landmarks.includes(pickupLandmark) && !pickupLandmark.toLowerCase().includes("junction") ? `${pickupPoint.name} · ${pickupLandmark}` : pickupPoint.name);
-      const serverTo = dropoffPoint.serverName || (dropoffLandmark && dropoffPoint.landmarks.includes(dropoffLandmark) ? `${dropoffPoint.name} · ${dropoffLandmark}` : dropoffPoint.name);
+      const serverFrom = pickupPoint.serverName || selectedPointName(pickupPoint, pickupLandmark);
+      const serverTo = dropoffPoint.serverName || selectedPointName(dropoffPoint, dropoffLandmark);
       const pickupStopId = pickupPoint.serverId || pickupPoint.id;
       const dropoffStopId = dropoffPoint.serverId || dropoffPoint.id;
 

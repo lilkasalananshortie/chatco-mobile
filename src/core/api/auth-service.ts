@@ -1,5 +1,6 @@
 ﻿import { appStorage } from "../storage/app-storage";
 import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
+import { forgetShiftData } from "../storage/offline-shift-cache";
 import type { User } from "../domain/types";
 import {
   CACHED_USER_KEY,
@@ -37,6 +38,7 @@ export const authService = {
     } finally {
       if (await appStorage.getItem(TOKEN_KEY) === endingToken) {
         await appStorage.removeItem(TOKEN_KEY);
+        await forgetShiftData();
       }
     }
   },

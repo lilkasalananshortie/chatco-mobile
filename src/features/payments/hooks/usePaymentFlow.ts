@@ -22,6 +22,7 @@ import {
   getBarangaysTraversed,
   getFareBetween,
   pointSelectionComplete,
+  pointsMatchingNumber,
   selectedPointName,
   subDropoffPoints,
 } from "../fare-helpers";
@@ -208,21 +209,13 @@ export function usePaymentFlow({
   const groupGrossFare = (fareInfo?.regularFare ?? 0) * groupPassengerCount;
   const groupDiscount = groupGrossFare - groupTotalFare;
 
-  // Filtered points by search query
-  const filteredPoints = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return pointAreas;
-    return pointAreas.filter(
-      (p) =>
-        p.name.toLowerCase().includes(query) ||
-        p.code.toLowerCase().includes(query) ||
-        subDropoffPoints(p).some((l) => l.toLowerCase().includes(query)),
-    );
-  }, [pointAreas, searchQuery]);
+  // Filtered points by point number
+  const filteredPoints = useMemo(() => pointsMatchingNumber(pointAreas, searchQuery), [pointAreas, searchQuery]);
 
   const clearPickup = () => {
     setPickupPoint(null);
     setPickupLandmark(null);
+    setSearchQuery("");
     setSelectingField("pickup");
     if (expandedBarangay === pickupPoint?.pointNumber) {
       setExpandedBarangay(null);
@@ -232,6 +225,7 @@ export function usePaymentFlow({
   const clearDropoff = () => {
     setDropoffPoint(null);
     setDropoffLandmark(null);
+    setSearchQuery("");
     setSelectingField("dropoff");
     if (expandedBarangay === dropoffPoint?.pointNumber) {
       setExpandedBarangay(null);
@@ -246,6 +240,7 @@ export function usePaymentFlow({
       setPickupLandmark(dropoffLandmark);
       setDropoffPoint(tmpPoint);
       setDropoffLandmark(tmpLandmark);
+      setSearchQuery("");
     }
   };
 
@@ -343,8 +338,8 @@ export function usePaymentFlow({
     setStep("processing");
 
     try {
-      const serverFrom = pickupPoint.serverName || (pickupLandmark && pickupPoint.landmarks.includes(pickupLandmark) && !pickupLandmark.toLowerCase().includes("junction") ? `${pickupPoint.name} · ${pickupLandmark}` : pickupPoint.name);
-      const serverTo = dropoffPoint.serverName || (dropoffLandmark && dropoffPoint.landmarks.includes(dropoffLandmark) ? `${dropoffPoint.name} · ${dropoffLandmark}` : dropoffPoint.name);
+      const serverFrom = pickupPoint.serverName || selectedPointName(pickupPoint, pickupLandmark);
+      const serverTo = dropoffPoint.serverName || selectedPointName(dropoffPoint, dropoffLandmark);
       const pickupStopId = pickupPoint.serverId || pickupPoint.id;
       const dropoffStopId = dropoffPoint.serverId || dropoffPoint.id;
 
@@ -423,8 +418,8 @@ export function usePaymentFlow({
     setStep("processing");
 
     try {
-      const serverFrom = pickupPoint.serverName || (pickupLandmark && pickupPoint.landmarks.includes(pickupLandmark) && !pickupLandmark.toLowerCase().includes("junction") ? `${pickupPoint.name} · ${pickupLandmark}` : pickupPoint.name);
-      const serverTo = dropoffPoint.serverName || (dropoffLandmark && dropoffPoint.landmarks.includes(dropoffLandmark) ? `${dropoffPoint.name} · ${dropoffLandmark}` : dropoffPoint.name);
+      const serverFrom = pickupPoint.serverName || selectedPointName(pickupPoint, pickupLandmark);
+      const serverTo = dropoffPoint.serverName || selectedPointName(dropoffPoint, dropoffLandmark);
       const pickupStopId = pickupPoint.serverId || pickupPoint.id;
       const dropoffStopId = dropoffPoint.serverId || dropoffPoint.id;
 

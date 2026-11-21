@@ -1,4 +1,4 @@
-export type CashSyncOutcome = { status: "synced" | "failed"; error?: string };
+export type CashSyncOutcome = { status: "synced" | "failed"; error?: string; transaction_id?: string | null };
 
 /** Match a server acknowledgement to its durable idempotency key, not a row index. */
 export function cashSyncOutcome(response: unknown, key: string, localId: string): CashSyncOutcome | undefined {

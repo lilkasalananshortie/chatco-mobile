@@ -15,11 +15,14 @@ import { RemittanceReportSlipModal } from "./components/RemittanceReportSlipModa
 import { RemittanceCollectionsCard } from "./components/RemittanceCollectionsCard";
 import { RemittanceHistorySection, type RemittanceHistoryFilter } from "./components/RemittanceHistorySection";
 import { PastShiftRemittance } from "./components/PastShiftRemittance";
-import { transactionSummary } from "../../core/domain/transaction-summary";
+import { shiftTotals } from "../../core/domain/transaction-summary";
+import type { CashReviewTicket } from "../../core/storage/offline-cash-queue";
 import { readShiftAccess, remittanceTotals } from "../../core/api/shift-access";
 import { useReducedMotion } from "../../shared/ui/useWebEntrance";
 
 type ReportLoadState = "loading" | "success" | "error";
+
+const CASH_WAITING_TO_SYNC = "Some cash transactions are still waiting to sync. Check your connection, keep the app open, and try again in a minute.";
 
 export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnded, onBack, onSignOut, onSubmitting }: {
   shift: Shift;
@@ -67,6 +70,7 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
   const [error, setError] = useState("");
   const [submittedTotals, setSubmittedTotals] = useState<{ cash: number; gcash: number; all: number } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [reviewTickets, setReviewTickets] = useState<CashReviewTicket[]>([]);
   const loadInFlight = useRef<Promise<void> | null>(null);
   const endedRef = useRef(false);
   const onEndedRef = useRef(onEnded);
@@ -158,17 +162,27 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
   }, [success]);
 
   const totals = useMemo(() => {
-    const summary = transactionSummary(transactions);
+    const summary = shiftTotals(transactions, earnings);
     return { ...summary, all: summary.total };
-  }, [transactions]);
-  const accountableTotals = outstanding ? remittanceTotals(outstanding) : earnings
-    ? { ...totals, cash: earnings.cashTotal, gcash: earnings.gcashTotal, all: earnings.total }
-    : totals;
+  }, [transactions, earnings]);
+  const accountableTotals = outstanding ? remittanceTotals(outstanding) : totals;
 
+  // Each group passenger has a row, and every row repeats the group's size.
   const totalPassengers = useMemo(
-    () => transactions.reduce((sum, transaction) => sum + (transaction.totalPassengers ?? 1), 0),
+    () => transactions.reduce((sum, transaction) => sum + (transaction.groupId ? 1 : transaction.totalPassengers ?? 1), 0),
     [transactions],
   );
+
+  // Refused tickets are shown as collected until now, but the server won't count them.
+  const excludedCash = outstanding ? 0 : reviewTickets.reduce((sum, ticket) => sum + ticket.amount, 0);
+  const confirmTotals = {
+    ...accountableTotals,
+    cash: Math.max(0, accountableTotals.cash - excludedCash),
+    all: Math.max(0, accountableTotals.all - excludedCash),
+  };
+  const confirmPassengers = outstanding
+    ? Number(outstanding.total_passengers ?? 0)
+    : Math.max(0, totalPassengers - reviewTickets.length);
 
   const canRemit = hasOutstanding || transactions.length > 0;
   const allowed = hasOutstanding || canOperate;
@@ -182,15 +196,16 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
     setError("");
     preparing.current = true;
     try {
-      await syncPendingCashTransactions();
+      await syncPendingCashTransactions({ drain: true });
       const pending = await api.pendingCashCount(shift.shiftId);
       if (pending > 0) {
-        setError("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
+        setError(CASH_WAITING_TO_SYNC);
         return;
       }
+      setReviewTickets(await api.cashNeedingReview(shift.shiftId));
       setConfirm(true);
     } catch {
-      setError("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
+      setError(CASH_WAITING_TO_SYNC);
     } finally { preparing.current = false; }
   };
 
@@ -205,11 +220,9 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
     setBusy(true);
     setError("");
     try {
-      await syncPendingCashTransactions();
+      await syncPendingCashTransactions({ drain: true });
       const pendingForShift = await api.pendingCashCount(shift.shiftId);
-      if (pendingForShift > 0) {
-        throw new Error("Some cash transactions are still waiting to sync. Reconnect to the internet and try again before submitting remittance.");
-      }
+      if (pendingForShift > 0) throw new Error(CASH_WAITING_TO_SYNC);
       let snapshot = accountableTotals;
       if (hasOutstanding) {
         const access = await readShiftAccess();
@@ -302,8 +315,9 @@ export function ReportScreen({ shift, outstanding, refreshKey, canOperate, onEnd
       busy={busy}
       error={error}
       shiftInfo={{ driverName: shift.driverName, unitNumber: shift.unitNumber }}
-      totalPassengers={outstanding ? Number(outstanding.total_passengers ?? 0) : totalPassengers}
-      accountableTotals={accountableTotals}
+      totalPassengers={confirmPassengers}
+      accountableTotals={confirmTotals}
+      excludedTickets={reviewTickets}
       onConfirm={submit}
     />
 

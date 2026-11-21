@@ -149,7 +149,10 @@ export function LocationPickerStep({
           dropoffLandmark={dropoffLandmark}
           selectingField={selectingField}
           setSelectingField={field => {
-            if (field === "pickup" || pointSelectionComplete(pickupPoint, pickupLandmark)) setSelectingField(field);
+            if (field === "pickup" || pointSelectionComplete(pickupPoint, pickupLandmark)) {
+              setSelectingField(field);
+              setSearchQuery("");
+            }
           }}
           isSameBarangay={isSameBarangay}
           pickupDotColor={pickupDotColor}

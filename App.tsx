@@ -23,7 +23,8 @@ import { SettingsScreen } from "./src/features/settings/SettingsScreen";
 import { VerificationScreen } from "./src/features/shift/VerificationScreen";
 import { audioCues, initAudioCues, loadScanSoundSetting, preloadAudioCues } from "./src/core/utils/audio-cues";
 import type { Remittance, Screen, Shift, User } from "./src/core/domain/types";
-import { readShiftAccess, remittanceShift, ShiftAccessUnavailableError } from "./src/core/api/shift-access";
+import { readShiftAccess, readStartupShiftAccess, remittanceShift, ShiftAccessUnavailableError } from "./src/core/api/shift-access";
+import { rememberActiveShift } from "./src/core/storage/offline-shift-cache";
 
 export default function App() {
   return (
@@ -112,7 +113,7 @@ function AppRoot() {
   const dismissedReminderIds = useMemo(() => new Set<string>(), [user?.id]);
 
   useEffect(() => {
-    void api.getDeviceId().then(setDeviceId);
+    void api.getDeviceId().then(setDeviceId).catch(() => {});
     void initAudioCues();
     void loadScanSoundSetting();
     preloadAudioCues();
@@ -177,7 +178,7 @@ function AppRoot() {
     try {
       const currentUser = await api.me();
       if (currentUser && !currentUser.must_change_password) {
-        const access = await readShiftAccess().catch(() => null);
+        const access = await readStartupShiftAccess(currentUser.id).catch(() => null);
         setShift(access?.kind === "active" ? access.shift : null);
         setOutstanding(access?.kind === "unremitted" ? access.remittance : null);
         setScreen(access?.kind === "active" ? "home" : access?.kind === "unremitted" ? "report" : "verify");
@@ -201,6 +202,9 @@ function AppRoot() {
     setUser(currentUser);
   }, []);
   useEffect(() => { void loadSession(); }, [loadSession]);
+  useEffect(() => {
+    if (user && shift?.isActive && !shift.timeOut) void rememberActiveShift(user.id, shift);
+  }, [user?.id, shift]);
   // Periodically revalidate the shift so an ended/remitted shift returns
   // the conductor to the verification screen. Ownership is enforced by the
   // login policy, not here — a 401 on this poll signs the device out.
@@ -227,6 +231,8 @@ function AppRoot() {
           }
         } else {
           setShift(current);
+          // Opened without signal, then reconnected: return to the running shift.
+          setScreen(previous => previous === "verify" ? "home" : previous);
         }
       } catch (cause) {
         if (active && !remitting.current && cause instanceof ShiftAccessUnavailableError) {
@@ -268,7 +274,7 @@ function AppRoot() {
         const synced = await syncPendingCashTransactions();
         if (active && synced > 0) setRefreshKey(key => key + 1);
       } catch {
-        if (active) setIsOnline(false);
+        // A queue read failure is not an outage. Tickets stay saved for the next pass.
       } finally {
         running = false;
       }
@@ -335,6 +341,7 @@ function AppRoot() {
       <>
       <VerificationScreen
         conductorName={user.name}
+        isOnline={isOnline}
         onViewMetrics={() => setScreen("metrics")}
         onViewSettings={() => setScreen("settings")}
         onStarted={s => { setShift(s); setScreen("home"); }}

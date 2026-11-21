@@ -82,6 +82,7 @@ export const api = {
   // Transactions & Cash Management
   pendingCashCount: transactionService.pendingCashCount,
   pendingCashSyncError: transactionService.pendingCashSyncError,
+  cashNeedingReview: transactionService.cashNeedingReview,
   transactions: transactionService.transactions,
   transactionsPage: transactionService.transactionsPage,
   earnings: transactionService.earnings,

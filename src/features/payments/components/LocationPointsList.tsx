@@ -1,10 +1,10 @@
-import { Animated, Pressable, ScrollView, View } from "react-native";
+import { Animated, Keyboard, Pressable, ScrollView, View } from "react-native";
 import { Text, TextInput } from "../../../shared/ui/BrandText";
 import { Ionicons } from "@expo/vector-icons";
 import { usePaymentTheme } from "../../../core/theme/payment-theme";
 import { appHaptics } from "../../../core/utils/haptics";
 import type { FarePoint } from "../../../core/domain/types";
-import { subDropoffPoints } from "../fare-helpers";
+import { pointSearchDigits, subDropoffPoints } from "../fare-helpers";
 import type { SelectedPaymentMethod } from "../payment-types";
 import { useAnimatedToggle } from "../../../shared/ui/useAnimatedFeedback";
 import { useReducedMotion } from "../../../shared/ui/useWebEntrance";
@@ -69,9 +69,13 @@ export function LocationPointsList({
           <Ionicons name="search" size={16} color={colors.muted} />
           <TextInput
             value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search barangay or landmark…"
+            onChangeText={(text) => setSearchQuery(pointSearchDigits(text))}
+            placeholder="Enter point number…"
             placeholderTextColor={colors.muted}
+            accessibilityLabel="Search by point number"
+            keyboardType="number-pad"
+            inputMode="numeric"
+            maxLength={3}
             style={styles.searchInput}
           />
           {searchQuery ? (
@@ -84,7 +88,12 @@ export function LocationPointsList({
 
       <Text style={[styles.searchTip, { paddingHorizontal: 16, paddingBottom: 8 }]}>{selectingField === "pickup" ? "Tap your boarding Point Area, then choose a sub pickup point" : "Tap your destination Point Area, then choose a sub drop-off point"}</Text>
       {/* Points List */}
-      <ScrollView style={styles.pointsList} contentContainerStyle={styles.pointsListContent}>
+      <ScrollView style={styles.pointsList} contentContainerStyle={styles.pointsListContent} keyboardShouldPersistTaps="handled">
+        {searchQuery && filteredPoints.length === 0 ? (
+          <Text accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 13, textAlign: "center", paddingVertical: 24 }}>
+            No point {Number(searchQuery)} on this route
+          </Text>
+        ) : null}
         {filteredPoints.map((point) => {
           const isPickup = pickupPoint?.pointNumber === point.pointNumber;
           const isDropoff = dropoffPoint?.pointNumber === point.pointNumber;
@@ -123,6 +132,7 @@ export function LocationPointsList({
               <Pressable
                 onPress={() => {
                   appHaptics.light();
+                  Keyboard.dismiss();
                   if (selectingField === "pickup") {
                     setPickupPoint(point);
                     setPickupLandmark(null);
@@ -138,7 +148,8 @@ export function LocationPointsList({
                       setExpandedBarangay(point.pointNumber);
                     }
                   }
-                  setSearchQuery("");
+                  // Keep the match on screen while its sub-stops are open.
+                  if (pointSubDropoffs.length === 0) setSearchQuery("");
                 }}
                 style={[styles.pointItemCard, { backgroundColor: itemBg, borderColor: itemBorder }]}
               >
@@ -188,6 +199,7 @@ export function LocationPointsList({
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation();
+                        Keyboard.dismiss();
                         setExpandedBarangay(isExpanded ? null : point.pointNumber);
                       }}
                       style={styles.expandChevronButton}
@@ -233,6 +245,7 @@ export function LocationPointsList({
                             setDropoffLandmark(landmark);
                           }
                           setExpandedBarangay(null);
+                          setSearchQuery("");
                         }}
                         style={[
                           styles.substopRow,

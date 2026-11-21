@@ -19,8 +19,10 @@
  * The queue is consumed by syncPendingCashTransactions() in chatco-api.ts.
  */
 
+import { needsAdminReview } from "../domain/cash-review";
 import type { Transaction } from "../domain/types";
 import { appStorage } from "./app-storage";
+import { getConductorDeviceId } from "./device-id";
 
 export type PendingCashItem = {
   id: string;
@@ -35,7 +37,11 @@ export type PendingCashItem = {
   attempts?: number;
   lastAttemptAt?: number;
   lastError?: string;
+  /** Times the server answered and said no, as opposed to being unreachable. */
+  refusals?: number;
 };
+
+export type CashReviewTicket = { ticketId: string; amount: number; reason: string };
 
 const KEY = "chatco_pending_cash_v1";
 const CORRUPT_KEY_PREFIX = `${KEY}_corrupt_`;
@@ -122,11 +128,30 @@ export async function pendingCashForShift(shiftId: string): Promise<Transaction[
   return items.filter(item => item.shiftId === shiftId).flatMap(item => item.localTransactions);
 }
 
+const currentDeviceId = () => getConductorDeviceId().catch(() => null);
+
+/** Tickets that can still sync on their own. Tickets in admin review are counted separately. */
 export async function pendingCashCount(shiftId?: string): Promise<number> {
-  const items = await getPendingCash();
+  const items = (await getPendingCash()).filter(item => !shiftId || item.shiftId === shiftId);
+  if (items.length === 0) return 0;
+  const deviceId = await currentDeviceId();
   return items
-    .filter(item => !shiftId || item.shiftId === shiftId)
+    .filter(item => !needsAdminReview(item, deviceId))
     .reduce((total, item) => total + item.localTransactions.length, 0);
+}
+
+/** Saved cash the server keeps refusing. It stays on the phone until an admin resolves it. */
+export async function cashNeedingReview(shiftId?: string): Promise<CashReviewTicket[]> {
+  const items = (await getPendingCash()).filter(item => !shiftId || item.shiftId === shiftId);
+  if (items.length === 0) return [];
+  const deviceId = await currentDeviceId();
+  return items
+    .filter(item => needsAdminReview(item, deviceId))
+    .flatMap(item => item.localTransactions.map(ticket => ({
+      ticketId: ticket.transactionId,
+      amount: ticket.finalAmount,
+      reason: item.lastError ?? "This ticket cannot sync from this device.",
+    })));
 }
 
 /** Returns the latest server-side sync rejection for the selected authorized shift. */

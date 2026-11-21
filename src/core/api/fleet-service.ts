@@ -1,4 +1,5 @@
 import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
+import { forgetActiveShift } from "../storage/offline-shift-cache";
 import type {
   Announcement,
   HailRequest,
@@ -185,7 +186,7 @@ export const fleetService = {
 
   remit: async (shift: Shift, expectedCash: number, gcash: number) => {
     const deviceId = await getConductorDeviceId();
-    return post<{ remittance?: Remittance }>("/mobile/conductor/remittances", {
+    const result = await post<{ remittance?: Remittance }>("/mobile/conductor/remittances", {
       shift_id: shift.shiftId,
       total_collected: expectedCash,
       // Required legacy total is informational; only admin declares counted cash.
@@ -194,5 +195,7 @@ export const fleetService = {
       device_id: deviceId,
       device_type: CONDUCTOR_DEVICE_TYPE,
     });
+    await forgetActiveShift();
+    return result;
   },
 };

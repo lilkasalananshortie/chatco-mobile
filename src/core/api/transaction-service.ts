@@ -1,4 +1,5 @@
 import {
+  cashNeedingReview,
   enqueuePendingCash,
   getNextOfflineTicketSequence,
   pendingCashCount,
@@ -6,23 +7,31 @@ import {
   pendingCashForShift,
 } from "../storage/offline-cash-queue";
 import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
+import { rememberedShiftTransactions, rememberShiftTransactions, withTicketRefs } from "../storage/offline-shift-cache";
 import type { ShiftEarnings, Transaction } from "../domain/types";
 import { NetworkError, post, request } from "./api-client";
 import { mapTransaction } from "./api-mappers";
 import { isValidUuid } from "./payment-service";
 
+/** The fares last confirmed by the server plus cash saved since, for use without signal. */
+async function savedShiftTransactions(shiftId: string, pending: Transaction[]): Promise<Transaction[]> {
+  return (await withTicketRefs(await rememberedShiftTransactions(shiftId))).concat(pending);
+}
+
 export const transactionService = {
   pendingCashCount: (shiftId?: string) => pendingCashCount(shiftId),
   pendingCashSyncError: (shiftId?: string) => pendingCashSyncError(shiftId),
+  cashNeedingReview: (shiftId?: string) => cashNeedingReview(shiftId),
 
   transactions: async (shiftId: string) => {
     const pending = await pendingCashForShift(shiftId);
     try {
-      return (await request<any[]>(`/mobile/conductor/transactions?shift_id=${encodeURIComponent(shiftId)}`))
-        .map(mapTransaction)
-        .concat(pending);
+      const rows = (await request<any[]>(`/mobile/conductor/transactions?shift_id=${encodeURIComponent(shiftId)}`))
+        .map(mapTransaction);
+      void rememberShiftTransactions(shiftId, rows);
+      return (await withTicketRefs(rows)).concat(pending);
     } catch (cause) {
-      if (cause instanceof NetworkError) return pending;
+      if (cause instanceof NetworkError) return savedShiftTransactions(shiftId, pending);
       throw cause;
     }
   },
@@ -59,7 +68,7 @@ export const transactionService = {
       const res = await request<any>(`/mobile/conductor/transactions?${params.toString()}`);
       const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
       return {
-        transactions: rows.map(mapTransaction),
+        transactions: await withTicketRefs(rows.map(mapTransaction)),
         currentPage: Number(res?.current_page ?? options.page),
         perPage: Number(res?.per_page ?? options.perPage ?? 25),
         total: Number(res?.total ?? rows.length),
@@ -68,7 +77,12 @@ export const transactionService = {
       };
     } catch (cause) {
       if (cause instanceof NetworkError) {
-        const local = await pendingCashForShift(shiftId);
+        const method = options.paymentMethod && options.paymentMethod !== "ALL" ? options.paymentMethod.toUpperCase() : null;
+        const from = options.dateFrom ? new Date(`${options.dateFrom}T00:00:00`).getTime() : -Infinity;
+        const to = options.dateTo ? new Date(`${options.dateTo}T23:59:59`).getTime() : Infinity;
+        const local = (await savedShiftTransactions(shiftId, await pendingCashForShift(shiftId))).filter(transaction =>
+          (!method || transaction.paymentMethod.toUpperCase() === method)
+          && transaction.timestamp >= from && transaction.timestamp <= to);
         return {
           transactions: local,
           currentPage: 1,

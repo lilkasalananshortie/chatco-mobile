@@ -2,7 +2,8 @@ import { shiftService } from "./shift-service";
 import { fleetService } from "./fleet-service";
 import { resolveShiftAccess, type ShiftAccess } from "../domain/shift-access";
 import { appStorage } from "../storage/app-storage";
-import { TOKEN_KEY } from "./api-client";
+import { restoreActiveShift } from "../storage/offline-shift-cache";
+import { NetworkError, TOKEN_KEY } from "./api-client";
 export { remittanceShift, remittanceTotals } from "../domain/shift-access";
 
 /** Active-shift lookup succeeded, but history could not be verified. */
@@ -17,6 +18,22 @@ export async function readShiftAccess() {
   const access = await checkShiftAccess();
   if (access.kind === "unremitted" || access.kind === "waiting") return { kind: access.kind, remittance: access.record };
   return access;
+}
+
+/**
+ * For reopening the app: without signal, continue today's server-confirmed shift.
+ * A server answer of "no active shift" is never overridden by the saved copy.
+ */
+export async function readStartupShiftAccess(userId: string) {
+  try {
+    return await readShiftAccess();
+  } catch (cause) {
+    if (cause instanceof NetworkError) {
+      const shift = await restoreActiveShift(userId);
+      if (shift) return { kind: "active" as const, shift };
+    }
+    throw cause;
+  }
 }
 
 // Only share concurrent reads. A completed check never authorizes a later start.

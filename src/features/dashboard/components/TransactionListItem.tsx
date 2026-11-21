@@ -89,6 +89,7 @@ export function TransactionListItem({ transaction, isExpanded, onToggleExpand, r
             <Detail label="Conductor" value={transaction.conductorName || "—"} />
             <Detail label="Recorded" value={`${displayDate}, ${displayTime}`} />
             <Detail label="Txn ID" value={transaction.transactionId} mono />
+            {transaction.offlineTicketRef ? <Detail label="Printed as" value={transaction.offlineTicketRef} mono /> : null}
           </View>
           {onPrint ? (
             <Pressable

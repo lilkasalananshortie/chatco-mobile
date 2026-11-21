@@ -6,12 +6,14 @@ import { api } from "../../core/api/chatco-api";
 import { useAppTheme } from "../../core/theme/ThemeProvider";
 import { ScreenShell } from "../../shared/ui";
 import type { ConductorProfile, Remittance, Shift, Transaction, User } from "../../core/domain/types";
+import type { CashReviewTicket } from "../../core/storage/offline-cash-queue";
 import { createSettingsStyles } from "./settings-styles";
 import { PersonalDetailsCard, ProfileCard } from "./components/ProfileCard";
 import { ActiveAssignmentCard } from "./components/ActiveAssignmentCard";
 import { AppPreferencesCard } from "./components/AppPreferencesCard";
 import { BluetoothPrinterCard } from "./components/BluetoothPrinterCard";
 import { AccountSessionSection } from "./components/AccountSessionSection";
+import { ThemeToggleIcon } from "./components/ThemeToggleIcon";
 import { thermalPrinter, type PrinterStatus } from "../../core/utils/thermal-printer";
 import { pickProfilePhotoSelection } from "./profile-photo";
 import { transactionSummary } from "../../core/domain/transaction-summary";
@@ -78,6 +80,7 @@ export function SettingsScreen({
   const [logoutCheckStatus, setLogoutCheckStatus] = useState<"loading" | "ready" | "error">("loading");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [reviewTickets, setReviewTickets] = useState<CashReviewTicket[]>([]);
 
   const loadSettingsData = useCallback(async () => {
     setLogoutCheckStatus("loading");
@@ -90,14 +93,16 @@ export function SettingsScreen({
       .then(data => ({ data, ok: true }))
       .catch(() => ({ data: [] as Remittance[], ok: false }));
 
-    const [nextProfile, transactionResult, sound, allSounds, remittanceResult] = await Promise.all([
+    const [nextProfile, transactionResult, sound, allSounds, remittanceResult, ticketsInReview] = await Promise.all([
       api.profile().catch(() => null),
       transactionRequest,
       loadScanSoundSetting(),
       initAudioCues(),
       remittanceRequest,
+      api.cashNeedingReview().catch(() => [] as CashReviewTicket[]),
     ]);
     if (!mounted.current) return;
+    setReviewTickets(ticketsInReview);
     if (nextProfile) setProfile(nextProfile);
     setTransactions(transactionResult.data);
     setScanSound(sound);
@@ -277,11 +282,7 @@ export function SettingsScreen({
             isLofi ? styles.themeToggleLight : styles.themeToggleDark,
           ]}
         >
-          <Ionicons
-            name={isLofi ? "sunny-outline" : "moon-outline"}
-            size={20}
-            color={isLofi ? "#D97706" : "#99C1F1"}
-          />
+          <ThemeToggleIcon isLight={isLight} />
         </Pressable>
       </View>
 
@@ -332,6 +333,7 @@ export function SettingsScreen({
 
       {/* Account & Session */}
       <AccountSessionSection
+        reviewTickets={reviewTickets}
         isLowFidelity={isLowFidelity}
         styles={styles}
         colors={colors}

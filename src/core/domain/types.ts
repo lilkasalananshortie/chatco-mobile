@@ -51,6 +51,8 @@ export interface Transaction {
   finalAmount: number;
   /** True only while this cash receipt exists locally and awaits server acknowledgement. */
   offlinePending?: boolean;
+  /** The number printed on the receipt while this fare was offline. */
+  offlineTicketRef?: string | null;
   from: string;
   to: string;
   timestamp: number;

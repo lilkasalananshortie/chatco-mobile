@@ -1,5 +1,6 @@
 import { appStorage } from "../storage/app-storage";
 import { CONDUCTOR_DEVICE_TYPE, getConductorDeviceId } from "../storage/device-id";
+import { forgetActiveShift } from "../storage/offline-shift-cache";
 import type { ConductorProfile, Driver, Shift, Unit } from "../domain/types";
 import {
   CACHED_DRIVERS_KEY,
@@ -103,6 +104,7 @@ export const shiftService = {
         }
         // A legacy local provisional shift is not server authorization.
         await appStorage.removeItem(PROVISIONAL_SHIFT_KEY).catch(() => null);
+        await forgetActiveShift();
         return null;
       } catch (cause) {
         if (cause instanceof NetworkError) {

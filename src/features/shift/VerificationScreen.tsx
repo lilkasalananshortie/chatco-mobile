@@ -22,7 +22,9 @@ export function VerificationScreen({
   onViewMetrics,
   onViewSettings,
   onOutstanding,
+  isOnline = false,
 }: {
+  isOnline?: boolean;
   conductorName?: string;
   onStarted: (shift: Shift) => void;
   onLogout?: () => void;
@@ -98,6 +100,11 @@ export function VerificationScreen({
     const subscription = AppState.addEventListener("change", state => { if (state === "active") void load(); });
     return () => { mounted.current = false; subscription.remove(); };
   }, [load]);
+
+  // Opened without signal: check again as soon as the connection returns.
+  useEffect(() => {
+    if (isOnline && loadError) void load();
+  }, [isOnline]);
 
   if (loading) return <Loading label="Checking assigned units…" />;
 

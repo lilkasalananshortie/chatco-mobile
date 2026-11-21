@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
-import { transactionSummary } from "../../../core/domain/transaction-summary";
+import { shiftTotals, transactionSummary } from "../../../core/domain/transaction-summary";
 import { api, NetworkError } from "../../../core/api/chatco-api";
+import { loadRememberedCapacity, rememberCapacity, rememberedCapacity } from "../../../core/storage/offline-shift-cache";
 import type { Capacity, HailRequest, Shift, ShiftEarnings, Transaction } from "../../../core/domain/types";
 import { appHaptics } from "../../../core/utils/haptics";
 import { audioCues } from "../../../core/utils/audio-cues";
@@ -27,7 +28,7 @@ export function useDashboardShift({
 }: UseDashboardShiftProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [earnings, setEarnings] = useState<ShiftEarnings | null>(null);
-  const [capacity, setCapacity] = useState<Capacity>("AVAILABLE");
+  const [capacity, setCapacity] = useState<Capacity>(rememberedCapacity(shift.shiftId));
   const [isOnBreak, setIsOnBreak] = useState(Boolean(shift.isOnBreak));
   const [breakPending, setBreakPending] = useState(false);
   const [breakConfirmOpen, setBreakConfirmOpen] = useState(false);
@@ -48,6 +49,9 @@ export function useDashboardShift({
   const localAccepts = useRef(new Map<string, string>());
   const refreshHails = useRef<() => Promise<void>>(async () => undefined);
   const releasedAccepts = useRef(new Set<string>());
+  const operationalRefreshAgain = useRef(false);
+  const latestIsOnline = useRef(isOnline);
+  latestIsOnline.current = isOnline;
 
   // This unit can no longer pick these commuters up, so their cooldown has ended.
   const releaseAcceptedHails = useCallback((hailIds: string[]) => {
@@ -60,31 +64,40 @@ export function useDashboardShift({
   }, []);
 
   useEffect(() => {
-    void api.getDeviceId().then(setDeviceId);
+    void api.getDeviceId().then(setDeviceId).catch(() => {});
   }, []);
 
   const refreshOperationalData = useCallback(async () => {
-    if (operationalRefreshInFlight.current) return operationalRefreshInFlight.current;
+    if (operationalRefreshInFlight.current) {
+      // The running read may have started before the sale that asked for this one.
+      operationalRefreshAgain.current = true;
+      return operationalRefreshInFlight.current;
+    }
     const request = (async () => {
       try {
-        const [records, pendingCount, syncError, earningsData] = await Promise.all([
-          api.transactions(shift.shiftId),
-          api.pendingCashCount(shift.shiftId),
-          api.pendingCashSyncError(shift.shiftId),
-          isOnline
-            ? api.earnings(shift.shiftId).catch(cause => {
-                if (cause instanceof NetworkError) return null;
-                throw cause;
-              })
-            : Promise.resolve(null),
-        ]);
-        setTransactions(records);
-        setPendingOfflineCount(pendingCount);
-        setPendingOfflineError(syncError ?? "");
-        if (earningsData) setEarnings(earningsData);
-        setError("");
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Unable to load shift data.");
+        do {
+          operationalRefreshAgain.current = false;
+          try {
+            const [records, pendingCount, syncError, earningsData] = await Promise.all([
+              api.transactions(shift.shiftId),
+              api.pendingCashCount(shift.shiftId),
+              api.pendingCashSyncError(shift.shiftId),
+              latestIsOnline.current
+                ? api.earnings(shift.shiftId).catch(cause => {
+                    if (cause instanceof NetworkError) return null;
+                    throw cause;
+                  })
+                : Promise.resolve(null),
+            ]);
+            setTransactions(records);
+            setPendingOfflineCount(pendingCount);
+            setPendingOfflineError(syncError ?? "");
+            if (earningsData) setEarnings(earningsData);
+            setError("");
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Unable to load shift data.");
+          }
+        } while (operationalRefreshAgain.current);
       } finally {
         operationalRefreshInFlight.current = null;
       }
@@ -201,6 +214,13 @@ export function useDashboardShift({
     return () => clearTimeout(timer);
   }, [hails]);
 
+  // Restores Full or Standing after the app was closed during this shift.
+  useEffect(() => {
+    let active = true;
+    void loadRememberedCapacity(shift.shiftId).then(saved => { if (active && saved) setCapacity(saved); });
+    return () => { active = false; };
+  }, [shift.shiftId]);
+
   const updateCapacity = async (next: Capacity) => {
     if (!canOperate) return;
     audioCues.playCapacitySound();
@@ -209,6 +229,7 @@ export function useDashboardShift({
     setError("");
     try {
       await api.capacity(next);
+      void rememberCapacity(shift.shiftId, next);
       if (next === "FULL") releaseAcceptedHails(hails.filter(isAcceptedHail).map(hail => hail.id));
     } catch (cause) {
       setCapacity(previous);
@@ -300,18 +321,15 @@ export function useDashboardShift({
     setDeviceBusy(true);
     setDeviceError("");
     try {
-      const [pending, online] = await Promise.all([
-        api.pendingCashCount(shift.shiftId),
-        api.checkConnectivity().catch(() => false),
-      ]);
-      if (pending > 0 || !online) {
-        setDeviceError("Offline cash fares are still waiting to sync. Reconnect device to sync before handoff.");
+      const online = await api.checkConnectivity().catch(() => false);
+      if (!online) {
+        setDeviceError("This device is offline. Reconnect to sync its cash fares before handoff.");
         return;
       }
-      await api.syncPendingCashTransactions();
+      await api.syncPendingCashTransactions({ drain: true });
       const remaining = await api.pendingCashCount(shift.shiftId);
       if (remaining > 0) {
-        setDeviceError("Offline cash fares are still waiting to sync. Reconnect device to sync before handoff.");
+        setDeviceError("Offline cash fares are still waiting to sync. Keep the app open and try again in a minute.");
         return;
       }
       const updated = await api.releaseShiftDevice(shift.shiftId);
@@ -329,9 +347,7 @@ export function useDashboardShift({
     [transactions]
   );
 
-  const totals = earnings
-    ? { ...transactionTotals, total: earnings.total, cash: earnings.cashTotal, gcash: earnings.gcashTotal }
-    : transactionTotals;
+  const totals = shiftTotals(transactions, earnings);
 
   const ownsShift = Boolean(shift.operatingDeviceId && deviceId && shift.operatingDeviceId === deviceId);
   const isOperatingDevice = ownsShift;

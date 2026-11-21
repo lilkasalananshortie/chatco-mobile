@@ -16,6 +16,7 @@ export interface AccountSessionSectionProps {
   showLogoutConfirm: boolean;
   setShowLogoutConfirm: (show: boolean) => void;
   onConfirmLogout: () => void;
+  reviewTickets?: Array<{ ticketId: string; amount: number }>;
 }
 
 export function AccountSessionSection({
@@ -30,12 +31,22 @@ export function AccountSessionSection({
   showLogoutConfirm,
   setShowLogoutConfirm,
   onConfirmLogout,
+  reviewTickets = [],
 }: AccountSessionSectionProps) {
   const entrance = useWebEntrance(showLogoutConfirm, isLowFidelity);
+  const reviewTotal = reviewTickets.reduce((sum, ticket) => sum + ticket.amount, 0);
   return (
     <View>
       {/* Logout Section */}
       <View style={styles.logoutSection}>
+        {reviewTickets.length > 0 ? (
+          <View accessibilityRole="alert" style={styles.logoutLockBanner}>
+            <Ionicons name="warning-outline" size={14} color={isLofi ? colors.warning : "#FBBF24"} />
+            <Text style={[styles.logoutLockText, { flex: 1 }]}>
+              {reviewTickets.length} cash ticket{reviewTickets.length === 1 ? "" : "s"} (₱{reviewTotal.toFixed(2)}) need admin review: {reviewTickets.map(ticket => ticket.ticketId).join(", ")}. Keep this cash separate and show these numbers to the admin.
+            </Text>
+          </View>
+        ) : null}
         {logoutCheckStatus === "loading" ? (
           <View style={styles.logoutLockBanner}>
             <Ionicons name="time-outline" size={14} color={colors.muted} />

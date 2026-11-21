@@ -7,8 +7,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Platform, StyleSheet } from "react-native";
+import { Animated, Platform, StyleSheet, View } from "react-native";
 import { appearanceSettings } from "./appearance-settings";
+import { useThemeFade } from "./useThemeFade";
 
 const standardColors = {
   background: "#050F1A",
@@ -143,10 +144,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       .catch(() => { setIsLight(false); setIsLowFidelity(false); })
       .finally(() => setReady(true));
   }, []);
+  const { switchTo, veilOpacity, veilIsLight } = useThemeFade(isLight, setIsLight, isLowFidelity);
   const setLight = useCallback(async (value: boolean) => {
     await appearanceSettings.setLight(value);
-    setIsLight(value);
-  }, []);
+    switchTo(value);
+  }, [switchTo]);
   const setLowFidelity = useCallback(async (value: boolean) => {
     await appearanceSettings.setLowFidelity(value);
     setIsLowFidelity(value);
@@ -164,7 +166,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setLowFidelity,
     styles: makeStyles(colors, isLowFidelity),
   }), [colors, isLight, isLowFidelity, ready, setLight, setLowFidelity]);
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={value}>
+    <View style={{ flex: 1 }}>
+      {children}
+      <Animated.View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[StyleSheet.absoluteFill, {
+          backgroundColor: veilIsLight ? lightColors.background : standardColors.background,
+          opacity: veilOpacity,
+          pointerEvents: "none",
+        }]}
+      />
+    </View>
+  </ThemeContext.Provider>;
 }
 
 export function useAppTheme() {
